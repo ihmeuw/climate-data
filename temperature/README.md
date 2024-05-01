@@ -5,4 +5,5 @@ This repo contains the fundamental code used to downscale ERA5 daily average tem
 1. Moving the intermediate processing steps to their own worker scripts
 2. Converting all outputs to a compressed file format. Ideally, using compression options found in the xarray library when outputting .nc files.
 3. Creating an additional script that addresses problematic outliers in the prediction step. Ideally, this is done within the regional_predictions.py script or directly after it. 
-4. Including pre-pipeline scripts having to do with downloading relevant datasets and processing them into pipeline-ready inputs.
+4. Include pre-pipeline scripts having to do with downloading relevant datasets and processing them into pipeline-ready inputs.
+5. Include diagnostic scripts used to visualize prediction data.
