@@ -1,0 +1,18 @@
+{
+  "template": "https://github.com/collijk/python-package-cookiecutter",
+  "commit": "7e9285f84cc6b52165dbc97b9a0d4f059d0f6818",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "author_name": "Nadim Hashmeh",
+      "author_email": "nhashmeh@uw.edu",
+      "github_username": "",
+      "project_name": "climate-downscale",
+      "project_slug": "climate-downscale",
+      "package_name": "climate_downscale",
+      "project_short_description": "Pipelines to downscale ERA5 and CMIP6 data.",
+      "_template": "https://github.com/collijk/python-package-cookiecutter"
+    }
+  },
+  "directory": null
+}
