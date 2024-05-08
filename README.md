@@ -8,7 +8,7 @@
 
 **Documentation**: [https://.github.io/climate-downscale](https://.github.io/climate-downscale)
 
-**Source Code**: [https://github.com//climate-downscale](https://github.com//climate-downscale)
+**Source Code**: [https://github.com/climate-downscale](https://github.com//climate-downscale)
 
 **PyPI**: [https://pypi.org/project/climate-downscale/](https://pypi.org/project/climate-downscale/)
 
@@ -16,56 +16,42 @@
 
 Pipelines to downscale ERA5 and CMIP6 data.
 
-## Installation
-
-```sh
-pip install climate-downscale
-```
 
 ## Development
 
-* Clone this repository
-* Requirements:
-  * [Poetry](https://python-poetry.org/)
-  * Python 3.10+
-* Create a virtual environment and install the dependencies
+Instructions using conda:
 
-```sh
-poetry install
-```
+1. Clone this repository. 
 
-* Activate the virtual environment
+    Over ssh:
+    ```sh
+    git clone git@github.com:ihmeuw/climate-downscale.git
+    ```
+    
+    Over https:
+    ```sh
+    git clone https://github.com/ihmeuw/climate-downscale.git
+    ```
 
-```sh
-poetry shell
-```
+2. Create a new conda environment.
 
-### Testing
+    ```sh
+    conda create -n climate-downscale python=3.10
+    conda activate climate-downscale
+    ```
 
-```sh
-pytest
-```
+3. Install `poetry` and the project dependencies.
 
-### Documentation
-
-The documentation is automatically generated from the content of the `docs` directory and from the docstrings
- of the public signatures of the source code. The documentation is updated and published as a [Github project page
- ](https://pages.github.com/) automatically as part each release.
-
-### Releasing
-
-Trigger the [Draft release workflow](https://github.com//climate-downscale/actions/workflows/draft_release.yml)
-(press _Run workflow_). This will update the changelog & version and create a GitHub release which is in _Draft_ state.
-
-Find the draft release from the
-[GitHub releases](https://github.com//climate-downscale/releases) and publish it. When
- a release is published, it'll trigger [release](https://github.com//climate-downscale/blob/master/.github/workflows/release.yml) workflow which creates PyPI
- release and deploys updated documentation.
+    ```sh
+    conda install poetry
+    poetry install
+    ```
 
 ### Pre-commit
 
-Pre-commit hooks run all the auto-formatting (`ruff format`), linters (e.g. `ruff` and `mypy`), and other quality
- checks to make sure the changeset is in good shape before a commit/push happens.
+Pre-commit hooks run all the auto-formatting (`ruff format`), linters 
+(e.g. `ruff` and `mypy`), and other quality checks to make sure the changeset is in 
+good shape before a commit/push happens.
 
 You can install the hooks with (runs for each commit):
 
@@ -82,7 +68,5 @@ pre-commit install -t pre-push
 Or if you want e.g. want to run all checks manually for all files:
 
 ```sh
-pre-commit run --all-files
+poetry run pre-commit run --all-files
 ```
-
----
