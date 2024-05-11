@@ -34,14 +34,14 @@ python = ">=3.10, <3.13"
 click = "*"
 numpy = "^1.26.4"
 pandas = "^2.2.2"
-rasterra = "^0.5.8"
+rasterra = "^0.5.9"
 shapely = "^2.0.4"
 geopandas = "^0.14.4"
 xarray = "^2024.3.0"
 cdsapi = "^0.7.0"
 matplotlib = "^3.8.4"
 scikit-learn = "^1.4.2"
-rra-tools = "^1.0.1"
+rra-tools = "^1.0.2"
 
 [tool.poetry.group.dev.dependencies]
 mkdocstrings = {version = ">=0.23", extras = ["python"]}
