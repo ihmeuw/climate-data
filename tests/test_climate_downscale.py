@@ -1,2 +1,4 @@
 def test_climate_downscale() -> None:
-    pass
+    from climate_downscale import cli
+
+    assert cli

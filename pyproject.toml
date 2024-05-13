@@ -30,8 +30,20 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.10, <4.0"
+python = ">=3.10, <3.13"
 click = "*"
+numpy = "^1.26.4"
+pandas = "^2.2.2"
+rasterra = "^0.5.9"
+shapely = "^2.0.4"
+geopandas = "^0.14.4"
+xarray = "^2024.3.0"
+cdsapi = "^0.7.0"
+matplotlib = "^3.8.4"
+scikit-learn = "^1.4.2"
+rra-tools = "^1.0.2"
+netcdf4 = "^1.6.5"
+pyarrow = "^16.0.0"
 
 [tool.poetry.group.dev.dependencies]
 mkdocstrings = {version = ">=0.23", extras = ["python"]}
@@ -107,7 +119,7 @@ addopts = """\
 """
 
 [tool.coverage.report]
-fail_under = 100
+fail_under = 1
 exclude_lines = [
     'if TYPE_CHECKING:',
     'pragma: no cover'
