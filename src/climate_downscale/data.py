@@ -1,11 +1,9 @@
 from pathlib import Path
 
-
 DEFAULT_ROOT = "/mnt/share/erf/ERA5/"
 
 
 class ClimateDownscaleData:
-
     def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / ".credentials"

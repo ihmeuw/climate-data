@@ -1,12 +1,18 @@
-from typing import TypeVar, ParamSpec
 from pathlib import Path
+from typing import ParamSpec, TypeVar
 
-from climate_downscale.data import ClimateDownscaleData, DEFAULT_ROOT
-from rra_tools.cli_tools import with_output_directory, with_queue, with_choice, ClickOption, RUN_ALL
-from rra_tools import jobmon
-
-import click
 import cdsapi
+import click
+from rra_tools import jobmon
+from rra_tools.cli_tools import (
+    RUN_ALL,
+    ClickOption,
+    with_choice,
+    with_output_directory,
+    with_queue,
+)
+
+from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
 VALID_YEARS = [str(y) for y in range(1990, 2024)]
 VALID_MONTHS = [f"{i:02d}" for i in range(1, 13)]
@@ -65,8 +71,8 @@ def extract_era5_main(
     variable: str,
 ) -> None:
     cddata = ClimateDownscaleData(output_dir)
-    cred_path = cddata.credentials_root / 'copernicus.txt'
-    url, key = cred_path.read_text().strip().split('\n')
+    cred_path = cddata.credentials_root / "copernicus.txt"
+    url, key = cred_path.read_text().strip().split("\n")
 
     copernicus = cdsapi.Client(url=url, key=key)
     kwargs = {
@@ -79,7 +85,7 @@ def extract_era5_main(
         "time_zone": "UTC+00:00",
         "frequency": "1-hourly",
         "grid": "0.1/0.1",
-        "area": {"lat": [-90, 90], "lon": [-180, 180]}
+        "area": {"lat": [-90, 90], "lon": [-180, 180]},
     }
     result = copernicus.service(
         "tool.toolbox.orchestrator.workflow",
@@ -96,7 +102,7 @@ def extract_era5_main(
     copernicus.download(result, [out_path])
 
 
-@click.command()
+@click.command()  # type: ignore[arg-type]
 @with_output_directory(DEFAULT_ROOT)
 @with_year()
 @with_month()
@@ -105,7 +111,7 @@ def extract_era5_task(year: str, month: str, variable: str) -> None:
     extract_era5_main(DEFAULT_ROOT, year, month, variable)
 
 
-@click.command()
+@click.command()  # type: ignore[arg-type]
 @with_output_directory(DEFAULT_ROOT)
 @with_year(allow_all=True)
 @with_variable(allow_all=True)
@@ -135,4 +141,3 @@ def extract_era5(
         },
         runner="cdtask",
     )
-
