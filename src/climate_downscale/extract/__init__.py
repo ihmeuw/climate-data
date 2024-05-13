@@ -3,9 +3,9 @@ from climate_downscale.extract.ncei_climate_stations import (
 )
 
 RUNNERS = {
-    'ncei': extract_ncei_climate_stations,
+    "ncei": extract_ncei_climate_stations,
 }
 
 TASK_RUNNERS = {
-    'ncei': extract_ncei_climate_stations,
+    "ncei": extract_ncei_climate_stations,
 }
