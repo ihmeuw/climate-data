@@ -138,12 +138,11 @@ exclude = [
 # If you need to ignore something for some specific module,
 # add overrides for them. Avoid changing the global config!
 # For example:
-# [[tool.mypy.overrides]]
-# module = [
-#  "my_unpyted_dependency1.*",
-#  "my_unpyted_dependency2.*"
-# ]
-# ignore_missing_imports = true
+ [[tool.mypy.overrides]]
+ module = [
+     "cdsapi.*",
+ ]
+ ignore_missing_imports = true
 
 # [[tool.mypy.overrides]]
 # module = [
