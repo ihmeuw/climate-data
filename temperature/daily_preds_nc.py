@@ -22,7 +22,7 @@ print("output_path: ", output_path)
 final_data = pd.DataFrame()
 
 for file in os.listdir(folder):
-    if file.endswith('.feather'):
+    if file.endswith(".feather"):
         print(file)
         # load the data
         print("Loading data")
@@ -30,15 +30,15 @@ for file in os.listdir(folder):
         # drop index column
         print("Dropping unnecessary columns")
         # data = data.drop(columns='index')
-        data = data[['latitude_st', 'longitude_st', 'day_of_year', 'predictions']]
+        data = data[["latitude_st", "longitude_st", "day_of_year", "predictions"]]
         # filter to get day
         print("Filtering to get day: ", day)
-        data_day = data[data['day_of_year'] == day]
+        data_day = data[data["day_of_year"] == day]
         # round lat/lon for storage
         print("Rounding lat/lon")
-        data_day['latitude_st'] = data_day['latitude_st'].round(10)
-        data_day['longitude_st'] = data_day['longitude_st'].round(10)
-        data_day['predictions'] = data_day['predictions'].round(3)
+        data_day["latitude_st"] = data_day["latitude_st"].round(10)
+        data_day["longitude_st"] = data_day["longitude_st"].round(10)
+        data_day["predictions"] = data_day["predictions"].round(3)
         print("Appending data")
         # Append the data for the current day to the larger DataFrame
         final_data = pd.concat([final_data, data_day])
@@ -53,26 +53,26 @@ day_of_year = day - 1
 date = date + timedelta(days=day_of_year)
 
 # Format the datetime object into a string
-date_string = date.strftime('%Y_%m_%d')
+date_string = date.strftime("%Y_%m_%d")
 print("Here is the date string: ", date_string)
 
 # replace old time columns with date
-final_data.rename(columns={'latitude_st': 'lat', 'longitude_st': 'lon'}, inplace=True)
-final_data = final_data[['lat', 'lon', 'predictions']]
-final_data['date'] = date_string
+final_data.rename(columns={"latitude_st": "lat", "longitude_st": "lon"}, inplace=True)
+final_data = final_data[["lat", "lon", "predictions"]]
+final_data["date"] = date_string
 
-filename = 'predictions_' + date_string
+filename = "predictions_" + date_string
 
-print('resetting index')
-final_data.set_index(['date', 'lat', 'lon'], inplace=True)
+print("resetting index")
+final_data.set_index(["date", "lat", "lon"], inplace=True)
 
 # convert the dataframe to an xarray Dataset
-print('converting to xarray Dataset')
+print("converting to xarray Dataset")
 final_data = xr.Dataset.from_dataframe(final_data)
 
 # Calculate the scale factor and add offset
-min_value = final_data['predictions'].min(dim=('date', 'lat', 'lon')).item()
-max_value = final_data['predictions'].max(dim=('date', 'lat', 'lon')).item()
+min_value = final_data["predictions"].min(dim=("date", "lat", "lon")).item()
+max_value = final_data["predictions"].max(dim=("date", "lat", "lon")).item()
 scale_factor = (max_value - min_value) / (2**16 - 1)
 add_offset = min_value
 
@@ -82,13 +82,15 @@ os.makedirs(output_path, exist_ok=True)
 print("saving file to: ", output_path + filename)
 
 # save the Dataset to a netCDF file
-final_data.to_netcdf(output_path + filename + '.nc',
-            encoding={
-                'predictions': {
-                    'dtype': 'float32', 
-                    'scale_factor': scale_factor, 
-                    'add_offset': add_offset, 
-                    '_FillValue': -9999,
-                    'zlib': True
-                    }
-                })
+final_data.to_netcdf(
+    output_path + filename + ".nc",
+    encoding={
+        "predictions": {
+            "dtype": "float32",
+            "scale_factor": scale_factor,
+            "add_offset": add_offset,
+            "_FillValue": -9999,
+            "zlib": True,
+        }
+    },
+)
