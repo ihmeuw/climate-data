@@ -21,13 +21,13 @@ Pipelines to downscale ERA5 and CMIP6 data.
 
 Instructions using conda:
 
-1. Clone this repository. 
+1. Clone this repository.
 
     Over ssh:
     ```sh
     git clone git@github.com:ihmeuw/climate-downscale.git
     ```
-    
+
     Over https:
     ```sh
     git clone https://github.com/ihmeuw/climate-downscale.git
@@ -49,8 +49,8 @@ Instructions using conda:
 
 ### Pre-commit
 
-Pre-commit hooks run all the auto-formatting (`ruff format`), linters 
-(e.g. `ruff` and `mypy`), and other quality checks to make sure the changeset is in 
+Pre-commit hooks run all the auto-formatting (`ruff format`), linters
+(e.g. `ruff` and `mypy`), and other quality checks to make sure the changeset is in
 good shape before a commit/push happens.
 
 You can install the hooks with (runs for each commit):
