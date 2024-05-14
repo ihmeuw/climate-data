@@ -27,3 +27,11 @@ class ClimateDownscaleData:
     @property
     def ncei_climate_stations(self) -> Path:
         return self.extracted_data / "ncei_climate_stations"
+
+    @property
+    def srtm_elevation(self) -> Path:
+        return self.extracted_data / "srtm_elevation"
+
+    @property
+    def rub_local_climate_zones(self) -> Path:
+        return self.extracted_data / "rub_local_climate_zones"
