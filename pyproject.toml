@@ -62,8 +62,9 @@ ruff = ">=0.2.0"
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[project.scripts]
-my-cli = "climate_downscale.cli:main"
+[tool.poetry.scripts]
+cdrun = "climate_downscale.cli:cdrun"
+cdtask = "climate_downscale.cli:cdtask"
 
 [tool.ruff]
 target-version = "py310" # The lowest supported version
