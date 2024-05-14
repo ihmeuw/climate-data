@@ -2198,13 +2198,13 @@ use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
 name = "rra-tools"
-version = "1.0.2"
+version = "1.0.6"
 description = "Common utilities for IHME Rapid Response team pipelines."
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "rra_tools-1.0.2-py3-none-any.whl", hash = "sha256:380235dbaa3df1e2b8881921e65e11f246e3819f64c4399b3e889440110259f9"},
-    {file = "rra_tools-1.0.2.tar.gz", hash = "sha256:48703895315e35a7f478e89dbe86178e4181271946d089a3ca9b11b1b2d44e87"},
+    {file = "rra_tools-1.0.6-py3-none-any.whl", hash = "sha256:51d2f56e0b6fc13a7198e517aa61aed5fcd85c625bfb0e953a9e81ef12a4f7d9"},
+    {file = "rra_tools-1.0.6.tar.gz", hash = "sha256:9abc933b7c0efc2a899d56fd71e9c89a21c82950788c0bbc559200615a17880d"},
 ]
 
 [package.dependencies]
@@ -2657,4 +2657,4 @@ viz = ["matplotlib", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "755d516be20af5ac9530a84dcbd1ee3a80b479a1f94356c6b0aa9fa72c3d720d"
+content-hash = "82a6da0cf787906905b5cafad102974185f368c20e3ec6ef4e39592a43cf830f"
