@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 import pandas as pd
 from rra_tools.cli_tools import with_output_directory
-from rra_tools.shell_tools import wget
+from rra_tools.shell_tools import wget, mkdir
 
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
@@ -17,22 +17,29 @@ URL_TEMPLATE = (
 
 def extract_ncei_climate_stations_main(output_dir: str | Path) -> None:
     cd_data = ClimateDownscaleData(output_dir)
+    try:
+        print('Setting up dir')
+        download_dir = cd_data.ncei_climate_stations / 'temp'
+        mkdir(download_dir)
 
-    dfs = []
-    for year in EXTRACTION_YEARS:
-        with tempfile.NamedTemporaryFile(suffix=".tar.gz") as f:
+        dfs = []
+        print('Downloading data')
+        for year in EXTRACTION_YEARS:
+            p = download_dir / f"{year}.tar.gz"
+            outdir = download_dir / str(year)
+            mkdir(outdir)
             url = URL_TEMPLATE.format(year=year)
-
-            wget(url, f.name)
-
-            with tempfile.TemporaryDirectory() as outdir:
-                shutil.unpack_archive(f.name, outdir)
-                dfs.append(
-                    pd.concat([pd.read_csv(f) for f in Path(outdir).glob("*.csv")])
-                )
-    data = pd.concat(dfs)
-
-    data.to_parquet(cd_data.ncei_climate_stations / "climate_stations.parquet")
+            wget(url, str(p))
+            shutil.unpack_archive(str(p), outdir)
+            dfs.append(
+                pd.concat([pd.read_csv(f) for f in Path(outdir).glob("*.csv")])
+            )
+        print('concatting')
+        data = pd.concat(dfs)
+        print('writing')
+        data.to_parquet(cd_data.ncei_climate_stations / "climate_stations.parquet")
+    finally:
+        shutil.rmtree(download_dir)
 
 
 @click.command()  # type: ignore[arg-type]
