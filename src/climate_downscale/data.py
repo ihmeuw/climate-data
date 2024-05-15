@@ -33,5 +33,9 @@ class ClimateDownscaleData:
         return self.extracted_data / "srtm_elevation_gl1"
 
     @property
+    def open_topography_elevation(self) -> Path:
+        return self.extracted_data / "open_topography_elevation"
+
+    @property
     def rub_local_climate_zones(self) -> Path:
         return self.extracted_data / "rub_local_climate_zones"

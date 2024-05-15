@@ -7,21 +7,22 @@ from rra_tools.cli_tools import (
     with_output_directory,
     with_queue,
 )
+import tqdm
 
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
 API_ENDPOINT = "https://portal.opentopography.org/API/globaldem"
 
 ELEVATION_MODELS = [
-    "SRTMGL3",  # SRTM Global 3 arc second (90m)
-    "SRTMGL1",  # SRTM Global 1 arc second (30m)
-    "SRTMGL1_E",  # SRTM Global 1 arc second ellipsoidal height (30m)
-    "AW3D30",  # ALOS World 3D 30m
-    "AW3D30_E",  # ALOS World 3D 30m ellipsoidal height
+    "SRTMGL3",     # SRTM Global 3 arc second (90m)
+    "SRTMGL1",     # SRTM Global 1 arc second (30m)
+    "SRTMGL1_E",   # SRTM Global 1 arc second ellipsoidal height (30m)
+    "AW3D30",      # ALOS World 3D 30m
+    "AW3D30_E",    # ALOS World 3D 30m ellipsoidal height
     "SRTM15Plus",  # SRTM 15 arc second (500m)
-    "NASADEM",  # NASA DEM 1 arc second (30m)
-    "COP30",  # Copernicus 1 arc second (30m)
-    "COP90",  # Copernicus 3 arc second (90m)
+    "NASADEM",     # NASA DEM 1 arc second (30m)
+    "COP30",       # Copernicus 1 arc second (30m)
+    "COP90",       # Copernicus 3 arc second (90m)
 ]
 
 FETCH_SIZE = 5  # degrees, should be small enough for any model
@@ -38,7 +39,7 @@ def extract_elevation_main(
     key = cred_path.read_text().strip()
 
     params: dict[str, int | str] = {
-        "dem_type": model_name,
+        "demtype": model_name,
         "south": lat_start,
         "north": lat_start + FETCH_SIZE,
         "west": lon_start,
@@ -47,12 +48,12 @@ def extract_elevation_main(
         "API_Key": key,
     }
 
-    response = requests.get(API_ENDPOINT, params=params, stream=True, timeout=10)
+    response = requests.get(API_ENDPOINT, params=params, stream=True, timeout=30)
     response.raise_for_status()
 
-    out_path = cd_data.srtm_elevation_gl1 / f"{model_name}_{lat_start}_{lon_start}.tif"
+    out_path = cd_data.open_topography_elevation / f"{model_name}_{lat_start}_{lon_start}.tif"
     with out_path.open("wb") as fp:
-        for chunk in response.iter_content(chunk_size=None):
+        for chunk in tqdm.tqdm(response.iter_content(chunk_size=64 * 1024**2)):
             fp.write(chunk)
 
 
@@ -72,8 +73,8 @@ def extract_elevation_main(
 )
 @click.option(
     "--lon-start",
-    required=int,
-    type=float,
+    required=True,
+    type=int,
     help="Longitude of the top-left corner of the tile.",
 )
 def extract_elevation_task(

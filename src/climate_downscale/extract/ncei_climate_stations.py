@@ -29,9 +29,12 @@ def extract_ncei_climate_stations_main(output_dir: str | Path, year: str) -> Non
     shutil.unpack_archive(str(gz_path), year_dir)
 
     data = pd.concat([pd.read_csv(f) for f in year_dir.glob("*.csv")])
+    data['STATION'] = data['STATION'].astype(str)
     out_path = cd_data.ncei_climate_stations / f"{year}.parquet"
-    touch(out_path)
     data.to_parquet(out_path)
+
+    gz_path.unlink()
+    shutil.rmtree(year_dir)
 
 
 @click.command()  # type: ignore[arg-type]
@@ -52,9 +55,9 @@ def extract_ncei_climate_stations_task(output_dir: str, year: str) -> None:
 @with_queue()
 def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
-        "extract_ncei_climate_stations",
+        "extract ncei",
         node_args={
-            "output_dir": [output_dir],
+            "output-dir": [output_dir],
             "year": EXTRACTION_YEARS,
         },
         task_resources={
@@ -66,3 +69,4 @@ def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
         },
         runner="cdtask",
     )
+
