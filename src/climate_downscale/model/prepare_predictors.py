@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import click
+import numpy as np
 import rasterra as rt
 from rra_tools import jobmon
 from rra_tools.cli_tools import (
@@ -42,8 +43,24 @@ def load_elevation(
 
             if p.exists():
                 paths.append(p)
-
-    return rt.load_mf_raster(paths)
+    if paths:
+        raster = rt.load_mf_raster(paths)
+    else:
+        template = make_raster_template(
+            x_min=longitudes[0],
+            y_min=latitudes[0],
+            stride=STRIDE,
+            resolution=0.1,
+        )
+        no_data = -32768
+        arr = np.full((len(latitudes), len(longitudes)), no_data, dtype=np.int16)
+        raster = rt.RasterArray(
+            data=arr,
+            transform=template.transform,
+            crs=template.crs,
+            no_data_value=-32768,
+        )
+    return raster
 
 
 def prepare_predictors_main(
@@ -91,7 +108,9 @@ def prepare_predictors_main(
 @with_choice("lon-start", allow_all=False, choices=LONGITUDES)
 @with_output_directory(DEFAULT_ROOT)
 def prepare_predictors_task(
-    lat_start: str, lon_start: str, output_dir: str,
+    lat_start: str,
+    lon_start: str,
+    output_dir: str,
 ) -> None:
     prepare_predictors_main(output_dir, int(lat_start), int(lon_start))
 
