@@ -98,7 +98,7 @@ def extract_era5_main(
         },
     )
 
-    out_path = cddata.era5 / f"{variable}_{year}_{month}.nc"
+    out_path = cddata.era5_temperature_daily_mean / f"{variable}_{year}_{month}.nc"
     copernicus.download(result, [out_path])
 
 

@@ -1,50 +1,68 @@
 import shutil
-import tempfile
 from pathlib import Path
 
 import click
 import pandas as pd
-from rra_tools.cli_tools import with_output_directory
-from rra_tools.shell_tools import wget, mkdir, touch
+from rra_tools import jobmon
+from rra_tools.cli_tools import with_choice, with_output_directory, with_queue
+from rra_tools.shell_tools import mkdir, touch, wget
 
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
-EXTRACTION_YEARS = list(range(1990, 2024))
+EXTRACTION_YEARS = [str(y) for y in range(1990, 2024)]
 URL_TEMPLATE = (
     "https://www.ncei.noaa.gov/data/global-summary-of-the-day/archive/{year}.tar.gz"
 )
 
 
-def extract_ncei_climate_stations_main(output_dir: str | Path) -> None:
+def extract_ncei_climate_stations_main(output_dir: str | Path, year: str) -> None:
     cd_data = ClimateDownscaleData(output_dir)
-    try:
-        print('Setting up dir')
-        download_dir = cd_data.ncei_climate_stations / 'temp'
-        mkdir(download_dir)
 
-        dfs = []
-        print('Downloading data')
-        for year in EXTRACTION_YEARS:
-            p = download_dir / f"{year}.tar.gz"
-            outdir = download_dir / str(year)
-            mkdir(outdir)
-            url = URL_TEMPLATE.format(year=year)
-            wget(url, str(p))
-            shutil.unpack_archive(str(p), outdir)
-            dfs.append(
-                pd.concat([pd.read_csv(f) for f in Path(outdir).glob("*.csv")])
-            )
-        print('concatting')
-        data = pd.concat(dfs)
-        print('writing')
-        out_path = cd_data.ncei_climate_stations / "climate_stations.parquet"
-        touch(out_path)
-        data.to_parquet(out_path)
-    finally:
-        shutil.rmtree(download_dir)
+    gz_path = cd_data.ncei_climate_stations / f"{year}.tar.gz"
+    if gz_path.exists():
+        gz_path.unlink()
+    year_dir = cd_data.ncei_climate_stations / year
+    mkdir(year_dir, exist_ok=True)
+
+    url = URL_TEMPLATE.format(year=year)
+    wget(url, str(gz_path))
+    shutil.unpack_archive(str(gz_path), year_dir)
+
+    data = pd.concat([pd.read_csv(f) for f in year_dir.glob("*.csv")])
+    out_path = cd_data.ncei_climate_stations / f"{year}.parquet"
+    touch(out_path)
+    data.to_parquet(out_path)
+
+
+@click.command()  # type: ignore[arg-type]
+@with_choice(
+    "year",
+    "y",
+    allow_all=False,
+    choices=EXTRACTION_YEARS,
+    help="Year to extract data for.",
+)
+@with_output_directory(DEFAULT_ROOT)
+def extract_ncei_climate_stations_task(output_dir: str, year: str) -> None:
+    extract_ncei_climate_stations_main(output_dir, year)
 
 
 @click.command()  # type: ignore[arg-type]
 @with_output_directory(DEFAULT_ROOT)
-def extract_ncei_climate_stations(output_dir: str) -> None:
-    extract_ncei_climate_stations_main(output_dir)
+@with_queue()
+def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
+    jobmon.run_parallel(
+        "extract_ncei_climate_stations",
+        node_args={
+            "output_dir": [output_dir],
+            "year": EXTRACTION_YEARS,
+        },
+        task_resources={
+            "queue": queue,
+            "cores": 1,
+            "memory": "10G",
+            "runtime": "240m",
+            "project": "proj_rapidresponse",
+        },
+        runner="cdtask",
+    )

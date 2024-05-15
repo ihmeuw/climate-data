@@ -50,7 +50,7 @@ def extract_elevation_main(
     response = requests.get(API_ENDPOINT, params=params, stream=True, timeout=10)
     response.raise_for_status()
 
-    out_path = cd_data.elevation / f"{model_name}_{lat_start}_{lon_start}.tif"
+    out_path = cd_data.srtm_elevation_gl1 / f"{model_name}_{lat_start}_{lon_start}.tif"
     with out_path.open("wb") as fp:
         for chunk in response.iter_content(chunk_size=None):
             fp.write(chunk)
