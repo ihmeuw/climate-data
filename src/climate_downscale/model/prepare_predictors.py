@@ -87,13 +87,13 @@ def prepare_predictors_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@with_choice("lat_start", allow_all=True, choices=LATITUDES)
-@with_choice("lon_start", allow_all=True, choices=LONGITUDES)
+@with_choice("lat-start", allow_all=False, choices=LATITUDES)
+@with_choice("lon-start", allow_all=False, choices=LONGITUDES)
 @with_output_directory(DEFAULT_ROOT)
 def prepare_predictors_task(
-    lat_start: int, lon_start: int, output_dir: str | Path
+    lat_start: str, lon_start: str, output_dir: str,
 ) -> None:
-    prepare_predictors_main(output_dir, lat_start, lon_start)
+    prepare_predictors_main(output_dir, int(lat_start), int(lon_start))
 
 
 @click.command()  # type: ignore[arg-type]
@@ -104,8 +104,8 @@ def prepare_predictors(output_dir: str, queue: str) -> None:
         "model prepare_predictors",
         node_args={
             "output-dir": [output_dir],
-            "lat_start": LATITUDES,
-            "lon_start": LONGITUDES,
+            "lat-start": LATITUDES,
+            "lon-start": LONGITUDES,
         },
         task_resources={
             "queue": queue,
