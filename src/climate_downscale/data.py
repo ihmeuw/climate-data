@@ -1,4 +1,7 @@
 from pathlib import Path
+from typing import Any
+
+import rasterra as rt
 
 DEFAULT_ROOT = "/mnt/share/erf/climate_downscale/"
 
@@ -39,3 +42,51 @@ class ClimateDownscaleData:
     @property
     def rub_local_climate_zones(self) -> Path:
         return self.extracted_data / "rub_local_climate_zones"
+
+    @property
+    def model(self) -> Path:
+        return self.root / "model"
+
+    @property
+    def predictors(self) -> Path:
+        return self.model / "predictors"
+
+    def save_predictor(self, predictor: rt.RasterArray, name: str) -> None:
+        save_raster(predictor, self.predictors / f"{name}.tif")
+
+    def load_predictor(self, name: str) -> rt.RasterArray:
+        return rt.load_raster(self.predictors / f"{name}.tif")
+
+
+def save_raster(
+    raster: rt.RasterArray,
+    output_path: str | Path,
+    num_cores: int = 1,
+    **kwargs: Any,
+) -> None:
+    """Save a raster to a file with standard parameters."""
+    save_params = {
+        "tiled": True,
+        "blockxsize": 512,
+        "blockysize": 512,
+        "compress": "ZSTD",
+        "predictor": 2,  # horizontal differencing
+        "num_threads": num_cores,
+        "bigtiff": "yes",
+        **kwargs,
+    }
+    raster.to_file(output_path, **save_params)
+
+
+def save_raster_to_cog(
+    raster: rt.RasterArray,
+    output_path: str | Path,
+    num_cores: int = 1,
+    resampling: str = "nearest",
+) -> None:
+    """Save a raster to a COG file."""
+    cog_save_params = {
+        "driver": "COG",
+        "overview_resampling": resampling,
+    }
+    save_raster(raster, output_path, num_cores, **cog_save_params)
