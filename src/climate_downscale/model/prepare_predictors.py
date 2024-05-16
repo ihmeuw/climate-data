@@ -65,7 +65,7 @@ def load_elevation(
 
 def load_lcz_data(cd_data, latitudes, longitudes):
     path = cd_data.rub_local_climate_zones / 'lcz_filter_v2.tif'
-    bounds = (longitudes[0], latitudes[0], longitudes[1], latitudes[1])
+    bounds = (longitudes[0], latitudes[0], longitudes[-1], latitudes[-1])
     return rt.load_raster(path, bounds=bounds)
 
 
@@ -106,7 +106,7 @@ def prepare_predictors_main(
         predictors["elevation_era5"] - predictors["elevation_target"]
     )
     predictors["lcz_era5"] = lcz.resample_to(template_era5, resampling="mode")
-    predictors["lcz_target"] = lcz.resample_to(template.target, resampling="mode")
+    predictors["lcz_target"] = lcz.resample_to(template_target, resampling="mode")
 
     for name, predictor in predictors.items():
         cd_data.save_predictor(predictor, f"{name}_{lat_start}_{lon_start}")
