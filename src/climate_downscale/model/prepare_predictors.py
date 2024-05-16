@@ -5,21 +5,13 @@ import click
 import numpy as np
 import rasterra as rt
 from rra_tools import jobmon
-from rra_tools.cli_tools import (
-    with_choice,
-    with_output_directory,
-    with_queue,
-)
 
+from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_downscale.utils import make_raster_template
 
-# Degrees
-
-STRIDE = 30
-LATITUDES = [str(lat) for lat in range(-90, 90, STRIDE)]
-LONGITUDES = [str(lon) for lon in range(-180, 180, STRIDE)]
 PAD = 1
+STRIDE = clio.STRIDE
 
 
 def load_elevation(
@@ -111,13 +103,13 @@ def prepare_predictors_main(
     predictors["lcz_target"] = lcz.resample_to(template_target, resampling="mode")
 
     for name, predictor in predictors.items():
-        cd_data.save_predictor(predictor, f"{name}_{lat_start}_{lon_start}")
+        cd_data.save_predictor(predictor, name, lat_start, lon_start)
 
 
 @click.command()  # type: ignore[arg-type]
-@with_choice("lat-start", allow_all=False, choices=LATITUDES)
-@with_choice("lon-start", allow_all=False, choices=LONGITUDES)
-@with_output_directory(DEFAULT_ROOT)
+@clio.with_lat_start(allow_all=False)
+@clio.with_lon_start(allow_all=False)
+@clio.with_output_directory(DEFAULT_ROOT)
 def prepare_predictors_task(
     lat_start: str,
     lon_start: str,
@@ -127,15 +119,15 @@ def prepare_predictors_task(
 
 
 @click.command()  # type: ignore[arg-type]
-@with_output_directory(DEFAULT_ROOT)
-@with_queue()
+@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_queue()
 def prepare_predictors(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
         "model prepare_predictors",
         node_args={
             "output-dir": [output_dir],
-            "lat-start": LATITUDES,
-            "lon-start": LONGITUDES,
+            "lat-start": clio.LATITUDES,
+            "lon-start": clio.LONGITUDES,
         },
         task_resources={
             "queue": queue,

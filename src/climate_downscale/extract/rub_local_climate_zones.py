@@ -1,9 +1,9 @@
 from pathlib import Path
 
 import click
-from rra_tools.cli_tools import with_output_directory
 from rra_tools.shell_tools import wget
 
+from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
 URL_TEMPLATE = "https://zenodo.org/records/8419340/files/{file_name}?download=1"
@@ -27,6 +27,6 @@ def extract_rub_local_climate_zones_main(output_dir: str | Path) -> None:
 
 
 @click.command()  # type: ignore[arg-type]
-@with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(DEFAULT_ROOT)
 def extract_rub_local_climate_zones(output_dir: str) -> None:
     extract_rub_local_climate_zones_main(output_dir)

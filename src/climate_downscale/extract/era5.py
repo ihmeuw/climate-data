@@ -1,67 +1,12 @@
 from pathlib import Path
-from typing import ParamSpec, TypeVar
 
 import cdsapi
 import click
 from rra_tools import jobmon
-from rra_tools.cli_tools import (
-    RUN_ALL,
-    ClickOption,
-    with_choice,
-    with_output_directory,
-    with_queue,
-)
+from rra_tools.shell_tools import touch
 
+from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
-
-VALID_YEARS = [str(y) for y in range(1990, 2024)]
-VALID_MONTHS = [f"{i:02d}" for i in range(1, 13)]
-VALID_VARIABLES = [
-    "total_precipitation",
-    "2m_temperature",
-]
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-
-
-def with_year(
-    *,
-    allow_all: bool = False,
-) -> ClickOption[_P, _T]:
-    return with_choice(
-        "year",
-        "y",
-        allow_all=allow_all,
-        choices=VALID_YEARS,
-        help="Year to extract data for.",
-    )
-
-
-def with_month(
-    *,
-    allow_all: bool = False,
-) -> ClickOption[_P, _T]:
-    return with_choice(
-        "month",
-        "m",
-        allow_all=allow_all,
-        choices=VALID_MONTHS,
-        help="Month to extract data for.",
-    )
-
-
-def with_variable(
-    *,
-    allow_all: bool = False,
-) -> ClickOption[_P, _T]:
-    return with_choice(
-        "variable",
-        "x",
-        allow_all=allow_all,
-        choices=VALID_VARIABLES,
-        help="Variable to extract.",
-    )
 
 
 def extract_era5_main(
@@ -99,31 +44,32 @@ def extract_era5_main(
     )
 
     out_path = cddata.era5_temperature_daily_mean / f"{variable}_{year}_{month}.nc"
+    touch(out_path, exist_ok=True)
     copernicus.download(result, [out_path])
 
 
 @click.command()  # type: ignore[arg-type]
-@with_output_directory(DEFAULT_ROOT)
-@with_year()
-@with_month()
-@with_variable()
-def extract_era5_task(year: str, month: str, variable: str) -> None:
-    extract_era5_main(DEFAULT_ROOT, year, month, variable)
+@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_year()
+@clio.with_month()
+@clio.with_climate_variable()
+def extract_era5_task(year: str, month: str, climate_variable: str) -> None:
+    extract_era5_main(DEFAULT_ROOT, year, month, climate_variable)
 
 
 @click.command()  # type: ignore[arg-type]
-@with_output_directory(DEFAULT_ROOT)
-@with_year(allow_all=True)
-@with_variable(allow_all=True)
-@with_queue()
+@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_year(allow_all=True)
+@clio.with_climate_variable(allow_all=True)
+@clio.with_queue()
 def extract_era5(
     output_dir: str,
     year: str,
     variable: str,
     queue: str,
 ) -> None:
-    years = VALID_YEARS if year == RUN_ALL else [year]
-    variables = VALID_VARIABLES if variable == RUN_ALL else [variable]
+    years = clio.VALID_YEARS if year == clio.RUN_ALL else [year]
+    variables = clio.VALID_CLIMATE_VARIABLES if variable == clio.RUN_ALL else [variable]
 
     jobmon.run_parallel(
         task_name="extract_era5",
