@@ -34,7 +34,7 @@ python = ">=3.10, <3.13"
 click = "*"
 numpy = "^1.26.4"
 pandas = "^2.2.2"
-rasterra = "^0.5.10"
+rasterra = "^0.5.11"
 shapely = "^2.0.4"
 geopandas = "^0.14.4"
 xarray = "^2024.3.0"
@@ -92,6 +92,7 @@ ignore = [
     "RET505",   # Else after return, makes a lot of false positives
     "E501",     # Line too long, this is autoformatted
     "PYI041",   # Use float instead of int | float; dumb rule
+    "T201",     # print is fine for now.
 ]
 
 [tool.ruff.lint.per-file-ignores]

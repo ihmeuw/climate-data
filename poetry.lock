@@ -2069,13 +2069,13 @@ test = ["boto3 (>=1.2.4)", "hypothesis", "packaging", "pytest (>=2.8.2)", "pytes
 
 [[package]]
 name = "rasterra"
-version = "0.5.10"
+version = "0.5.11"
 description = "A sleek, object-oriented interface designed for intuitive raster data manipulation in Python."
 optional = false
 python-versions = "<3.13,>=3.10"
 files = [
-    {file = "rasterra-0.5.10-py3-none-any.whl", hash = "sha256:9d281f98e4cb6375a12a7b09cc61dcb8a07c53ecab12e62c7147254ae04307b6"},
-    {file = "rasterra-0.5.10.tar.gz", hash = "sha256:6080156dc8395c7ba427d518ad5d8cbc4fe583ca372b281819807a4d0aacd543"},
+    {file = "rasterra-0.5.11-py3-none-any.whl", hash = "sha256:85344ec80b38c6aa0d337fb564d98f69dc5cd3f7699162e5016b65cf2a33f8ad"},
+    {file = "rasterra-0.5.11.tar.gz", hash = "sha256:8f7e396e50ec0b8c7e7b2bac5e01bd865ebcd2f8757f72ab82daf7c73723e5d9"},
 ]
 
 [package.dependencies]
@@ -2683,4 +2683,4 @@ viz = ["matplotlib", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "7dcea9087ab369daf1a2661541b1add72c879d396fda8b2115a24c999356a822"
+content-hash = "76b81344dbd944abdc6006c3ce2e8a8ce7ae3131f747247396f1fb01ab80e1a3"

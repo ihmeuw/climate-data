@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import click
+from rra_tools.cli_tools import with_output_directory
 from rra_tools.shell_tools import wget
 
-from climate_downscale.data import ClimateDownscaleData
+from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
 URL_TEMPLATE = "https://zenodo.org/records/8419340/files/{file_name}?download=1"
 FILES = [
@@ -20,10 +21,12 @@ def extract_rub_local_climate_zones_main(output_dir: str | Path) -> None:
     out_root = data.rub_local_climate_zones
 
     for file_name in FILES:
+        print(f"Downloading {file_name}")
         url = URL_TEMPLATE.format(file_name=file_name)
         wget(url, out_root / file_name)
 
 
-@click.command()
-def extract_rub_local_climate_zones() -> None:
-    raise NotImplementedError
+@click.command()  # type: ignore[arg-type]
+@with_output_directory(DEFAULT_ROOT)
+def extract_rub_local_climate_zones(output_dir: str) -> None:
+    extract_rub_local_climate_zones_main(output_dir)

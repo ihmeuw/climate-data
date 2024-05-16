@@ -1,22 +1,31 @@
-import pandas as pd
-import xarray as xr
-import rasterra as rt
 from pathlib import Path
 
-def get_era5_temperature(year: int | str, cs_df: pd.DataFrame):
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import rasterra as rt
+import xarray as xr
+
+
+def get_era5_temperature(
+    year: int | str, cs_df: pd.DataFrame
+) -> npt.NDArray[np.float64]:
     lat = xr.DataArray(cs_df["lat"].values, dims=["points"])
     lon = xr.DataArray(cs_df["lon"].values, dims=["points"])
     time = xr.DataArray(cs_df["date"].values, dims=["points"])
-    
+
     era5 = xr.load_dataset(
         f"/mnt/share/erf/climate_downscale/extracted_data/era5_temperature_daily_mean/{year}_era5_temp_daily.nc"
     )
 
-    era5 = era5.assign_coords(longitude=(((era5.longitude + 180) % 360) - 180)).sortby(['latitude', 'longitude'])
+    era5 = era5.assign_coords(longitude=(((era5.longitude + 180) % 360) - 180)).sortby(
+        ["latitude", "longitude"]
+    )
     arr = era5.sel(latitude=lat, longitude=lon, time=time, method="nearest")
     if "expver" in era5.coords:
         arr = arr.sel(expver=1).combine_first(arr.sel(expver=5))
-    return arr['t2m'].to_numpy() - 273.15
+    return arr["t2m"].to_numpy() - 273.15
+
 
 year = 2023
 
@@ -45,25 +54,49 @@ climate_stations["dayofyear"] = climate_stations["date"].dt.dayofyear
 
 # Add temperature
 climate_stations["temperature"] = 5 / 9 * (climate_stations["temperature"] - 32)
-climate_stations['era5_temperature'] = get_era5_temperature(year, climate_stations)
+climate_stations["era5_temperature"] = get_era5_temperature(year, climate_stations)
+
+lon, lat = climate_stations["lon"].to_numpy(), climate_stations["lat"].to_numpy()
 
 # Elevation pieces
-target_elevation = rt.load_mf_raster(list(Path("/mnt/share/erf/climate_downscale/model/predictors").glob("elevation_target_*.tif")))
-climate_stations['target_elevation'] = srtm_elevation.select(climate_stations['lon'], climate_stations['lat'])
-era5_elevation = rt.load_mf_raster(list(Path("/mnt/share/erf/climate_downscale/model/predictors").glob("elevation_era5_*.tif")))
-climate_stations['era5_elevation'] = era5_elevation.select(climate_stations['lon'], climate_stations['lat'])
+target_elevation = rt.load_mf_raster(
+    list(
+        Path("/mnt/share/erf/climate_downscale/model/predictors").glob(
+            "elevation_target_*.tif"
+        )
+    )
+)
+climate_stations["target_elevation"] = target_elevation.select(lon, lat)
+era5_elevation = rt.load_mf_raster(
+    list(
+        Path("/mnt/share/erf/climate_downscale/model/predictors").glob(
+            "elevation_era5_*.tif"
+        )
+    )
+)
+climate_stations["era5_elevation"] = era5_elevation.select(lon, lat)
 
-climate_stations['elevation'] = climate_stations['ncei_elevation']
-missing_elevation = climate_stations['elevation'] < -999
-
-climate_stations['elevation'] = climate_stations['ncei_elevation']
-missing_elevation = climate_stations['elevation'] < -999
-climate_stations.loc[missing_elevation, 'elevation'] = climate_stations.loc[missing_elevation, 'target_elevation']
-still_missing_elevation = climate_stations['elevation'] < -999
+climate_stations["elevation"] = climate_stations["ncei_elevation"]
+nodata_val = -999
+missing_elevation = climate_stations["elevation"] < nodata_val
+climate_stations.loc[missing_elevation, "elevation"] = climate_stations.loc[
+    missing_elevation, "target_elevation"
+]
+still_missing_elevation = climate_stations["elevation"] < nodata_val
 climate_stations = climate_stations.loc[~still_missing_elevation]
 
 # Local climate zone
-target_lcz = rt.load_mf_raster(list(Path("/mnt/share/erf/climate_downscale/model/predictors").glob("lcz_target_*.tif")))
-climate_stations['target_lcz'] = target_lcz.select(climate_stations['lon'], climate_stations['lat'])
-era5_lcz = rt.load_mf_raster(list(Path("/mnt/share/erf/climate_downscale/model/predictors").glob("lcz_era5_*.tif")))
-climate_stations['era5_lcz'] = era5_lcz.select(climate_stations['lon'], climate_stations['lat'])
+target_lcz = rt.load_mf_raster(
+    list(
+        Path("/mnt/share/erf/climate_downscale/model/predictors").glob(
+            "lcz_target_*.tif"
+        )
+    )
+)
+climate_stations["target_lcz"] = target_lcz.select(lon, lat)
+era5_lcz = rt.load_mf_raster(
+    list(
+        Path("/mnt/share/erf/climate_downscale/model/predictors").glob("lcz_era5_*.tif")
+    )
+)
+climate_stations["era5_lcz"] = era5_lcz.select(lon, lat)
