@@ -85,8 +85,6 @@ def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
     data.loc[missing_elevation, "elevation"] = data.loc[
         missing_elevation, "target_elevation"
     ]
-    still_missing_elevation = data["elevation"] < nodata_val
-    data = data.loc[~still_missing_elevation]
 
     # Local climate zone
     data["target_lcz"] = cd_data.load_predictor("lcz_target").select(
@@ -111,7 +109,7 @@ def prepare_training_data_task(output_dir: str, year: str) -> None:
 @clio.with_queue()
 def prepare_training_data(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
-        "prepare training data",
+        "model prepare_training_data",
         node_args={
             "output-dir": [output_dir],
             "year": clio.VALID_YEARS,
@@ -119,8 +117,8 @@ def prepare_training_data(output_dir: str, queue: str) -> None:
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "10G",
-            "runtime": "240m",
+            "memory": "30G",
+            "runtime": "30m",
             "project": "proj_rapidresponse",
         },
         runner="cdtask",
