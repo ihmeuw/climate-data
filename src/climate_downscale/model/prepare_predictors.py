@@ -58,7 +58,7 @@ def load_elevation(
 def load_lcz_data(
     cd_data: ClimateDownscaleData, latitudes: Sequence[int], longitudes: Sequence[int]
 ) -> rt.RasterArray:
-    path = cd_data.rub_local_climate_zones / "lcz_filter_v2.tif"
+    path = cd_data.rub_local_climate_zones / "lcz_filter_v3.tif"
     bounds = (longitudes[0], latitudes[0], longitudes[-1], latitudes[-1])
     return rt.load_raster(path, bounds=bounds)
 
