@@ -115,12 +115,15 @@ def extract_elevation(
     lon_starts = list(range(-180, 180, FETCH_SIZE))
 
     jobmon.run_parallel(
+        runner="cdtask",
         task_name="extract_era5",
         node_args={
-            "output-dir": [output_dir],
             "model-name": [model_name],
             "lat-start": lat_starts,
             "lon-start": lon_starts,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -129,5 +132,4 @@ def extract_elevation(
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )

@@ -123,11 +123,14 @@ def prepare_predictors_task(
 @clio.with_queue()
 def prepare_predictors(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
-        "model prepare_predictors",
+        runner="cdtask",
+        task_name="model prepare_predictors",
         node_args={
-            "output-dir": [output_dir],
             "lat-start": clio.LATITUDES,
             "lon-start": clio.LONGITUDES,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -136,5 +139,4 @@ def prepare_predictors(output_dir: str, queue: str) -> None:
             "runtime": "45m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )

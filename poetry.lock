@@ -1969,7 +1969,6 @@ files = [
     {file = "PyYAML-6.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:bf07ee2fef7014951eeb99f56f39c9bb4af143d8aa3c21b1677805985307da34"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:855fb52b0dc35af121542a76b9a84f8d1cd886ea97c84703eaa6d88e37a2ad28"},
     {file = "PyYAML-6.0.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:40df9b996c2b73138957fe23a16a4f0ba614f4c0efce1e9406a184b6d07fa3a9"},
-    {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a08c6f0fe150303c1c6b71ebcd7213c2858041a7e01975da3a99aed1e7a378ef"},
     {file = "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408a9d86bcc12a0"},
     {file = "PyYAML-6.0.1-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:8d4e9c88387b0f5c7d5f281e55304de64cf7f9c0021a3525bd3b1c542da3b0e4"},
     {file = "PyYAML-6.0.1-cp312-cp312-win32.whl", hash = "sha256:d483d2cdf104e7c9fa60c544d92981f12ad66a457afae824d146093b8c294c54"},
@@ -2178,13 +2177,13 @@ files = [
 
 [[package]]
 name = "requests"
-version = "2.31.0"
+version = "2.32.2"
 description = "Python HTTP for Humans."
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "requests-2.31.0-py3-none-any.whl", hash = "sha256:58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f"},
-    {file = "requests-2.31.0.tar.gz", hash = "sha256:942c5a758f98d790eaed1a29cb6eefc7ffb0d1cf7af05c3d2791656dbd6ad1e1"},
+    {file = "requests-2.32.2-py3-none-any.whl", hash = "sha256:fc06670dd0ed212426dfeb94fc1b983d917c4f9847c863f313c9dfaaffb7c23c"},
+    {file = "requests-2.32.2.tar.gz", hash = "sha256:dd951ff5ecf3e3b3aa26b40703ba77495dab41da839ae72ef3c8e5d8e2433289"},
 ]
 
 [package.dependencies]
@@ -2199,13 +2198,13 @@ use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
 name = "rra-tools"
-version = "1.0.6"
+version = "1.0.8"
 description = "Common utilities for IHME Rapid Response team pipelines."
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "rra_tools-1.0.6-py3-none-any.whl", hash = "sha256:51d2f56e0b6fc13a7198e517aa61aed5fcd85c625bfb0e953a9e81ef12a4f7d9"},
-    {file = "rra_tools-1.0.6.tar.gz", hash = "sha256:9abc933b7c0efc2a899d56fd71e9c89a21c82950788c0bbc559200615a17880d"},
+    {file = "rra_tools-1.0.8-py3-none-any.whl", hash = "sha256:d499aa58403c2b26486a3f9a892239945aee4321067b64aac027ad5e86f39a48"},
+    {file = "rra_tools-1.0.8.tar.gz", hash = "sha256:9d4bf15c4ce60a3af6b55e4e6d158446c91e880a9dd89f6fdd0c72a2d633f888"},
 ]
 
 [package.dependencies]
@@ -2214,6 +2213,7 @@ deep-translator = ">=1.11.4,<2.0.0"
 loguru = ">=0.7.2,<0.8.0"
 pandas = ">=2.2.2,<3.0.0"
 pathos = ">=0.3.2,<0.4.0"
+requests = ">=2.32.2,<3.0.0"
 tqdm = ">=4.66.4,<5.0.0"
 
 [[package]]
@@ -2683,4 +2683,4 @@ viz = ["matplotlib", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "76b81344dbd944abdc6006c3ce2e8a8ce7ae3131f747247396f1fb01ab80e1a3"
+content-hash = "f26dfb9999164fb0037e8fd2b96ea27324abfb50902d9f5e2567717902199f23"

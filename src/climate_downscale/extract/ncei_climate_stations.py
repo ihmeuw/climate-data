@@ -54,10 +54,13 @@ def extract_ncei_climate_stations_task(output_dir: str, year: str) -> None:
 @with_queue()
 def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
-        "extract ncei",
+        runner="cdtask",
+        task_name="extract ncei",
         node_args={
-            "output-dir": [output_dir],
             "year": EXTRACTION_YEARS,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -66,5 +69,4 @@ def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )

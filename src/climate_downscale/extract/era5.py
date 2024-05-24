@@ -72,11 +72,14 @@ def extract_era5(
     variables = clio.VALID_CLIMATE_VARIABLES if variable == clio.RUN_ALL else [variable]
 
     jobmon.run_parallel(
+        runner="cdtask",
         task_name="extract_era5",
         node_args={
-            "output-dir": [output_dir],
             "year": years,
             "variable": variables,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -85,5 +88,4 @@ def extract_era5(
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )

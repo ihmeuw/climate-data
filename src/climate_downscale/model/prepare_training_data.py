@@ -111,10 +111,13 @@ def prepare_training_data_task(output_dir: str, year: str) -> None:
 @clio.with_queue()
 def prepare_training_data(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
-        "prepare training data",
+        runner="cdtask",
+        task_name="prepare training data",
         node_args={
-            "output-dir": [output_dir],
             "year": clio.VALID_YEARS,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -123,5 +126,4 @@ def prepare_training_data(output_dir: str, queue: str) -> None:
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )
