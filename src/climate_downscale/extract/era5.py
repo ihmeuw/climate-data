@@ -26,6 +26,7 @@ def extract_era5_main(
         "variable": climate_variable,
         "year": year,
         "month": month,
+        "day": [f"{d:02d}" for d in range(1, 32)],
         "time": [f"{h:02d}:00" for h in range(24)],
         "format": "netcdf",
     }
