@@ -22,6 +22,7 @@ def load_and_clean_climate_stations(
         "LONGITUDE": "lon",
         "TEMP": "temperature",
         "ELEVATION": "ncei_elevation",
+        "STATION": "station_id",
     }
     climate_stations = (
         climate_stations.rename(columns=column_map)
@@ -55,7 +56,9 @@ def get_era5_temperature(
     )
 
     if "expver" in era5.coords:
-        era5 = era5.sel(expver=1).combine_first(era5.sel(expver=5))
+        # expver == 1 is final data.  expver == 5 is provisional data
+        # and has a very strong nonsense seasonal trend.
+        era5 = era5.sel(expver=1)
     return era5["t2m"].to_numpy() - 273.15
 
 
@@ -93,6 +96,7 @@ def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
     data["era5_lcz"] = cd_data.load_predictor("lcz_era5").select(
         coords["lon"], coords["lat"]
     )
+  
 
     cd_data.save_training_data(data, year)
 
