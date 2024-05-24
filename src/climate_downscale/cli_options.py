@@ -52,6 +52,8 @@ def with_month(
 VALID_CLIMATE_VARIABLES = [
     "total_precipitation",
     "2m_temperature",
+    "2m_dewpoint_temperature",
+    "surface_pressure",
 ]
 
 
@@ -65,6 +67,22 @@ def with_climate_variable(
         allow_all=allow_all,
         choices=VALID_CLIMATE_VARIABLES,
         help="Variable to extract.",
+    )
+
+
+VALID_ERA5_DATASETS = ["reanalysis-era5-land", "reanalysis-era5-single-levels"]
+
+
+def with_era5_dataset(
+    *,
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "era5-dataset",
+        "d",
+        allow_all=allow_all,
+        choices=VALID_ERA5_DATASETS,
+        help="Dataset to extract.",
     )
 
 
@@ -101,12 +119,14 @@ __all__ = [
     "VALID_YEARS",
     "VALID_MONTHS",
     "VALID_CLIMATE_VARIABLES",
+    "VALID_DATASETS",
     "STRIDE",
     "LATITUDES",
     "LONGITUDES",
     "with_year",
     "with_month",
     "with_climate_variable",
+    "with_dataset",
     "with_lat_start",
     "with_lon_start",
     "with_output_directory",
