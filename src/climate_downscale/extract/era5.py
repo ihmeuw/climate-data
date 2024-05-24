@@ -89,7 +89,7 @@ def extract_era5(  # noqa: PLR0913
 
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="extract_era5",
+        task_name="extract era5",
         node_args={
             "era5-dataset": datasets,
             "climate-variable": variables,

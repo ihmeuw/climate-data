@@ -22,6 +22,7 @@ def load_and_clean_climate_stations(
         "LONGITUDE": "lon",
         "TEMP": "temperature",
         "ELEVATION": "ncei_elevation",
+        "STATION": "station_id",
     }
     climate_stations = (
         climate_stations.rename(columns=column_map)
@@ -55,7 +56,9 @@ def get_era5_temperature(
     )
 
     if "expver" in era5.coords:
-        era5 = era5.sel(expver=1).combine_first(era5.sel(expver=5))
+        # expver == 1 is final data.  expver == 5 is provisional data
+        # and has a very strong nonsense seasonal trend.
+        era5 = era5.sel(expver=1)
     return era5["t2m"].to_numpy() - 273.15
 
 
@@ -85,8 +88,6 @@ def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
     data.loc[missing_elevation, "elevation"] = data.loc[
         missing_elevation, "target_elevation"
     ]
-    still_missing_elevation = data["elevation"] < nodata_val
-    data = data.loc[~still_missing_elevation]
 
     # Local climate zone
     data["target_lcz"] = cd_data.load_predictor("lcz_target").select(
@@ -112,7 +113,7 @@ def prepare_training_data_task(output_dir: str, year: str) -> None:
 def prepare_training_data(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="prepare training data",
+        task_name="model prepare_training_data",
         node_args={
             "year": clio.VALID_YEARS,
         },
@@ -122,8 +123,8 @@ def prepare_training_data(output_dir: str, queue: str) -> None:
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "10G",
-            "runtime": "240m",
+            "memory": "30G",
+            "runtime": "30m",
             "project": "proj_rapidresponse",
         },
     )
