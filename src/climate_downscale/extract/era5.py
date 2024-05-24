@@ -31,13 +31,21 @@ def extract_era5_main(
         "format": "netcdf",
     }
     out_path = cddata.era5_path(era5_dataset, climate_variable, year, month)
-    touch(out_path, exist_ok=True)
+    if out_path.exists():
+        print("Already extracted:", out_path)
+        return
 
-    copernicus.retrieve(
-        era5_dataset,
-        kwargs,
-        out_path,
-    )
+    touch(out_path)
+    try:
+        result = copernicus.retrieve(
+            era5_dataset,
+            kwargs,
+        )
+        result.download(out_path)
+    except Exception as e:
+        print(f"Failed to download {era5_dataset} {climate_variable} {year} {month}")
+        out_path.unlink()
+        raise e  # noqa: TRY201
 
 
 @click.command()  # type: ignore[arg-type]
