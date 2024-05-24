@@ -30,11 +30,15 @@ class ClimateDownscaleData:
     def era5(self) -> Path:
         return self.extracted_data / "era5"
 
-    def era5_path(self, dataset: str, variable: str, year: int | str) -> Path:
-        return self.era5 / f"{dataset}_{variable}_{year}.nc"
+    def era5_path(
+        self, dataset: str, variable: str, year: int | str, month: str
+    ) -> Path:
+        return self.era5 / f"{dataset}_{variable}_{year}_{month}.nc"
 
-    def load_era5(self, dataset: str, variable: str, year: int | str) -> xr.Dataset:
-        return xr.open_dataset(self.era5_path(dataset, variable, year))
+    def load_era5(
+        self, dataset: str, variable: str, year: int | str, month: str
+    ) -> xr.Dataset:
+        return xr.open_dataset(self.era5_path(dataset, variable, year, month))
 
     @property
     def era5_temperature_daily_mean(self) -> Path:
