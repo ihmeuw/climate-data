@@ -4,6 +4,7 @@ import cdsapi
 import click
 from rra_tools import jobmon
 from rra_tools.shell_tools import touch
+import xarray as xr
 
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
@@ -19,34 +20,73 @@ def extract_era5_main(
     cddata = ClimateDownscaleData(output_dir)
     cred_path = cddata.credentials_root / "copernicus.txt"
     url, key = cred_path.read_text().strip().split("\n")
-
-    copernicus = cdsapi.Client(url=url, key=key)
-    kwargs = {
-        "product_type": "reanalysis",
-        "variable": climate_variable,
-        "year": year,
-        "month": month,
-        "day": [f"{d:02d}" for d in range(1, 32)],
-        "time": [f"{h:02d}:00" for h in range(24)],
-        "format": "netcdf",
-    }
+    
     out_path = cddata.era5_path(era5_dataset, climate_variable, year, month)
+    raw_out_path = out_path.with_stem(f"{out_path.stem}_raw")
+    
     if out_path.exists():
-        print("Already extracted:", out_path)
-        return
+        if raw_out_path.exists():
+            # We ran into an error before completing compression, likely a
+            # memory error. Delete and retry.
+            out_path.unlink()
+        else:
+            print("Already extracted:", out_path)
+            return
+    
+    try:
+        if not raw_out_path.exists():
+            return
+            touch(raw_out_path)
+
+            print('Connecting to copernicus')
+            copernicus = cdsapi.Client(url=url, key=key)
+            kwargs = {
+                "product_type": "reanalysis",
+                "variable": climate_variable,
+                "year": year,
+                "month": month,
+                "day": [f"{d:02d}" for d in range(1, 32)],
+                "time": [f"{h:02d}:00" for h in range(24)],
+                "format": "netcdf",
+            }
+            print("Downloading...")
+            result = copernicus.retrieve(
+                era5_dataset,
+                kwargs,
+            )
+            result.download(raw_out_path)
+        else:
+            print("Already downloaded:", raw_out_path)
+    except Exception as e:
+        print(f"Failed to download {era5_dataset} {climate_variable} {year} {month}")
+        if raw_out_path.exists():
+            raw_out_path.unlink()        
+        raise e  # noqa: TRY201
 
     touch(out_path)
     try:
-        result = copernicus.retrieve(
-            era5_dataset,
-            kwargs,
+        print("Compressing...")
+        ds = xr.open_dataset(raw_out_path)
+        var_name = list(ds)[0]  # These are all single variable datasets    
+        og_encoding = ds[var_name].encoding
+        ds.to_netcdf(
+            out_path,
+            encoding={
+                var_name:{
+                    **og_encoding,
+                    "zlib": True,
+                    "complevel": 1,
+                }
+            }
         )
-        result.download(out_path)
+        
     except Exception as e:
-        print(f"Failed to download {era5_dataset} {climate_variable} {year} {month}")
-        out_path.unlink()
+        print(f'Failed to compress {era5_dataset} {climate_variable} {year} {month}')
+        if out_path.exists():
+            out_path.unlink()
         raise e  # noqa: TRY201
 
+    raw_out_path.unlink()
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
@@ -111,8 +151,8 @@ def extract_era5(  # noqa: PLR0913
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "10G",
-            "runtime": "240m",
+            "memory": "120G",
+            "runtime": "600m",
             "project": "proj_rapidresponse",
         },
     )
