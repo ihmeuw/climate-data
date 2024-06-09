@@ -50,10 +50,17 @@ def with_month(
 
 
 VALID_CLIMATE_VARIABLES = [
-    "total_precipitation",
-    "2m_temperature",
+    "10m_u_component_of_wind",
+    "10m_v_component_of_wind",
     "2m_dewpoint_temperature",
+    "2m_temperature",
+    "surface_net_solar_radiation",
+    "surface_net_thermal_radiation",
     "surface_pressure",
+    "surface_solar_radiation_downwards",
+    "surface_thermal_radiation_downwards",
+    "total_precipitation",
+    "total_sky_direct_solar_radiation_at_surface",
 ]
 
 
