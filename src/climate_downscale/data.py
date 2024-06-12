@@ -41,6 +41,19 @@ class ClimateDownscaleData:
         return xr.open_dataset(self.era5_path(dataset, variable, year, month))
 
     @property
+    def cmip6(self) -> Path:
+        return self.extracted_data / "cmip6"
+
+    def load_cmip6_metadata(self) -> pd.DataFrame:
+        meta_path = self.cmip6 / "cmip6-metadata.parquet"
+        if not meta_path.exists():
+            external_path = "https://storage.googleapis.com/cmip6/cmip6-zarr-consolidated-stores.csv"
+            meta = pd.read_csv(external_path)
+            touch(meta_path)
+            meta.to_parquet(meta_path)
+        return pd.read_parquet(meta_path)
+
+    @property
     def era5_temperature_daily_mean(self) -> Path:
         return self.extracted_data / "era5_temperature_daily_mean"
 

@@ -48,6 +48,7 @@ types-requests = "^2.31.0.20240406"
 types-tqdm = "^4.66.0.20240417"
 gcsfs = "^2024.6.0"
 zarr = "^2.18.2"
+types-pyyaml = "^6.0.12.20240311"
 
 [tool.poetry.group.dev.dependencies]
 mkdocstrings = {version = ">=0.23", extras = ["python"]}
@@ -95,6 +96,7 @@ ignore = [
     "E501",     # Line too long, this is autoformatted
     "PYI041",   # Use float instead of int | float; dumb rule
     "T201",     # print is fine for now.
+    "RET504",   # Unnecessary assignment before return
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -148,6 +150,7 @@ exclude = [
  module = [
      "cdsapi.*",
      "affine.*",
+     "gcsfs.*",
  ]
  ignore_missing_imports = true
 

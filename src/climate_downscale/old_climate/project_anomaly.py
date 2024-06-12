@@ -5,11 +5,10 @@ from typing import TYPE_CHECKING
 
 import click
 import pandas as pd
-from rra_tools import jobmon
-
 from rra_population_pipelines.pipelines.climate import data
 from rra_population_pipelines.shared.cli_tools import options as clio
 from rra_population_pipelines.shared.data import RRA_POP
+from rra_tools import jobmon
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -26,35 +25,6 @@ _ENSEMBLE_MEMBERS = [
 _VALID_YEARS = tuple([str(y) for y in range(2015, 2101)])
 
 
-def get_run_metadata(
-    variable_id: str,
-    experiment_id: str,
-) -> pd.DataFrame:
-    metadata = data.load_cmip_metadata()
-    metadata = (
-        metadata.set_index(["institution_id", "source_id"])
-        .sort_index()
-        .loc[_ENSEMBLE_MEMBERS]
-        .reset_index()
-        .set_index(["variable_id", "experiment_id"])
-    )
-    history_meta = (
-        metadata.loc[(variable_id, "historical")]
-        .set_index(["institution_id", "source_id", "member_id"])  # type: ignore[union-attr]
-        .loc[:, "zstore"]
-    )
-    experiment_meta = (
-        metadata.loc[(variable_id, experiment_id)]
-        .set_index(["institution_id", "source_id", "member_id"])  # type: ignore[union-attr]
-        .loc[:, "zstore"]
-    )
-    final_meta = pd.concat(
-        [history_meta.rename("historical"), experiment_meta.rename("experiment")],
-        axis=1,
-    )
-    return final_meta  # type: ignore[no-any-return]
-
-
 def compute_common_lat_lon(
     run_metadata: pd.DataFrame,
 ) -> tuple[pd.Index[float], pd.Index[float]]:
@@ -62,7 +32,7 @@ def compute_common_lat_lon(
     lon = pd.Index([], name="lon", dtype=float)
 
     for key in run_metadata.index.tolist():
-        historical = data.load_cmip_historical_data(run_metadata.at[key, "historical"])
+        historical = data.load_cmip_historical_data(run_metadata.loc[key, "historical"])
         lat = lat.union(historical["lat"])  # type: ignore[arg-type]
         lon = lon.union(historical["lon"])  # type: ignore[arg-type]
     return lat, lon
@@ -98,9 +68,9 @@ def project_anomaly_main(variable: str, experiment: str, year: str) -> xr.Datase
 
     anomalies: list[xr.Dataset] = []
     for key in run_meta.index.tolist():
-        historical = data.load_cmip_historical_data(run_meta.at[key, "historical"])
+        historical = data.load_cmip_historical_data(run_meta.loc[key, "historical"])
         scenario = data.load_cmip_experiment_data(
-            run_meta.at[key, "experiment"], year=year
+            run_meta.loc[key, "experiment"], year=year
         )
         anomaly = compute_single_model_anomaly(historical, scenario, variable=variable)
         anomaly = interp_common_lat_lon(anomaly, lat, lon)

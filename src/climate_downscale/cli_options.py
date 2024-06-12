@@ -49,7 +49,7 @@ def with_month(
     )
 
 
-VALID_CLIMATE_VARIABLES = [
+VALID_ERA5_VARIABLES = [
     "10m_u_component_of_wind",
     "10m_v_component_of_wind",
     "2m_dewpoint_temperature",
@@ -64,15 +64,15 @@ VALID_CLIMATE_VARIABLES = [
 ]
 
 
-def with_climate_variable(
+def with_era5_variable(
     *,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
-        "climate-variable",
+        "era5-variable",
         "x",
         allow_all=allow_all,
-        choices=VALID_CLIMATE_VARIABLES,
+        choices=VALID_ERA5_VARIABLES,
         help="Variable to extract.",
     )
 
@@ -90,6 +90,75 @@ def with_era5_dataset(
         allow_all=allow_all,
         choices=VALID_ERA5_DATASETS,
         help="Dataset to extract.",
+    )
+
+
+VALID_CMIP6_SOURCES = [
+    "CAMS-CSM1-0",
+    "CanESM5",
+    "CNRM-ESM2-1",
+    "GFDL-ESM4",
+    "GISS-E2-1-G",
+    "MIROC-ES2L",
+    "MIROC6",
+    "MRI-ESM2-0",
+]
+
+
+def with_cmip6_source(
+    *,
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "cmip6-source",
+        "s",
+        allow_all=allow_all,
+        choices=VALID_CMIP6_SOURCES,
+        help="CMIP6 source to extract.",
+    )
+
+
+VALID_CMIP6_EXPERIMENTS = [
+    "ssp119",
+    "ssp126",
+    "ssp245",
+    "ssp370",
+    "ssp585",
+]
+
+
+def with_cmip6_experiment(
+    *,
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "cmip6-experiment",
+        "e",
+        allow_all=allow_all,
+        choices=VALID_CMIP6_EXPERIMENTS,
+        help="CMIP6 experiment to extract.",
+    )
+
+
+VALID_CMIP6_VARIABLES = [
+    "uas",
+    "vas",
+    "hurs",
+    "tas",
+    "pr",
+]
+
+
+def with_cmip6_variable(
+    *,
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "cmip6-variable",
+        "x",
+        allow_all=allow_all,
+        choices=VALID_CMIP6_VARIABLES,
+        help="CMIP6 variable to extract.",
     )
 
 
@@ -125,15 +194,21 @@ def with_lon_start(
 __all__ = [
     "VALID_YEARS",
     "VALID_MONTHS",
-    "VALID_CLIMATE_VARIABLES",
+    "VALID_ERA5_VARIABLES",
     "VALID_ERA5_DATASETS",
+    "VALID_CMIP6_SOURCES",
+    "VALID_CMIP6_EXPERIMENTS",
+    "VALID_CMIP6_VARIABLES",
     "STRIDE",
     "LATITUDES",
     "LONGITUDES",
     "with_year",
     "with_month",
-    "with_climate_variable",
+    "with_era5_variable",
     "with_era5_dataset",
+    "with_cmip6_source",
+    "with_cmip6_experiment",
+    "with_cmip6_variable",
     "with_lat_start",
     "with_lon_start",
     "with_output_directory",
