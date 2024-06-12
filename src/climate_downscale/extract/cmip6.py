@@ -111,7 +111,7 @@ def extract_cmip6(
 
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="extract_cmip6",
+        task_name="extract cmip6",
         node_args={
             "cmip6-source": sources,
             "cmip6-experiment": experiments,
