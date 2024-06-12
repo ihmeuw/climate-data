@@ -35,6 +35,7 @@ def extract_cmip6_main(
     cmip6_experiment: str,
     cmip6_variable: str,
 ) -> None:
+    print(f'Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}')
     cd_data = ClimateDownscaleData(output_dir)
     meta = cd_data.load_cmip6_metadata()
 
@@ -46,6 +47,7 @@ def extract_cmip6_main(
     )
 
     meta_subset = meta[mask].set_index("member_id").zstore.to_dict()
+    print(f'Extracting {len(meta_subset)} members...')
 
     for member, zstore_path in meta_subset.items():
         cmip_data = load_cmip_data(zstore_path)
