@@ -35,7 +35,7 @@ def extract_cmip6_main(
     cmip6_experiment: str,
     cmip6_variable: str,
 ) -> None:
-    print(f'Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}')
+    print(f"Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}")
     cd_data = ClimateDownscaleData(output_dir)
     meta = cd_data.load_cmip6_metadata()
 
@@ -47,16 +47,16 @@ def extract_cmip6_main(
     )
 
     meta_subset = meta[mask].set_index("member_id").zstore.to_dict()
-    print(f'Extracting {len(meta_subset)} members...')
+    print(f"Extracting {len(meta_subset)} members...")
 
     for member, zstore_path in meta_subset.items():
-        print('Extracting', member, zstore_path)
+        print("Extracting", member, zstore_path)
         cmip_data = load_cmip_data(zstore_path)
-        out_filename = f"{cmip6_source}_{cmip6_experiment}_{cmip6_variable}_{member}.nc"
+        out_filename = f"{cmip6_variable}_{cmip6_experiment}_{cmip6_source}_{member}.nc"
         out_path = cd_data.cmip6 / out_filename
         shell_tools.touch(out_path, exist_ok=True)
         shift, scale = VARIABLE_ENCODINGS[cmip6_variable]
-        print('Writing to', out_path)
+        print("Writing to", out_path)
         cmip_data.to_netcdf(
             out_path,
             encoding={
