@@ -103,7 +103,7 @@ def project_anomaly_main(variable: str, experiment: str, year: str) -> xr.Datase
             run_meta.at[key, "experiment"], year=year
         )
         anomaly = compute_single_model_anomaly(historical, scenario, variable=variable)
-        anomaly = interp_common_latin _lon(anomaly, lat, lon)
+        anomaly = interp_common_lat_lon(anomaly, lat, lon)
         anomalies.append(anomaly)
 
     mean_anomaly = 1 / len(anomalies) * sum(anomalies)
