@@ -3,7 +3,7 @@ from pathlib import Path
 import click
 import gcsfs
 import xarray as xr
-from rra_tools import jobmon
+from rra_tools import jobmon, shell_tools
 
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
@@ -51,6 +51,7 @@ def extract_cmip6_main(
         cmip_data = load_cmip_data(zstore_path)
         out_filename = f"{cmip6_source}_{cmip6_experiment}_{cmip6_variable}_{member}.nc"
         out_path = cd_data.cmip6 / out_filename
+        shell_tools.touch(out_path, exist_ok=True)
         shift, scale = VARIABLE_ENCODINGS[cmip6_variable]
         cmip_data.to_netcdf(
             out_path,
