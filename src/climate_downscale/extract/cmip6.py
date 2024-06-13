@@ -128,7 +128,7 @@ def extract_cmip6(
             "queue": queue,
             "cores": 1,
             "memory": "10G",
-            "runtime": "120m",
+            "runtime": "600m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
