@@ -87,12 +87,12 @@ class ClimateDownscaleData:
         return self.extracted_data / "rub_local_climate_zones"
 
     @property
-    def model(self) -> Path:
-        return self.root / "model"
+    def downscale_model(self) -> Path:
+        return self.root / "downscale_model"
 
     @property
     def predictors(self) -> Path:
-        return self.model / "predictors"
+        return self.downscale_model / "predictors"
 
     def save_predictor(
         self,
@@ -109,7 +109,7 @@ class ClimateDownscaleData:
 
     @property
     def training_data(self) -> Path:
-        return self.model / "training_data"
+        return self.downscale_model / "training_data"
 
     def save_training_data(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.training_data / f"{year}.parquet"
@@ -118,6 +118,32 @@ class ClimateDownscaleData:
 
     def load_training_data(self, year: int | str) -> pd.DataFrame:
         return pd.read_parquet(self.training_data / f"{year}.parquet")
+
+    @property
+    def results(self) -> Path:
+        return self.root / "results"
+
+    @property
+    def era5_daily(self) -> Path:
+        return self.results / "era5_daily"
+
+    def save_era5_daily(
+        self,
+        ds: xr.Dataset,
+        variable: str,
+        year: int | str,
+        **encoding_kwargs: Any,
+    ) -> None:
+        encoding = {
+            "dtype": "int16",
+            "_FillValue": -32767,
+            "zlib": True,
+            "complevel": 1,
+        }
+        encoding.update(encoding_kwargs)
+        path = self.era5_daily / f"{variable}_{year}.nc"
+        touch(path, exist_ok=True)
+        ds.to_netcdf(path, encoding={"value": encoding})
 
 
 def save_raster(
