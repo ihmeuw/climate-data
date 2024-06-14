@@ -22,13 +22,14 @@ VALID_YEARS = [str(y) for y in range(1990, 2024)]
 
 def with_year(
     *,
+    years: list[str] = VALID_YEARS,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
         "year",
         "y",
         allow_all=allow_all,
-        choices=VALID_YEARS,
+        choices=years,
         help="Year to extract data for.",
     )
 
@@ -219,4 +220,6 @@ __all__ = [
     "with_num_cores",
     "with_progress_bar",
     "RUN_ALL",
+    "ClickOption",
+    "with_choice",
 ]
