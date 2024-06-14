@@ -36,7 +36,7 @@ def load_and_clean_climate_stations(
             temperature=lambda df: 5 / 9 * (df["temperature"] - 32),
         )
     )
-    return climate_stations  # noqa: RET504
+    return climate_stations
 
 
 def get_era5_temperature(
@@ -113,7 +113,7 @@ def prepare_training_data_task(output_dir: str, year: str) -> None:
 def prepare_training_data(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="model prepare_training_data",
+        task_name="downscale prepare_training_data",
         node_args={
             "year": clio.VALID_YEARS,
         },

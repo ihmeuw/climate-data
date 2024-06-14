@@ -124,7 +124,7 @@ def prepare_predictors_task(
 def prepare_predictors(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="model prepare_predictors",
+        task_name="downscale prepare_predictors",
         node_args={
             "lat-start": clio.LATITUDES,
             "lon-start": clio.LONGITUDES,

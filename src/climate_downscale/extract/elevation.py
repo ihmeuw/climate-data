@@ -94,7 +94,7 @@ def extract_elevation_task(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @click.option(
-    "--model-name",
+    "--generate-name",
     required=True,
     type=click.Choice(ELEVATION_MODELS),
     help="Name of the elevation model to download.",
