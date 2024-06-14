@@ -166,9 +166,9 @@ def generate_era5_daily_main(
     source_variables, collapse_fun, (e_offset, e_scale) = TRANSFORM_MAP[target_variable]
 
     datasets = []
-    for month in range(1, 13):
+    for month in range(1, 3):
         month_str = f"{month:02d}"
-        print("loading single-levels")
+        print(f"loading single-levels for {month_str}")
         single_level = [
             load_variable(sv, year, month_str, "single-levels")
             for sv in source_variables
@@ -181,7 +181,7 @@ def generate_era5_daily_main(
         print("interpolating")
         ds_land_res = utils.interpolate_to_target_latlon(ds, TARGET_LAT, TARGET_LON)
 
-        print("loading land")
+        print(f"loading land for {month_str}")
         land = [load_variable(sv, year, month_str, "land") for sv in source_variables]
         print("collapsing")
         ds_land = collapse_fun(*land)  # type: ignore[operator]
