@@ -124,7 +124,7 @@ def with_variable(
 
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
-    ds = xr.load_dataset(ds_path)
+    ds = xr.open_dataset(ds_path)
     ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
         "longitude"
     )
@@ -140,6 +140,7 @@ def load_variable(
     root = Path("/mnt/share/erf/climate_downscale/extracted_data/era5")
     p = root / f"reanalysis-era5-{dataset}_{variable}_{year}_{month}.nc"
     if dataset == "land" and not p.exists():
+        raise NotImplementedError
         # Substitute the single level dataset pre-interpolated at the target resolution.
         p = root / f"reanalysis-era5-single-levels_{variable}_{year}_{month}.nc"
         ds = utils.interpolate_to_target_latlon(
@@ -174,7 +175,7 @@ def generate_era5_daily_main(
             for sv in source_variables
         ]
         print("collapsing")
-        ds = collapse_fun(*single_level)  # type: ignore[operator]
+        ds = collapse_fun(*single_level).compute()  # type: ignore[operator]
         # collapsing often screws the date dtype, so fix it
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
@@ -184,7 +185,7 @@ def generate_era5_daily_main(
         print(f"loading land for {month_str}")
         land = [load_variable(sv, year, month_str, "land") for sv in source_variables]
         print("collapsing")
-        ds_land = collapse_fun(*land)  # type: ignore[operator]
+        ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
         print("combining")
