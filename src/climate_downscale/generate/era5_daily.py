@@ -231,7 +231,7 @@ def generate_era5_daily(
 
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="extract cmip6",
+        task_name="generate era5_daily",
         node_args={
             "year": years,
             "variable": variables,
