@@ -2,6 +2,7 @@ import typing
 from pathlib import Path
 
 import click
+import dask
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -78,9 +79,6 @@ TRANSFORM_MAP = {
         utils.daily_sum,
         (0, 0.1),
     ),
-}
-
-UNTESTED_TRANSFORM_MAP = {
     "heat_index": (
         ["2m_temperature", "2m_dewpoint_temperature"],
         lambda x, y: utils.daily_mean(utils.heat_index(x, y)),
@@ -124,10 +122,11 @@ def with_variable(
 
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
-    ds = xr.open_dataset(ds_path)
-    ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
-        "longitude"
-    )
+    ds = xr.open_dataset(ds_path).chunk(time=24)    
+    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+        ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
+            "longitude"
+        )
     return ds
 
 
@@ -167,9 +166,9 @@ def generate_era5_daily_main(
     source_variables, collapse_fun, (e_offset, e_scale) = TRANSFORM_MAP[target_variable]
 
     datasets = []
-    for month in range(1, 3):
+    for month in range(1, 13):
         month_str = f"{month:02d}"
-        print(f"loading single-levels for {month_str}")
+        print(f"loading single-levels for {month_str}")        
         single_level = [
             load_variable(sv, year, month_str, "single-levels")
             for sv in source_variables
@@ -180,16 +179,17 @@ def generate_era5_daily_main(
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
         print("interpolating")
-        ds_land_res = utils.interpolate_to_target_latlon(ds, TARGET_LAT, TARGET_LON)
+        ds_land_res = utils.interpolate_to_target_latlon(ds, TARGET_LAT, TARGET_LON)        
 
         print(f"loading land for {month_str}")
         land = [load_variable(sv, year, month_str, "land") for sv in source_variables]
         print("collapsing")
-        ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
+        with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+            ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
         print("combining")
-        combined = ds_land.combine_first(ds_land_res)
+        combined = ds_land.combine_first(ds_land_res)        
         datasets.append(combined)
 
     ds_year = xr.concat(datasets, dim="date").sortby("date")
@@ -235,15 +235,15 @@ def generate_era5_daily(
         task_name="generate era5_daily",
         node_args={
             "year": years,
-            "variable": variables,
+            "target-variable": variables,
         },
         task_args={
             "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
-            "cores": 1,
-            "memory": "10G",
+            "cores": 5,
+            "memory": "100G",
             "runtime": "120m",
             "project": "proj_rapidresponse",
         },
