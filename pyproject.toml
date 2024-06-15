@@ -49,6 +49,7 @@ types-tqdm = "^4.66.0.20240417"
 gcsfs = "^2024.6.0"
 zarr = "^2.18.2"
 types-pyyaml = "^6.0.12.20240311"
+dask = "^2024.5.2"
 
 [tool.poetry.group.dev.dependencies]
 mkdocstrings = {version = ">=0.23", extras = ["python"]}

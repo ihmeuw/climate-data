@@ -1,6 +1,14 @@
 import numpy as np
 import xarray as xr
 
+REFERENCE_PERIOD = slice("2015-01-01", "2024-12-31")
+TARGET_LON = xr.DataArray(
+    np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
+)
+TARGET_LAT = xr.DataArray(
+    np.round(np.arange(90.0, -90.1, -0.1, dtype="float32"), 1), dims="latitude"
+)
+
 #############################
 # Standard unit conversions #
 #############################
@@ -36,6 +44,24 @@ def meter_to_millimeter(rainfall_m: xr.Dataset) -> xr.Dataset:
         Rainfall in millimeters
     """
     return 1000 * rainfall_m
+
+
+def precipitation_flux_to_rainfall(precipitation_flux: xr.Dataset) -> xr.Dataset:
+    """Convert precipitation flux to rainfall
+
+    Parameters
+    ----------
+    precipitation_flux
+        Precipitation flux in kg m-2 s-1
+
+    Returns
+    -------
+    xr.Dataset
+        Rainfall in mm/day
+    """
+    seconds_per_day = 86400
+    mm_per_kg_m2 = 1
+    return seconds_per_day * mm_per_kg_m2 * precipitation_flux  # type: ignore[no-any-return]k
 
 
 def scale_wind_speed_height(wind_speed_10m: xr.Dataset) -> xr.Dataset:
@@ -87,16 +113,6 @@ def daily_sum(ds: xr.Dataset) -> xr.Dataset:
 ########################
 # Data transformations #
 ########################
-
-
-def cdd(temperature_c: xr.Dataset) -> xr.Dataset:
-    """Calculate cooling degree days"""
-    return daily_mean(np.maximum(temperature_c - 18, 0))  # type: ignore[call-overload]
-
-
-def hdd(temperature_c: xr.Dataset) -> xr.Dataset:
-    """Calculate heating degree days"""
-    return daily_mean(np.maximum(18 - temperature_c, 0))  # type: ignore[call-overload]
 
 
 def vector_magnitude(x: xr.Dataset, y: xr.Dataset) -> xr.Dataset:
@@ -155,7 +171,8 @@ def rh_percent(
 
 
 def heat_index(
-    temperature_c: xr.Dataset, dewpoint_temperature_c: xr.Dataset
+    temperature_c: xr.Dataset,
+    dewpoint_temperature_c: xr.Dataset,
 ) -> xr.Dataset:
     """Calculate the heat index.
 
@@ -195,7 +212,8 @@ def heat_index(
 
 
 def humidex(
-    temperature_c: xr.Dataset, dewpoint_temperature_c: xr.Dataset
+    temperature_c: xr.Dataset,
+    dewpoint_temperature_c: xr.Dataset,
 ) -> xr.Dataset:
     """Calculate the humidex.
 
@@ -269,9 +287,7 @@ def rename_val_column(ds: xr.Dataset) -> xr.Dataset:
 
 def interpolate_to_target_latlon(
     ds: xr.Dataset,
-    target_lat: xr.DataArray,
-    target_lon: xr.DataArray,
 ) -> xr.Dataset:
     return ds.interp(
-        longitude=target_lon, latitude=target_lat, method="nearest"
+        longitude=TARGET_LON, latitude=TARGET_LAT, method="nearest"
     ).interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")

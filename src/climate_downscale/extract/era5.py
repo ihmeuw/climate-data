@@ -35,7 +35,9 @@ def download_era5_main(
 ) -> None:
     cddata = ClimateDownscaleData(output_dir)
 
-    final_out_path = cddata.era5_path(era5_dataset, era5_variable, year, month)
+    final_out_path = cddata.extracted_era5_path(
+        era5_dataset, era5_variable, year, month
+    )
     download_path, download_format = get_download_spec(final_out_path)
 
     if download_path.exists():
@@ -84,7 +86,9 @@ def unzip_and_compress_era5(
     month: str,
 ) -> None:
     cddata = ClimateDownscaleData(output_dir)
-    final_out_path = cddata.era5_path(era5_dataset, era5_variable, year, month)
+    final_out_path = cddata.extracted_era5_path(
+        era5_dataset, era5_variable, year, month
+    )
     zip_path = final_out_path.with_suffix(".zip")
     uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
 
@@ -214,7 +218,7 @@ def extract_era5(  # noqa: PLR0913
     to_compress = []
     complete = []
     for spec in itertools.product(datasets, variables, years, months):
-        final_out_path = cddata.era5_path(*spec)
+        final_out_path = cddata.extracted_era5_path(*spec)
         download_path, _ = get_download_spec(final_out_path)
 
         if final_out_path.exists() and download_path.exists():
@@ -250,7 +254,7 @@ def extract_era5(  # noqa: PLR0913
             for user in users:
                 if to_download:
                     download_batch.append((*to_download.pop(), user))
-        if not len(download_batch) == min(len(users) * jobs_per_user, downloads_left):
+        if len(download_batch) != min(len(users) * jobs_per_user, downloads_left):
             msg = "Download batch size is incorrect"
             raise ValueError(msg)
 

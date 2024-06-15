@@ -3,7 +3,6 @@ from pathlib import Path
 
 import click
 import dask
-import numpy as np
 import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
@@ -11,13 +10,6 @@ from rra_tools import jobmon
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_downscale.generate import utils
-
-TARGET_LON = xr.DataArray(
-    np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
-)
-TARGET_LAT = xr.DataArray(
-    np.round(np.arange(90.0, -90.1, -0.1, dtype="float32"), 1), dims="latitude"
-)
 
 # Map from source variable to a unit conversion function
 CONVERT_MAP = {
@@ -54,15 +46,10 @@ TRANSFORM_MAP = {
         utils.daily_min,
         (273.15, 0.01),
     ),
-    "cooling_degree_days": (
-        ["2m_temperature"],
-        utils.cdd,
-        (0, 0.01),
-    ),
-    "heating_degree_days": (
-        ["2m_temperature"],
-        utils.hdd,
-        (0, 0.01),
+    "dewpoint_temperature": (
+        ["2m_dewpoint_temperature"],
+        utils.daily_mean,
+        (273.15, 0.01),
     ),
     "wind_speed": (
         ["10m_u_component_of_wind", "10m_v_component_of_wind"],
@@ -79,6 +66,9 @@ TRANSFORM_MAP = {
         utils.daily_sum,
         (0, 0.1),
     ),
+}
+
+ADDITIONAL_TRANSFORM_MAP = {
     "heat_index": (
         ["2m_temperature", "2m_dewpoint_temperature"],
         lambda x, y: utils.daily_mean(utils.heat_index(x, y)),
@@ -122,8 +112,8 @@ def with_variable(
 
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
-    ds = xr.open_dataset(ds_path).chunk(time=24)    
-    with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+    ds = xr.open_dataset(ds_path).chunk(time=24)
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
         ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
             "longitude"
         )
@@ -142,14 +132,10 @@ def load_variable(
         raise NotImplementedError
         # Substitute the single level dataset pre-interpolated at the target resolution.
         p = root / f"reanalysis-era5-single-levels_{variable}_{year}_{month}.nc"
-        ds = utils.interpolate_to_target_latlon(
-            load_and_shift_longitude(p),
-            target_lat=TARGET_LAT,
-            target_lon=TARGET_LON,
-        )
+        ds = utils.interpolate_to_target_latlon(load_and_shift_longitude(p))
     elif dataset == "land":
         ds = load_and_shift_longitude(p).assign_coords(
-            latitude=TARGET_LAT, longitude=TARGET_LON
+            latitude=utils.TARGET_LAT, longitude=utils.TARGET_LON
         )
     else:
         ds = load_and_shift_longitude(p)
@@ -168,7 +154,7 @@ def generate_era5_daily_main(
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
-        print(f"loading single-levels for {month_str}")        
+        print(f"loading single-levels for {month_str}")
         single_level = [
             load_variable(sv, year, month_str, "single-levels")
             for sv in source_variables
@@ -179,24 +165,29 @@ def generate_era5_daily_main(
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
         print("interpolating")
-        ds_land_res = utils.interpolate_to_target_latlon(ds, TARGET_LAT, TARGET_LON)        
+        ds_land_res = utils.interpolate_to_target_latlon(ds)
 
         print(f"loading land for {month_str}")
         land = [load_variable(sv, year, month_str, "land") for sv in source_variables]
         print("collapsing")
-        with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+        with dask.config.set(**{"array.slicing.split_large_chunks": False}):
             ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
         print("combining")
-        combined = ds_land.combine_first(ds_land_res)        
+        combined = ds_land.combine_first(ds_land_res)
         datasets.append(combined)
 
     ds_year = xr.concat(datasets, dim="date").sortby("date")
 
     cd_data = ClimateDownscaleData(output_dir)
-    cd_data.save_era5_daily(
-        ds_year, target_variable, year, add_offset=e_offset, scale_factor=e_scale
+    cd_data.save_daily_results(
+        ds_year,
+        scenario="historical",
+        variable=target_variable,
+        year=year,
+        add_offset=e_offset,
+        scale_factor=e_scale,
     )
 
 
@@ -232,7 +223,7 @@ def generate_era5_daily(
 
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="generate era5_daily",
+        task_name="generate historical_daily",
         node_args={
             "year": years,
             "target-variable": variables,
@@ -243,7 +234,7 @@ def generate_era5_daily(
         task_resources={
             "queue": queue,
             "cores": 5,
-            "memory": "100G",
+            "memory": "200G",
             "runtime": "120m",
             "project": "proj_rapidresponse",
         },
