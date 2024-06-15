@@ -1,5 +1,6 @@
 from typing import ParamSpec, TypeVar
 
+import click
 from rra_tools.cli_tools import (
     RUN_ALL,
     ClickOption,
@@ -192,6 +193,14 @@ def with_lon_start(
     )
 
 
+def with_overwrite() -> ClickOption[_P, _T]:
+    return click.option(
+        "--overwrite",
+        is_flag=True,
+        help="Overwrite existing files.",
+    )
+
+
 __all__ = [
     "VALID_YEARS",
     "VALID_MONTHS",
@@ -222,4 +231,5 @@ __all__ = [
     "RUN_ALL",
     "ClickOption",
     "with_choice",
+    "with_overwrite",
 ]

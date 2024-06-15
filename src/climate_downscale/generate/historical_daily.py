@@ -1,3 +1,4 @@
+import itertools
 import typing
 from pathlib import Path
 
@@ -208,26 +209,43 @@ def generate_historical_daily_task(
 @clio.with_year(allow_all=True)
 @with_variable(allow_all=True)
 @clio.with_queue()
+@clio.with_overwrite()
 def generate_historical_daily(
     output_dir: str,
     year: str,
     target_variable: str,
     queue: str,
+    overwrite: bool,
 ) -> None:
+    cd_data = ClimateDownscaleData(output_dir)
+
     years = clio.VALID_YEARS if year == clio.RUN_ALL else [year]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL
         else [target_variable]
     )
+    years_and_variables = []
+    complete = []
+    for y, v in itertools.product(years, variables):
+        path = cd_data.daily_results_path("historical", v, y)
+        if not path.exists() or overwrite:
+            years_and_variables.append((y, v))
+        else:
+            complete.append((y, v))
+
+    print(
+        f"{len(complete)} tasks already done. "
+        f"Launching {len(years_and_variables)} tasks"
+    )
 
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate historical_daily",
-        node_args={
-            "year": years,
-            "target-variable": variables,
-        },
+        flat_node_args=(
+            ("year", "target_variable"),
+            years_and_variables,
+        ),
         task_args={
             "output-dir": output_dir,
         },
