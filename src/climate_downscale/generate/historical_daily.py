@@ -144,7 +144,7 @@ def load_variable(
     return ds
 
 
-def generate_era5_daily_main(
+def generate_historical_daily_main(
     output_dir: str | Path,
     year: str,
     target_variable: str,
@@ -195,12 +195,12 @@ def generate_era5_daily_main(
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year()
 @with_variable()
-def generate_era5_daily_task(
+def generate_historical_daily_task(
     output_dir: str,
     year: str,
     target_variable: str,
 ) -> None:
-    generate_era5_daily_main(output_dir, year, target_variable)
+    generate_historical_daily_main(output_dir, year, target_variable)
 
 
 @click.command()  # type: ignore[arg-type]
@@ -208,7 +208,7 @@ def generate_era5_daily_task(
 @clio.with_year(allow_all=True)
 @with_variable(allow_all=True)
 @clio.with_queue()
-def generate_era5_daily(
+def generate_historical_daily(
     output_dir: str,
     year: str,
     target_variable: str,

@@ -1,12 +1,12 @@
-from climate_downscale.generate.era5_daily import (
-    generate_era5_daily,
-    generate_era5_daily_task,
+from climate_downscale.generate.historical_daily import (
+    generate_historical_daily,
+    generate_historical_daily_task,
 )
 
 RUNNERS = {
-    "era5_daily": generate_era5_daily,
+    "historical_daily": generate_historical_daily,
 }
 
 TASK_RUNNERS = {
-    "era5_daily": generate_era5_daily_task,
+    "historical_daily": generate_historical_daily_task,
 }
