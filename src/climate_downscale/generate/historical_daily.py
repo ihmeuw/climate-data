@@ -99,7 +99,7 @@ _P = typing.ParamSpec("_P")
 _T = typing.TypeVar("_T")
 
 
-def with_variable(
+def with_target_variable(
     *,
     allow_all: bool = False,
 ) -> clio.ClickOption[_P, _T]:
@@ -187,15 +187,17 @@ def generate_historical_daily_main(
         scenario="historical",
         variable=target_variable,
         year=year,
-        add_offset=e_offset,
-        scale_factor=e_scale,
+        encoding_kwargs={
+            "add_offset": e_offset,
+            "scale_factor": e_scale,
+        },
     )
 
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year()
-@with_variable()
+@with_target_variable()
 def generate_historical_daily_task(
     output_dir: str,
     year: str,
@@ -207,7 +209,7 @@ def generate_historical_daily_task(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(allow_all=True)
-@with_variable(allow_all=True)
+@with_target_variable(allow_all=True)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_historical_daily(
