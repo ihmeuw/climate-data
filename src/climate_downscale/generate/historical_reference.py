@@ -23,7 +23,7 @@ def generate_historical_reference_main(
 
     reference_data = []
     for path in paths:
-        ds = xr.load_dataset(path).groupby("time.month").mean("time")
+        ds = xr.load_dataset(path).groupby("date.month").mean("date")
         reference_data.append(ds)
 
     encoding_kwargs = xr.open_dataset(paths[0])["value"].encoding
