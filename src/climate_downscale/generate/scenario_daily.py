@@ -1,16 +1,89 @@
+import itertools
+import typing
 from pathlib import Path
 
+import click
 import pandas as pd
 import xarray as xr
+from rra_tools import jobmon
 
-from climate_downscale.data import ClimateDownscaleData
+from climate_downscale import cli_options as clio
+from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_downscale.generate import utils
+
+VALID_YEARS = [str(y) for y in range(max(utils.REFERENCE_YEARS) + 1, 2101)]
 
 # Map from source variable to a unit conversion function
 CONVERT_MAP = {
+    "uas": utils.scale_wind_speed_height,
+    "vas": utils.scale_wind_speed_height,
+    "hurs": utils.identity,
     "tas": utils.kelvin_to_celsius,
+    "tasmin": utils.kelvin_to_celsius,
+    "tasmax": utils.kelvin_to_celsius,
     "pr": utils.precipitation_flux_to_rainfall,
 }
+
+# Map from target variable to:
+#  - a list of source variables
+#  - a transformation function
+#  - a tuple of offset and scale factors for the output for serialization
+#  - an anomaly type
+TRANSFORM_MAP = {
+    "mean_temperature": (
+        ["tas"],
+        utils.identity,
+        (273.15, 0.01),
+        "additive",
+    ),
+    "max_temperature": (
+        ["tasmax"],
+        utils.identity,
+        (273.15, 0.01),
+        "additive",
+    ),
+    "min_temperature": (
+        ["tasmin"],
+        utils.identity,
+        (273.15, 0.01),
+        "additive",
+    ),
+    "wind_speed": (
+        ["uas", "vas"],
+        utils.vector_magnitude,
+        (0, 0.01),
+        "multiplicative",
+    ),
+    "relative_humidity": (
+        ["hurs"],
+        utils.identity,
+        (0, 0.01),
+        "multiplicative",
+    ),
+    "total_precipitation": (
+        ["pr"],
+        utils.identity,
+        (0, 0.1),
+        "multiplicative",
+    ),
+}
+
+
+_P = typing.ParamSpec("_P")
+_T = typing.TypeVar("_T")
+
+
+def with_target_variable(
+    *,
+    allow_all: bool = False,
+) -> clio.ClickOption[_P, _T]:
+    return clio.with_choice(
+        "target-variable",
+        "t",
+        allow_all=allow_all,
+        choices=list(TRANSFORM_MAP.keys()),
+        help="Variable to generate.",
+    )
 
 
 def load_and_shift_longitude(
@@ -33,7 +106,6 @@ def load_variable(
 ) -> xr.Dataset:
     if year == "reference":
         ds = load_and_shift_longitude(member_path, utils.REFERENCE_PERIOD)
-        ds = ds.groupby("date.month").mean("date")
     else:
         time_slice = slice(f"{year}-01-01", f"{year}-12-31")
         time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
@@ -65,7 +137,6 @@ def compute_anomaly(
         .assign_coords(longitude=(anomaly.longitude + 180) % 360 - 180)
         .sortby("longitude")
     )
-    anomaly = utils.interpolate_to_target_latlon(anomaly)
     return anomaly
 
 
@@ -73,21 +144,118 @@ def generate_scenario_daily_main(
     output_dir: str | Path,
     year: str | int,
     target_variable: str,
-    cmip_scenario: str,
+    cmip6_experiment: str,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
-    paths = cd_data.extracted_cmip6.glob(f"{target_variable}_{cmip_scenario}*.nc")
 
-    for path in paths:
-        reference = load_variable(path, target_variable, "reference")
-        target = load_variable(path, target_variable, year)
+    (source_variables, transform_fun, (e_offset, e_scale), anomaly_type) = (
+        TRANSFORM_MAP[target_variable]
+    )
 
-        anomaly_type = "additive"  # TRANSFORM_MAP[target_variable][1]
-        anomaly = compute_anomaly(reference, target, anomaly_type)
-        cd_data.save_daily_results(
-            anomaly,
-            scenario=cmip_scenario,
-            variable=target_variable,
-            year=year,
-            encoding_kwargs={"zlib": True, "complevel": 1},
+    paths_by_var = [
+        list(cd_data.extracted_cmip6.glob(f"{source_variable}_{cmip6_experiment}*.nc"))
+        for source_variable in source_variables
+    ]
+    source_paths = list(zip(*paths_by_var, strict=True))
+
+    historical_reference = cd_data.load_daily_results(
+        scenario="historical",
+        variable=target_variable,
+        year="reference",
+    )
+
+    scale = 1 / len(source_paths)
+    anomaly = xr.zeros_like(historical_reference)
+    for sps in source_paths:
+        scenario_reference = transform_fun(  # type: ignore[operator]
+            *[load_variable(sp, target_variable, "reference") for sp in sps]
         )
+        target = transform_fun(  # type: ignore[operator]
+            *[load_variable(sp, target_variable, year) for sp in sps]
+        )
+        s_anomaly = scale * compute_anomaly(scenario_reference, target, anomaly_type)
+        anomaly += utils.interpolate_to_target_latlon(s_anomaly)
+
+    scenario_data = historical_reference + anomaly
+    cd_data.save_daily_results(
+        scenario_data,
+        scenario=cmip6_experiment,
+        variable=target_variable,
+        year=year,
+        encoding_kwargs={
+            "add_offset": e_offset,
+            "scale_factor": e_scale,
+        },
+    )
+
+
+@click.command()  # type: ignore[arg-type]
+@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_year(years=VALID_YEARS)
+@with_target_variable()
+@clio.with_cmip6_experiment()
+def generate_scenario_daily_task(
+    output_dir: str, year: str, target_variable: str, cmip6_experiment: str
+) -> None:
+    generate_scenario_daily_main(output_dir, year, target_variable, cmip6_experiment)
+
+
+@click.command()  # type: ignore[arg-type]
+@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_year(years=VALID_YEARS, allow_all=True)
+@with_target_variable(allow_all=True)
+@clio.with_cmip6_experiment(allow_all=True)
+@clio.with_queue()
+@clio.with_overwrite()
+def generate_scenario_daily(
+    output_dir: str,
+    year: str,
+    target_variable: str,
+    cmip6_experiment: str,
+    queue: str,
+    overwrite: bool,  # noqa: FBT001
+) -> None:
+    cd_data = ClimateDownscaleData(output_dir)
+
+    years = VALID_YEARS if year == clio.RUN_ALL else [year]
+    variables = (
+        list(TRANSFORM_MAP.keys())
+        if target_variable == clio.RUN_ALL
+        else [target_variable]
+    )
+    experiments = (
+        list(clio.VALID_CMIP6_EXPERIMENTS)
+        if cmip6_experiment == clio.RUN_ALL
+        else [cmip6_experiment]
+    )
+
+    yve = []
+    complete = []
+    for y, v, e in itertools.product(years, variables, experiments):
+        path = cd_data.daily_results_path(y, v, e)
+        if not path.exists() or overwrite:
+            yve.append((y, v, e))
+        else:
+            complete.append((y, v, e))
+
+    print(f"{len(complete)} tasks already done. " f"Launching {len(yve)} tasks")
+
+    jobmon.run_parallel(
+        runner="cdtask",
+        task_name="generate scenario_daily",
+        flat_node_args=(
+            ("year", "target-variable", "cmip-experiment"),
+            yve,
+        ),
+        task_args={
+            "output-dir": output_dir,
+        },
+        task_resources={
+            "queue": queue,
+            "cores": 5,
+            "memory": "200G",
+            "runtime": "240m",
+            "project": "proj_rapidresponse",
+        },
+        max_attempts=1,
+    )

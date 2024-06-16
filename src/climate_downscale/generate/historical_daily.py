@@ -47,11 +47,6 @@ TRANSFORM_MAP = {
         utils.daily_min,
         (273.15, 0.01),
     ),
-    "dewpoint_temperature": (
-        ["2m_dewpoint_temperature"],
-        utils.daily_mean,
-        (273.15, 0.01),
-    ),
     "wind_speed": (
         ["10m_u_component_of_wind", "10m_v_component_of_wind"],
         lambda x, y: utils.daily_mean(utils.vector_magnitude(x, y)),
@@ -68,32 +63,6 @@ TRANSFORM_MAP = {
         (0, 0.1),
     ),
 }
-
-ADDITIONAL_TRANSFORM_MAP = {
-    "heat_index": (
-        ["2m_temperature", "2m_dewpoint_temperature"],
-        lambda x, y: utils.daily_mean(utils.heat_index(x, y)),
-        (273.15, 0.01),
-    ),
-    "humidex": (
-        ["2m_temperature", "2m_dewpoint_temperature"],
-        lambda x, y: utils.daily_mean(utils.humidex(x, y)),
-        (273.15, 0.01),
-    ),
-    "effective_temperature": (
-        [
-            "2m_temperature",
-            "2m_dewpoint_temperature",
-            "10m_u_component_of_wind",
-            "10m_v_component_of_wind",
-        ],
-        lambda t2m, t2d, uas, vas: utils.daily_mean(
-            utils.effective_temperature(t2m, t2d, uas, vas)
-        ),
-        (273.15, 0.01),
-    ),
-}
-
 
 _P = typing.ParamSpec("_P")
 _T = typing.TypeVar("_T")
