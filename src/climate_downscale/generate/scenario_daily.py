@@ -92,9 +92,9 @@ def load_and_shift_longitude(
 ) -> xr.Dataset:
     ds = xr.open_dataset(ds_path).sel(time=time_slice).compute()
     ds = (
-        ds.rename({"lat": "latitude", "lon": "longitude", "time": "date"})
-        .assign_coords(longitude=(ds.longitude + 180) % 360 - 180)
-        .sortby("longitude")
+        ds.assign_coords(lon=(ds.lon + 180) % 360 - 180)
+        .sortby("lon")
+        .rename({"lat": "latitude", "lon": "longitude", "time": "date"})
     )
     return ds
 
