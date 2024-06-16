@@ -20,15 +20,29 @@ def generate_historical_reference_main(
         cd_data.daily_results_path("historical", target_variable, year)
         for year in utils.REFERENCE_YEARS
     ]
+    print(f"Building reference data from: {len(paths)} files.")
 
     reference_data = []
     for path in paths:
-        ds = xr.load_dataset(path).groupby("time.month").mean("time")
+        print(f"Loading: {path}")
+        ds = xr.load_dataset(path)
+        print("Computing monthly means")
+        ds = ds.groupby("time.month").mean("time")
         reference_data.append(ds)
 
-    encoding_kwargs = xr.open_dataset(paths[0])["value"].encoding
+    old_encoding = {
+        k: v for k, v in xr.open_dataset(paths[0])["value"].encoding.items()
+        if k in ['dtype', '_FillValue', 'scale_factor', 'add_offset']
+    }
+    encoding_kwargs = {
+        "zlib": True,
+        "complevel": 1,
+        **old_encoding,
+    }
 
+    print("Averaging years by month")
     reference = sum(reference_data) / len(reference_data)
+    print("Saving reference data")
     cd_data.save_daily_results(
         reference,
         scenario="historical",
