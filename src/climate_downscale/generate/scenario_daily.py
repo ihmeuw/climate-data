@@ -111,7 +111,7 @@ def load_variable(
         ds = load_and_shift_longitude(member_path, time_slice)
         ds = (
             ds.assign_coords(date=ds.date.dt.floor("D"))
-            .interp(date=time_range)
+            .interp_calendar(time_range, dim="date")
             .interpolate_na(dim="date", method="nearest", fill_value="extrapolate")
         )
     variable = str(next(iter(ds)))
