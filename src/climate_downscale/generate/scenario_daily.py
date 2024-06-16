@@ -158,25 +158,38 @@ def generate_scenario_daily_main(
     ]
     source_paths = list(zip(*paths_by_var, strict=True))
 
+    print("loading historical reference")
     historical_reference = cd_data.load_daily_results(
         scenario="historical",
         variable=target_variable,
         year="reference",
     )
 
+    print("Making memory buffer")
     scale = 1 / len(source_paths)
     anomaly = xr.zeros_like(historical_reference)
-    for sps in source_paths:
+    for i, sps in enumerate(source_paths):
+        pid = f"{i}/{len(source_paths)}"
+        print(f"{pid}: Loading reference")
         scenario_reference = transform_fun(  # type: ignore[operator]
             *[load_variable(sp, target_variable, "reference") for sp in sps]
         )
+        print(f"{pid}: Loading target")
         target = transform_fun(  # type: ignore[operator]
             *[load_variable(sp, target_variable, year) for sp in sps]
         )
+        print(f"{pid}: computing anomaly")
         s_anomaly = scale * compute_anomaly(scenario_reference, target, anomaly_type)
-        anomaly += utils.interpolate_to_target_latlon(s_anomaly)
+        print(f"{pid}: downscaling anomaly")
+        anomaly += utils.interpolate_to_target_latlon(s_anomaly, method="linear")
 
-    scenario_data = historical_reference + anomaly
+    print("Computing scenario data")
+    if anomaly_type == "additive":
+        scenario_data = historical_reference + anomaly
+    else:
+        scenario_data = historical_reference * anomaly
+
+    print("Saving")
     cd_data.save_daily_results(
         scenario_data,
         scenario=cmip6_experiment,

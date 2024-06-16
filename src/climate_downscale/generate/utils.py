@@ -288,9 +288,10 @@ def rename_val_column(ds: xr.Dataset) -> xr.Dataset:
 
 def interpolate_to_target_latlon(
     ds: xr.Dataset,
+    method: str = "nearest",
 ) -> xr.Dataset:
     return (
-        ds.interp(longitude=TARGET_LON, latitude=TARGET_LAT, method="nearest")
+        ds.interp(longitude=TARGET_LON, latitude=TARGET_LAT, method=method)  # type: ignore[arg-type]
         .interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")
         .interpolate_na(dim="latitude", method="nearest", fill_value="extrapolate")
     )
