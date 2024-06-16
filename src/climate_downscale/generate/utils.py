@@ -62,7 +62,7 @@ def precipitation_flux_to_rainfall(precipitation_flux: xr.Dataset) -> xr.Dataset
     """
     seconds_per_day = 86400
     mm_per_kg_m2 = 1
-    return seconds_per_day * mm_per_kg_m2 * precipitation_flux  # type: ignore[no-any-return]
+    return seconds_per_day * mm_per_kg_m2 * precipitation_flux
 
 
 def scale_wind_speed_height(wind_speed_10m: xr.Dataset) -> xr.Dataset:

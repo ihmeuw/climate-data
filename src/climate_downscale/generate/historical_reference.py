@@ -31,8 +31,9 @@ def generate_historical_reference_main(
         reference_data.append(ds)
 
     old_encoding = {
-        k: v for k, v in xr.open_dataset(paths[0])["value"].encoding.items()
-        if k in ['dtype', '_FillValue', 'scale_factor', 'add_offset']
+        k: v
+        for k, v in xr.open_dataset(paths[0])["value"].encoding.items()
+        if k in ["dtype", "_FillValue", "scale_factor", "add_offset"]
     }
     encoding_kwargs = {
         "zlib": True,
@@ -44,7 +45,7 @@ def generate_historical_reference_main(
     reference = sum(reference_data) / len(reference_data)
     print("Saving reference data")
     cd_data.save_daily_results(
-        reference,
+        reference,  # type: ignore[arg-type]
         scenario="historical",
         variable=target_variable,
         year="reference",
@@ -52,7 +53,7 @@ def generate_historical_reference_main(
     )
 
 
-@click.command()
+@click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable()
 def generate_historical_reference_task(
@@ -62,7 +63,7 @@ def generate_historical_reference_task(
     generate_historical_reference_main(output_dir, target_variable)
 
 
-@click.command()
+@click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable(allow_all=True)
 @clio.with_queue()

@@ -114,7 +114,7 @@ def with_target_variable(
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
     ds = xr.open_dataset(ds_path).chunk(time=24)
-    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
         ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
             "longitude"
         )
@@ -182,7 +182,7 @@ def generate_historical_daily_main(
             for sv in source_variables
         ]
         print("collapsing")
-        with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+        with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
             ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
