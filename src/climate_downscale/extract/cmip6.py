@@ -52,7 +52,8 @@ def extract_cmip6_main(
     meta_subset = meta[mask].set_index("member_id").zstore.to_dict()
     print(f"Extracting {len(meta_subset)} members...")
 
-    for member, zstore_path in meta_subset.items():
+    for i, (member, zstore_path) in enumerate(meta_subset.items()):
+        item = f"{i}/{len(meta_subset)} {member}"
         out_path = cd_data.extracted_cmip6_path(
             cmip6_variable,
             cmip6_experiment,
@@ -60,11 +61,11 @@ def extract_cmip6_main(
             member,
         )
         if out_path.exists() and not overwrite:
-            print("Skipping", member, zstore_path)
+            print("Skipping", item)
             continue
 
         try:
-            print("Extracting", member, zstore_path)
+            print("Extracting", item)
             cmip_data = load_cmip_data(zstore_path)
 
             shell_tools.touch(out_path, exist_ok=True)
