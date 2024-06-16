@@ -52,6 +52,9 @@ class ClimateDownscaleData:
             meta.to_parquet(meta_path)
         return pd.read_parquet(meta_path)
 
+    def extracted_cmip6_path(self, variable: str, experiment: str, source: str, member: str) -> Path:
+        return self.extracted_cmip6 / f"{variable}_{experiment}_{source}_{member}.nc"
+
     @property
     def ncei_climate_stations(self) -> Path:
         return self.extracted_data / "ncei_climate_stations"

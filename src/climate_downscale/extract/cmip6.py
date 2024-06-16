@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 
 import click
@@ -13,6 +14,8 @@ VARIABLE_ENCODINGS = {
     "vas": (0.0, 0.01),
     "hurs": (0.0, 0.01),
     "tas": (273.15, 0.01),
+    "tasmin": (273.15, 0.01),
+    "tasmax": (273.15, 0.01),
     "pr": (0.0, 1e-9),
 }
 
@@ -34,6 +37,7 @@ def extract_cmip6_main(
     cmip6_source: str,
     cmip6_experiment: str,
     cmip6_variable: str,
+    overwrite: bool,
 ) -> None:
     print(f"Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}")
     cd_data = ClimateDownscaleData(output_dir)
@@ -50,26 +54,40 @@ def extract_cmip6_main(
     print(f"Extracting {len(meta_subset)} members...")
 
     for member, zstore_path in meta_subset.items():
-        print("Extracting", member, zstore_path)
-        cmip_data = load_cmip_data(zstore_path)
-        out_filename = f"{cmip6_variable}_{cmip6_experiment}_{cmip6_source}_{member}.nc"
-        out_path = cd_data.cmip6 / out_filename
-        shell_tools.touch(out_path, exist_ok=True)
-        shift, scale = VARIABLE_ENCODINGS[cmip6_variable]
-        print("Writing to", out_path)
-        cmip_data.to_netcdf(
-            out_path,
-            encoding={
-                cmip6_variable: {
-                    "dtype": "int16",
-                    "scale_factor": scale,
-                    "add_offset": shift,
-                    "_FillValue": -32767,
-                    "zlib": True,
-                    "complevel": 1,
-                }
-            },
+        out_path = cd_data.extracted_cmip6_path(
+            cmip6_variable,
+            cmip6_experiment,
+            cmip6_source,
+            member,
         )
+        if out_path.exists() and not overwrite:
+            print("Skipping", member, zstore_path)
+            continue
+
+        try:
+            print("Extracting", member, zstore_path)
+            cmip_data = load_cmip_data(zstore_path)
+
+            shell_tools.touch(out_path, exist_ok=True)
+            shift, scale = VARIABLE_ENCODINGS[cmip6_variable]
+            print("Writing to", out_path)
+            cmip_data.to_netcdf(
+                out_path,
+                encoding={
+                    cmip6_variable: {
+                        "dtype": "int16",
+                        "scale_factor": scale,
+                        "add_offset": shift,
+                        "_FillValue": -32767,
+                        "zlib": True,
+                        "complevel": 1,
+                    }
+                },
+            )
+        except Exception as e:
+            if out_path.exists():
+                out_path.unlink()
+            raise e
 
 
 @click.command()  # type: ignore[arg-type]
@@ -77,13 +95,15 @@ def extract_cmip6_main(
 @clio.with_cmip6_source()
 @clio.with_cmip6_experiment()
 @clio.with_cmip6_variable()
+@clio.with_overwrite()
 def extract_cmip6_task(
     output_dir: str,
     cmip6_source: str,
     cmip6_experiment: str,
     cmip6_variable: str,
+    overwrite: bool,
 ) -> None:
-    extract_cmip6_main(output_dir, cmip6_source, cmip6_experiment, cmip6_variable)
+    extract_cmip6_main(output_dir, cmip6_source, cmip6_experiment, cmip6_variable, overwrite)
 
 
 @click.command()  # type: ignore[arg-type]
@@ -92,6 +112,7 @@ def extract_cmip6_task(
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_cmip6_variable(allow_all=True)
 @clio.with_queue()
+@clio.with_overwrite()
 def extract_cmip6(
     output_dir: str,
     cmip6_source: str,

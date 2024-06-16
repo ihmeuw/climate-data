@@ -7,6 +7,11 @@ import xarray as xr
 from climate_downscale.data import ClimateDownscaleData
 from climate_downscale.generate import utils
 
+TRANSFORM_MAP = {
+    "tas": (utils.kelvin_to_celsius, "additive"),
+    "pr": (utils.precipitation_flux_to_rainfall, "multiplicative"),
+}
+
 
 def compute_anomaly(
     reference: xr.DataArray, target: xr.DataArray, anomaly_type: str
@@ -29,10 +34,7 @@ def compute_anomaly(
     return anomaly
 
 
-TRANSFORM_MAP = {
-    "tas": (utils.kelvin_to_celsius, "additive"),
-    "pr": (utils.precipitation_flux_to_rainfall, "multiplicative"),
-}
+
 
 
 def load_reference_and_target(
