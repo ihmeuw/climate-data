@@ -136,6 +136,8 @@ def extract_cmip6(
         else [cmip6_variable]
     )
 
+    overwrite_arg = {"overwrite": None} if overwrite else {}
+
     jobmon.run_parallel(
         runner="cdtask",
         task_name="extract cmip6",
@@ -146,7 +148,7 @@ def extract_cmip6(
         },
         task_args={
             "output-dir": output_dir,
-            "overwrite": overwrite,
+            **overwrite_arg,
         },
         task_resources={
             "queue": queue,
