@@ -114,7 +114,7 @@ def with_target_variable(
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
     ds = xr.open_dataset(ds_path).chunk(time=24)
-    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
         ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
             "longitude"
         )
@@ -122,24 +122,31 @@ def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
 
 
 def load_variable(
+    cd_data: ClimateDownscaleData,
     variable: str,
     year: str,
     month: str,
     dataset: str = "single-levels",
 ) -> xr.Dataset:
-    root = Path("/mnt/share/erf/climate_downscale/extracted_data/era5")
-    p = root / f"reanalysis-era5-{dataset}_{variable}_{year}_{month}.nc"
-    if dataset == "land" and not p.exists():
-        raise NotImplementedError
-        # Substitute the single level dataset pre-interpolated at the target resolution.
-        p = root / f"reanalysis-era5-single-levels_{variable}_{year}_{month}.nc"
-        ds = utils.interpolate_to_target_latlon(load_and_shift_longitude(p))
+    path = cd_data.extracted_era5_path(dataset, variable, year, month)
+    if dataset == "land" and not path.exists():
+        if variable != "total_sky_direct_solar_radiation_at_surface":
+            # We only fallback for the one dataset, otherwise extraction failed.
+            msg = f"Land dataset not found for {variable}. Extraction likely failed."
+            raise ValueError(msg)
+        # If the land dataset doesn't exist, fall back to the single-levels dataset
+        path = cd_data.extracted_era5_path("single-levels", variable, year, month)
+        ds = load_and_shift_longitude(path)
+        # We expect this to already be in the correct grid, so interpolate.
+        ds = utils.interpolate_to_target_latlon(ds)
     elif dataset == "land":
-        ds = load_and_shift_longitude(p).assign_coords(
-            latitude=utils.TARGET_LAT, longitude=utils.TARGET_LON
-        )
+        ds = load_and_shift_longitude(path)
+        # There are some slight numerical differences in the lat/long for some of
+        # the land datasets. They are gridded consistently, so just tweak the
+        # coordinates so things align.
+        ds = ds.assign_coords(latitude=utils.TARGET_LAT, longitude=utils.TARGET_LON)
     else:
-        ds = load_and_shift_longitude(p)
+        ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]
     ds = conversion(utils.rename_val_column(ds))
     return ds
@@ -150,14 +157,15 @@ def generate_historical_daily_main(
     year: str,
     target_variable: str,
 ) -> None:
-    source_variables, collapse_fun, (e_offset, e_scale) = TRANSFORM_MAP[target_variable]
+    cd_data = ClimateDownscaleData(output_dir)
 
+    source_variables, collapse_fun, (e_offset, e_scale) = TRANSFORM_MAP[target_variable]
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
         print(f"loading single-levels for {month_str}")
         single_level = [
-            load_variable(sv, year, month_str, "single-levels")
+            load_variable(cd_data, sv, year, month_str, "single-levels")
             for sv in source_variables
         ]
         print("collapsing")
@@ -169,9 +177,12 @@ def generate_historical_daily_main(
         ds_land_res = utils.interpolate_to_target_latlon(ds)
 
         print(f"loading land for {month_str}")
-        land = [load_variable(sv, year, month_str, "land") for sv in source_variables]
+        land = [
+            load_variable(cd_data, sv, year, month_str, "land")
+            for sv in source_variables
+        ]
         print("collapsing")
-        with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+        with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
             ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
@@ -181,7 +192,6 @@ def generate_historical_daily_main(
 
     ds_year = xr.concat(datasets, dim="date").sortby("date")
 
-    cd_data = ClimateDownscaleData(output_dir)
     cd_data.save_daily_results(
         ds_year,
         scenario="historical",
@@ -217,7 +227,7 @@ def generate_historical_daily(
     year: str,
     target_variable: str,
     queue: str,
-    overwrite: bool,
+    overwrite: bool,  # noqa: FBT001
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 

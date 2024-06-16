@@ -20,17 +20,32 @@ def generate_historical_reference_main(
         cd_data.daily_results_path("historical", target_variable, year)
         for year in utils.REFERENCE_YEARS
     ]
+    print(f"Building reference data from: {len(paths)} files.")
 
     reference_data = []
     for path in paths:
-        ds = xr.load_dataset(path).groupby("date.month").mean("date")
+        print(f"Loading: {path}")
+        ds = xr.load_dataset(path)
+        print("Computing monthly means")
+        ds = ds.groupby("date.month").mean("date")
         reference_data.append(ds)
 
-    encoding_kwargs = xr.open_dataset(paths[0])["value"].encoding
+    old_encoding = {
+        k: v
+        for k, v in xr.open_dataset(paths[0])["value"].encoding.items()
+        if k in ["dtype", "_FillValue", "scale_factor", "add_offset"]
+    }
+    encoding_kwargs = {
+        "zlib": True,
+        "complevel": 1,
+        **old_encoding,
+    }
 
+    print("Averaging years by month")
     reference = sum(reference_data) / len(reference_data)
+    print("Saving reference data")
     cd_data.save_daily_results(
-        reference,
+        reference,  # type: ignore[arg-type]
         scenario="historical",
         variable=target_variable,
         year="reference",
@@ -38,7 +53,7 @@ def generate_historical_reference_main(
     )
 
 
-@click.command()
+@click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable()
 def generate_historical_reference_task(
@@ -48,7 +63,7 @@ def generate_historical_reference_task(
     generate_historical_reference_main(output_dir, target_variable)
 
 
-@click.command()
+@click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable(allow_all=True)
 @clio.with_queue()

@@ -48,7 +48,7 @@ def get_era5_temperature(
     lon = xr.DataArray(coords["lon"], dims=["points"])
     time = xr.DataArray(coords["date"], dims=["points"])
 
-    era5 = cd_data.load_era5_temperature_daily_mean(year)
+    era5 = cd_data.load_daily_results("historical", "tas", year)
     era5 = (
         era5.assign_coords(longitude=(((era5.longitude + 180) % 360) - 180))
         .sortby(["latitude", "longitude"])
@@ -59,7 +59,7 @@ def get_era5_temperature(
         # expver == 1 is final data.  expver == 5 is provisional data
         # and has a very strong nonsense seasonal trend.
         era5 = era5.sel(expver=1)
-    return era5["t2m"].to_numpy() - 273.15
+    return era5["value"].to_numpy()
 
 
 def prepare_training_data_main(output_dir: str | Path, year: str) -> None:

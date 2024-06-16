@@ -147,6 +147,8 @@ VALID_CMIP6_VARIABLES = [
     "vas",
     "hurs",
     "tas",
+    "tasmin",
+    "tasmax",
     "pr",
 ]
 

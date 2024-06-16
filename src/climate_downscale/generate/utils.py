@@ -62,7 +62,7 @@ def precipitation_flux_to_rainfall(precipitation_flux: xr.Dataset) -> xr.Dataset
     """
     seconds_per_day = 86400
     mm_per_kg_m2 = 1
-    return seconds_per_day * mm_per_kg_m2 * precipitation_flux  # type: ignore[no-any-return]k
+    return seconds_per_day * mm_per_kg_m2 * precipitation_flux
 
 
 def scale_wind_speed_height(wind_speed_10m: xr.Dataset) -> xr.Dataset:
@@ -289,6 +289,8 @@ def rename_val_column(ds: xr.Dataset) -> xr.Dataset:
 def interpolate_to_target_latlon(
     ds: xr.Dataset,
 ) -> xr.Dataset:
-    return ds.interp(
-        longitude=TARGET_LON, latitude=TARGET_LAT, method="nearest"
-    ).interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")
+    return (
+        ds.interp(longitude=TARGET_LON, latitude=TARGET_LAT, method="nearest")
+        .interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")
+        .interpolate_na(dim="latitude", method="nearest", fill_value="extrapolate")
+    )
