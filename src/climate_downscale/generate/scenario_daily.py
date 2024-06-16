@@ -101,7 +101,6 @@ def load_and_shift_longitude(
 
 def load_variable(
     member_path: str | Path,
-    variable: str,
     year: str | int,
 ) -> xr.Dataset:
     if year == "reference":
@@ -115,6 +114,7 @@ def load_variable(
             .interp(date=time_range)
             .interpolate_na(dim="date", method="nearest", fill_value="extrapolate")
         )
+    variable = str(next(iter(ds)))
     conversion = CONVERT_MAP[variable]
     ds = conversion(utils.rename_val_column(ds))
     return ds
@@ -172,11 +172,11 @@ def generate_scenario_daily_main(
         pid = f"{i}/{len(source_paths)}"
         print(f"{pid}: Loading reference")
         scenario_reference = transform_fun(  # type: ignore[operator]
-            *[load_variable(sp, target_variable, "reference") for sp in sps]
+            *[load_variable(sp, "reference") for sp in sps]
         )
         print(f"{pid}: Loading target")
         target = transform_fun(  # type: ignore[operator]
-            *[load_variable(sp, target_variable, year) for sp in sps]
+            *[load_variable(sp, year) for sp in sps]
         )
         print(f"{pid}: computing anomaly")
         s_anomaly = scale * compute_anomaly(scenario_reference, target, anomaly_type)
