@@ -255,7 +255,7 @@ def generate_historical_daily(
         runner="cdtask",
         task_name="generate historical_daily",
         flat_node_args=(
-            ("year", "target_variable"),
+            ("year", "target-variable"),
             years_and_variables,
         ),
         task_args={
