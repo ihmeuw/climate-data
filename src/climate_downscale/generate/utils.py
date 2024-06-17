@@ -7,7 +7,7 @@ TARGET_LON = xr.DataArray(
     np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
 )
 TARGET_LAT = xr.DataArray(
-    np.round(np.arange(90.0, -90.1, -0.1, dtype="float32"), 1), dims="latitude"
+    np.round(np.arange(-90.0, 90.1, 0.1, dtype="float32"), 1), dims="latitude"
 )
 
 #############################
@@ -293,5 +293,7 @@ def interpolate_to_target_latlon(
     return (
         ds.interp(longitude=TARGET_LON, latitude=TARGET_LAT, method=method)  # type: ignore[arg-type]
         .interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")
+        .sortby('latitude')
         .interpolate_na(dim="latitude", method="nearest", fill_value="extrapolate")
+        .sortby('latitude', ascending=False)
     )

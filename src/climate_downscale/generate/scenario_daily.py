@@ -1,8 +1,10 @@
 import itertools
 import typing
 from pathlib import Path
+from collections import defaultdict
 
 import click
+import numpy as np
 import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
@@ -91,10 +93,13 @@ def load_and_shift_longitude(
     time_slice: slice,
 ) -> xr.Dataset:
     ds = xr.open_dataset(ds_path).sel(time=time_slice).compute()
+    if ds.time.size == 0:
+        msg = 'No data in slice'
+        raise KeyError(msg)
     ds = (
         ds.assign_coords(lon=(ds.lon + 180) % 360 - 180)
         .sortby("lon")
-        .rename({"lat": "latitude", "lon": "longitude", "time": "date"})
+        .rename({"lat": "latitude", "lon": "longitude"})
     )
     return ds
 
@@ -104,15 +109,16 @@ def load_variable(
     year: str | int,
 ) -> xr.Dataset:
     if year == "reference":
-        ds = load_and_shift_longitude(member_path, utils.REFERENCE_PERIOD)
+        ds = load_and_shift_longitude(member_path, utils.REFERENCE_PERIOD).rename({"time": "date"})
     else:
         time_slice = slice(f"{year}-01-01", f"{year}-12-31")
         time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
         ds = load_and_shift_longitude(member_path, time_slice)
         ds = (
-            ds.assign_coords(date=ds.date.dt.floor("D"))
-            .interp_calendar(time_range, dim="date")
-            .interpolate_na(dim="date", method="nearest", fill_value="extrapolate")
+            ds.assign_coords(time=ds.time.dt.floor("D"))
+            .interp_calendar(time_range)
+            .interpolate_na(dim="time", method="nearest", fill_value="extrapolate")
+            .rename({"time": "date"})
         )
     variable = str(next(iter(ds)))
     conversion = CONVERT_MAP[variable]
@@ -123,20 +129,15 @@ def load_variable(
 def compute_anomaly(
     reference: xr.Dataset, target: xr.Dataset, anomaly_type: str
 ) -> xr.Dataset:
+    reference = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":
-        anomaly = target.groupby("time.month") - reference
+        anomaly = target.groupby("date.month") - reference
     elif anomaly_type == "multiplicative":
-        anomaly = (target.groupby("time.month") + 1) / (reference + 1)  # type: ignore[operator]
+        anomaly = (target + 1).groupby("date.month") / (reference + 1)  # type: ignore[operator]
     else:
         msg = f"Unknown anomaly type: {anomaly_type}"
         raise ValueError(msg)
-
-    anomaly = (
-        anomaly.drop_vars("month")
-        .rename({"lat": "latitude", "lon": "longitude", "time": "date"})
-        .assign_coords(longitude=(anomaly.longitude + 180) % 360 - 180)
-        .sortby("longitude")
-    )
+    anomaly = anomaly.drop_vars("month")
     return anomaly
 
 
@@ -152,11 +153,24 @@ def generate_scenario_daily_main(
         TRANSFORM_MAP[target_variable]
     )
 
-    paths_by_var = [
-        list(cd_data.extracted_cmip6.glob(f"{source_variable}_{cmip6_experiment}*.nc"))
-        for source_variable in source_variables
+    models_by_var = {}
+    for source_variable in source_variables:
+        model_vars = set([
+            p.stem.split(f"{cmip6_experiment}_")[1]
+            for p in cd_data.extracted_cmip6.glob(f"{source_variable}_{cmip6_experiment}*.nc")
+        ])
+        models_by_var[source_variable] = model_vars
+
+    shared_models = set.intersection(*models_by_var.values())
+    for var, models in models_by_var.items():
+        extra_models = models.difference(shared_models)
+        if extra_models:
+            print(var, extra_models)
+    source_paths = [
+        [cd_data.extracted_cmip6 / f'{source_variable}_{cmip6_experiment}_{model}.nc'
+         for source_variable in source_variables]
+        for model in sorted(shared_models)
     ]
-    source_paths = list(zip(*paths_by_var, strict=True))
 
     print("loading historical reference")
     historical_reference = cd_data.load_daily_results(
@@ -165,30 +179,48 @@ def generate_scenario_daily_main(
         year="reference",
     )
 
-    print("Making memory buffer")
-    scale = 1 / len(source_paths)
-    anomaly = xr.zeros_like(historical_reference)
+    anomalies = {}
+    source_paths = source_paths
     for i, sps in enumerate(source_paths):
-        pid = f"{i}/{len(source_paths)}"
+        pid = f"{i+1}/{len(source_paths)} {sps[0].stem}"
         print(f"{pid}: Loading reference")
-        scenario_reference = transform_fun(  # type: ignore[operator]
-            *[load_variable(sp, "reference") for sp in sps]
-        )
-        print(f"{pid}: Loading target")
-        target = transform_fun(  # type: ignore[operator]
-            *[load_variable(sp, year) for sp in sps]
-        )
+        try:
+            scenario_reference = transform_fun(  # type: ignore[operator]
+                *[load_variable(sp, "reference") for sp in sps]
+            )
+            print(f"{pid}: Loading target")
+            target = transform_fun(  # type: ignore[operator]
+                *[load_variable(sp, year) for sp in sps]
+            )
+        except KeyError:
+            print(f"{pid}: Bad formatting, skipping...")
+            continue
         print(f"{pid}: computing anomaly")
-        s_anomaly = scale * compute_anomaly(scenario_reference, target, anomaly_type)
-        print(f"{pid}: downscaling anomaly")
-        anomaly += utils.interpolate_to_target_latlon(s_anomaly, method="linear")
+        s_anomaly = compute_anomaly(scenario_reference, target, anomaly_type)
+        key = f"{len(s_anomaly.latitude)}_{len(s_anomaly.longitude)}"
+        old = anomalies.get(key, 0)
+        if old:
+            for coord in ['latitude', 'longitude']:
+                old_c = old[coord].to_numpy()
+                new_c = s_anomaly[coord].to_numpy()
+                if np.abs(old_c - new_c).max() < 1e-5:
+                    s_anomaly = s_anomaly.assign(**{coord: old_c})
+                else:
+                    msg = f"{coord} does not match despite having the same subdivision"
+                    raise ValueError(msg)
+        anomalies[key] = old + s_anomaly
+    anomaly = 0
+    for i, (k, v) in enumerate(anomalies.items()):
+        print(f"Downscaling {i+1}/{len(anomalies)}: {k}")
+        anomaly += utils.interpolate_to_target_latlon(v, method="linear")
+    anomaly /= len(source_paths)
 
     print("Computing scenario data")
     if anomaly_type == "additive":
-        scenario_data = historical_reference + anomaly
+        scenario_data = historical_reference + anomaly.groupby('date.month')
     else:
-        scenario_data = historical_reference * anomaly
-
+        scenario_data = historical_reference * anomaly.groupby('date.month')
+    scenario_data = scenario_data.drop_vars('month')
     print("Saving")
     cd_data.save_daily_results(
         scenario_data,
@@ -245,19 +277,18 @@ def generate_scenario_daily(
     yve = []
     complete = []
     for y, v, e in itertools.product(years, variables, experiments):
-        path = cd_data.daily_results_path(y, v, e)
+        path = cd_data.daily_results_path(scenario=e, variable=v, year=y)
         if not path.exists() or overwrite:
             yve.append((y, v, e))
         else:
             complete.append((y, v, e))
 
     print(f"{len(complete)} tasks already done. " f"Launching {len(yve)} tasks")
-
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_daily",
         flat_node_args=(
-            ("year", "target-variable", "cmip-experiment"),
+            ("year", "target-variable", "cmip6-experiment"),
             yve,
         ),
         task_args={
@@ -266,8 +297,8 @@ def generate_scenario_daily(
         task_resources={
             "queue": queue,
             "cores": 5,
-            "memory": "200G",
-            "runtime": "240m",
+            "memory": "120G",
+            "runtime": "400m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
