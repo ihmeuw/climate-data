@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import numpy as np
 import xarray as xr
 
@@ -99,16 +101,39 @@ def daily_mean(ds: xr.Dataset) -> xr.Dataset:
     return ds.groupby("time.date").mean()
 
 
+def annual_mean(ds: xr.Dataset) -> xr.Dataset:
+    return ds.groupby("date.year").mean()
+
+
 def daily_max(ds: xr.Dataset) -> xr.Dataset:
     return ds.groupby("time.date").max()
+
+
+def annual_max(ds: xr.Dataset) -> xr.Dataset:
+    return ds.groupby("date.year").max()
 
 
 def daily_min(ds: xr.Dataset) -> xr.Dataset:
     return ds.groupby("time.date").min()
 
 
+def annual_min(ds: xr.Dataset) -> xr.Dataset:
+    return ds.groupby("date.year").min()
+
+
 def daily_sum(ds: xr.Dataset) -> xr.Dataset:
     return ds.groupby("time.date").sum()
+
+
+def annual_sum(ds: xr.Dataset) -> xr.Dataset:
+    return ds.groupby("date.year").sum()
+
+
+def count_threshold(threshold: int | float) -> Callable[[xr.Dataset], xr.Dataset]:
+    def count(ds: xr.Dataset) -> xr.Dataset:
+        return ds > threshold
+
+    return count
 
 
 ########################
@@ -173,7 +198,7 @@ def rh_percent(
 
 def heat_index(
     temperature_c: xr.Dataset,
-    dewpoint_temperature_c: xr.Dataset,
+    relative_humidity_percent: xr.Dataset,
 ) -> xr.Dataset:
     """Calculate the heat index.
 
@@ -183,16 +208,17 @@ def heat_index(
     ----------
     temperature_c
         Temperature in Celsius
-    dewpoint_temperature_c
-        Dewpoint temperature in Celsius
+    relative_humidity_percent
+        Relative humidity as a percentage
 
     Returns
     -------
     xr.Dataset
         Heat index in Celsius
     """
-    t = temperature_c  # Alias for simplicity in the formula
-    r = rh_percent(temperature_c, dewpoint_temperature_c)
+    # Alias for simplicity in the formula
+    t = temperature_c
+    r = relative_humidity_percent
 
     # Heat index formula from canonical multi-variable regression
     hi_raw = (
@@ -214,7 +240,7 @@ def heat_index(
 
 def humidex(
     temperature_c: xr.Dataset,
-    dewpoint_temperature_c: xr.Dataset,
+    relative_humidity_percent: xr.Dataset,
 ) -> xr.Dataset:
     """Calculate the humidex.
 
@@ -224,23 +250,23 @@ def humidex(
     ----------
     temperature_c
         Temperature in Celsius
-    dewpoint_temperature_c
-        Dewpoint temperature in Celsius
+    relative_humidity_percent
+        Relative humidity as a percentage
 
     Returns
     -------
     xr.Dataset
         Humidex in Celsius
     """
-    vp = buck_vapor_pressure(dewpoint_temperature_c)
+    svp = buck_vapor_pressure(temperature_c)
+    vp = relative_humidity_percent / 100 * svp
     return temperature_c + 0.5555 * (vp - 10)
 
 
 def effective_temperature(
     temperature_c: xr.Dataset,
-    dewpoint_temperature_c: xr.Dataset,
-    uas: xr.Dataset,
-    vas: xr.Dataset,
+    relative_humidity_percent: xr.Dataset,
+    wind_speed_m_s: xr.Dataset,
 ) -> xr.Dataset:
     """Calculate the effective temperature.
 
@@ -250,12 +276,10 @@ def effective_temperature(
     ----------
     temperature_c
         Temperature in Celsius
-    dewpoint_temperature_c
-        Dewpoint temperature in Celsius
-    uas
-        U-component of wind speed
-    vas
-        V-component of wind speed
+    relative_humidity_percent
+        Relative humidity as a percentage
+    wind_speed_m_s
+        Wind speed in m/s
 
     Returns
     -------
@@ -264,8 +288,8 @@ def effective_temperature(
     """
     # Alias for simplicity in the formula
     t = temperature_c
-    r = rh_percent(temperature_c, dewpoint_temperature_c)
-    v = vector_magnitude(uas, vas)
+    r = relative_humidity_percent
+    v = wind_speed_m_s
 
     wind_adjustment = 1 / (1.76 + 1.4 * v**0.75)
     et = (
@@ -293,7 +317,7 @@ def interpolate_to_target_latlon(
     return (
         ds.interp(longitude=TARGET_LON, latitude=TARGET_LAT, method=method)  # type: ignore[arg-type]
         .interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")
-        .sortby('latitude')
+        .sortby("latitude")
         .interpolate_na(dim="latitude", method="nearest", fill_value="extrapolate")
-        .sortby('latitude', ascending=False)
+        .sortby("latitude", ascending=False)
     )

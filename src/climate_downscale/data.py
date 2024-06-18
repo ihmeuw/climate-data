@@ -52,7 +52,9 @@ class ClimateDownscaleData:
             meta.to_parquet(meta_path)
         return pd.read_parquet(meta_path)
 
-    def extracted_cmip6_path(self, variable: str, experiment: str, source: str, member: str) -> Path:
+    def extracted_cmip6_path(
+        self, variable: str, experiment: str, source: str, member: str
+    ) -> Path:
         return self.extracted_cmip6 / f"{variable}_{experiment}_{source}_{member}.nc"
 
     @property
@@ -156,6 +158,33 @@ class ClimateDownscaleData:
     ) -> xr.Dataset:
         results_path = self.daily_results_path(scenario, variable, year)
         return xr.open_dataset(results_path)
+
+    @property
+    def annual_results(self) -> Path:
+        return self.results / "annual"
+
+    def annual_results_path(self, scenario: str, variable: str) -> Path:
+        return self.annual_results / scenario / f"{variable}.nc"
+
+    def save_annual_results(
+        self,
+        results_ds: xr.Dataset,
+        scenario: str,
+        variable: str,
+        encoding_kwargs: dict[str, Any],
+    ) -> None:
+        path = self.annual_results_path(scenario, variable)
+        mkdir(path.parent, exist_ok=True, parents=True)
+        touch(path, exist_ok=True)
+
+        encoding = {
+            "dtype": "int16",
+            "_FillValue": -32767,
+            "zlib": True,
+            "complevel": 1,
+        }
+        encoding.update(encoding_kwargs)
+        results_ds.to_netcdf(path, encoding={"value": encoding})
 
 
 def save_raster(
