@@ -172,6 +172,20 @@ def with_cmip6_variable(
     )
 
 
+def with_target_variable(
+    *,
+    variable_names: list[str],
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "target-variable",
+        "t",
+        allow_all=allow_all,
+        choices=variable_names,
+        help="Variable to generate.",
+    )
+
+
 STRIDE = 30
 LATITUDES = [str(lat) for lat in range(-90, 90, STRIDE)]
 LONGITUDES = [str(lon) for lon in range(-180, 180, STRIDE)]

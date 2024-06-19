@@ -6,7 +6,6 @@ from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_downscale.generate.historical_daily import (
     TRANSFORM_MAP,
-    with_target_variable,
 )
 
 
@@ -54,7 +53,7 @@ def generate_historical_reference_main(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@with_target_variable()
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 def generate_historical_reference_task(
     output_dir: str,
     target_variable: str,
@@ -64,7 +63,7 @@ def generate_historical_reference_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@with_target_variable(allow_all=True)
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 @clio.with_queue()
 def generate_historical_reference(
     output_dir: str,

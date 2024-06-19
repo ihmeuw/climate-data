@@ -1,5 +1,4 @@
 import itertools
-import typing
 from pathlib import Path
 
 import click
@@ -81,23 +80,6 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
         "multiplicative",
     ),
 }
-
-
-_P = typing.ParamSpec("_P")
-_T = typing.TypeVar("_T")
-
-
-def with_target_variable(
-    *,
-    allow_all: bool = False,
-) -> clio.ClickOption[_P, _T]:
-    return clio.with_choice(
-        "target-variable",
-        "t",
-        allow_all=allow_all,
-        choices=list(TRANSFORM_MAP.keys()),
-        help="Variable to generate.",
-    )
 
 
 def get_source_paths(
@@ -265,7 +247,7 @@ def generate_scenario_daily_main(  # noqa: PLR0912
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_FORECAST_YEARS)
-@with_target_variable()
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment()
 def generate_scenario_daily_task(
     output_dir: str, year: str, target_variable: str, cmip6_experiment: str
@@ -276,7 +258,7 @@ def generate_scenario_daily_task(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_FORECAST_YEARS, allow_all=True)
-@with_target_variable(allow_all=True)
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_queue()
 @clio.with_overwrite()

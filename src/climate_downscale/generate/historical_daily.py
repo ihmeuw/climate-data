@@ -1,5 +1,4 @@
 import itertools
-import typing
 from pathlib import Path
 
 import click
@@ -66,22 +65,6 @@ TRANSFORM_MAP = {
         encoding_scale=0.1,
     ),
 }
-
-_P = typing.ParamSpec("_P")
-_T = typing.TypeVar("_T")
-
-
-def with_target_variable(
-    *,
-    allow_all: bool = False,
-) -> clio.ClickOption[_P, _T]:
-    return clio.with_choice(
-        "target-variable",
-        "t",
-        allow_all=allow_all,
-        choices=list(TRANSFORM_MAP.keys()),
-        help="Variable to generate.",
-    )
 
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
@@ -176,7 +159,7 @@ def generate_historical_daily_main(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_HISTORY_YEARS)
-@with_target_variable()
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 def generate_historical_daily_task(
     output_dir: str,
     year: str,
@@ -188,7 +171,7 @@ def generate_historical_daily_task(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_HISTORY_YEARS, allow_all=True)
-@with_target_variable(allow_all=True)
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_historical_daily(

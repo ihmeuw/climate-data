@@ -1,5 +1,4 @@
 import itertools
-import typing
 from pathlib import Path
 
 import click
@@ -108,23 +107,6 @@ TRANSFORM_MAP = {
 }
 
 
-_P = typing.ParamSpec("_P")
-_T = typing.TypeVar("_T")
-
-
-def with_target_variable(
-    *,
-    allow_all: bool = False,
-) -> clio.ClickOption[_P, _T]:
-    return clio.with_choice(
-        "target-variable",
-        "t",
-        allow_all=allow_all,
-        choices=list(TRANSFORM_MAP.keys()),
-        help="Variable to generate.",
-    )
-
-
 def generate_scenario_annual_main(
     output_dir: str | Path, target_variable: str, scenario: str, year: str
 ) -> None:
@@ -148,7 +130,7 @@ def generate_scenario_annual_main(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@with_target_variable()
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment(allow_historical=True)
 @clio.with_year(years=clio.VALID_HISTORY_YEARS + clio.VALID_FORECAST_YEARS)
 def generate_scenario_annual_task(
@@ -172,7 +154,7 @@ def generate_scenario_annual_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@with_target_variable(allow_all=True)
+@clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True, allow_historical=True)
 @clio.with_queue()
 @clio.with_overwrite()
