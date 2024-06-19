@@ -13,69 +13,40 @@ from climate_downscale.generate import utils
 TEMP_THRESHOLDS = list(range(20, 35))
 
 
-class Transform:
-    def __init__(
-        self,
-        source_variables: list[str],
-        transform_funcs: list[typing.Callable[..., xr.Dataset]] = [utils.annual_mean],  # noqa: B006
-        encoding_scale: float = 1.0,
-        encoding_offset: float = 0.0,
-    ):
-        self.source_variables = source_variables
-        self.transform_funcs = transform_funcs
-        self.encoding_scale = encoding_scale
-        self.encoding_offset = encoding_offset
-
-    def __iter__(self) -> typing.Iterator[str]:
-        return iter(self.source_variables)
-
-    def __call__(self, *datasets: xr.Dataset) -> xr.Dataset:
-        res = self.transform_funcs[0](*datasets)
-        for transform_func in self.transform_funcs[1:]:
-            res = transform_func(res)
-        return res
-
-    @property
-    def encoding_kwargs(self) -> dict[str, float]:
-        if self.encoding_offset != 0.0 or self.encoding_scale != 1:
-            return {
-                "add_offset": self.encoding_offset,
-                "scale_factor": self.encoding_scale,
-            }
-        return {}
-
-
 TRANSFORM_MAP = {
-    "mean_temperature": Transform(
+    "mean_temperature": utils.Transform(
         source_variables=["mean_temperature"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
-    "mean_high_temperature": Transform(
+    "mean_high_temperature": utils.Transform(
         source_variables=["max_temperature"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
-    "mean_low_temperature": Transform(
+    "mean_low_temperature": utils.Transform(
         source_variables=["min_temperature"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
-        f"days_over_{temp}C": Transform(
+        f"days_over_{temp}C": utils.Transform(
             source_variables=["mean_temperature"],
             transform_funcs=[utils.count_threshold(temp), utils.annual_sum],
         )
         for temp in TEMP_THRESHOLDS
     },
-    "mean_heat_index": Transform(
+    "mean_heat_index": utils.Transform(
         source_variables=["mean_temperature", "relative_humidity"],
         transform_funcs=[utils.heat_index, utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
-        f"days_over_{temp}C_heat_index": Transform(
+        f"days_over_{temp}C_heat_index": utils.Transform(
             source_variables=["mean_temperature", "relative_humidity"],
             transform_funcs=[
                 utils.heat_index,
@@ -85,14 +56,14 @@ TRANSFORM_MAP = {
         )
         for temp in TEMP_THRESHOLDS
     },
-    "mean_humidex": Transform(
+    "mean_humidex": utils.Transform(
         source_variables=["mean_temperature", "relative_humidity"],
         transform_funcs=[utils.humidex, utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
-        f"days_over_{temp}C_humidex": Transform(
+        f"days_over_{temp}C_humidex": utils.Transform(
             source_variables=["mean_temperature", "relative_humidity"],
             transform_funcs=[
                 utils.humidex,
@@ -102,14 +73,14 @@ TRANSFORM_MAP = {
         )
         for temp in TEMP_THRESHOLDS
     },
-    "mean_effective_temperature": Transform(
+    "mean_effective_temperature": utils.Transform(
         source_variables=["mean_temperature", "relative_humidity", "wind_speed"],
         transform_funcs=[utils.effective_temperature, utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
-        f"days_over_{temp}C_effective_temperature": Transform(
+        f"days_over_{temp}C_effective_temperature": utils.Transform(
             source_variables=["mean_temperature", "relative_humidity", "wind_speed"],
             transform_funcs=[
                 utils.effective_temperature,
@@ -119,15 +90,17 @@ TRANSFORM_MAP = {
         )
         for temp in TEMP_THRESHOLDS
     },
-    "wind_speed": Transform(
+    "wind_speed": utils.Transform(
         source_variables=["wind_speed"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
     ),
-    "relative_humidity": Transform(
+    "relative_humidity": utils.Transform(
         source_variables=["relative_humidity"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
     ),
-    "total_precipitation": Transform(
+    "total_precipitation": utils.Transform(
         source_variables=["total_precipitation"],
         transform_funcs=[utils.annual_sum],
         encoding_scale=0.1,
@@ -161,7 +134,7 @@ def generate_scenario_annual_main(
     ds = transform(
         *[
             xr.open_dataset(cd_data.daily_results_path(scenario, source_variable, year))
-            for source_variable in transform
+            for source_variable in transform.source_variables
         ]
     )
     cd_data.save_annual_results(

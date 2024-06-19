@@ -32,35 +32,38 @@ CONVERT_MAP = {
 #  - a transformation function
 #  - a tuple of offset and scale factors for the output for serialization
 TRANSFORM_MAP = {
-    "mean_temperature": (
-        ["2m_temperature"],
-        utils.daily_mean,
-        (273.15, 0.01),
+    "mean_temperature": utils.Transform(
+        source_variables=["2m_temperature"],
+        transform_funcs=[utils.daily_mean],
+        encoding_scale=0.01,
+        encoding_offset=273.15,
     ),
-    "max_temperature": (
-        ["2m_temperature"],
-        utils.daily_max,
-        (273.15, 0.01),
+    "max_temperature": utils.Transform(
+        source_variables=["2m_temperature"],
+        transform_funcs=[utils.daily_max],
+        encoding_scale=0.01,
+        encoding_offset=273.15,
     ),
-    "min_temperature": (
-        ["2m_temperature"],
-        utils.daily_min,
-        (273.15, 0.01),
+    "min_temperature": utils.Transform(
+        source_variables=["2m_temperature"],
+        transform_funcs=[utils.daily_min],
+        encoding_scale=0.01,
+        encoding_offset=273.15,
     ),
-    "wind_speed": (
-        ["10m_u_component_of_wind", "10m_v_component_of_wind"],
-        lambda x, y: utils.daily_mean(utils.vector_magnitude(x, y)),
-        (0, 0.01),
+    "wind_speed": utils.Transform(
+        source_variables=["10m_u_component_of_wind", "10m_v_component_of_wind"],
+        transform_funcs=[utils.vector_magnitude, utils.daily_mean],
+        encoding_scale=0.01,
     ),
-    "relative_humidity": (
-        ["2m_temperature", "2m_dewpoint_temperature"],
-        lambda x, y: utils.daily_mean(utils.rh_percent(x, y)),
-        (0, 0.01),
+    "relative_humidity": utils.Transform(
+        source_variables=["2m_temperature", "2m_dewpoint_temperature"],
+        transform_funcs=[utils.rh_percent, utils.daily_mean],
+        encoding_scale=0.01,
     ),
-    "total_precipitation": (
-        ["total_precipitation"],
-        utils.daily_sum,
-        (0, 0.1),
+    "total_precipitation": utils.Transform(
+        source_variables=["total_precipitation"],
+        transform_funcs=[utils.daily_sum],
+        encoding_scale=0.1,
     ),
 }
 
@@ -128,17 +131,17 @@ def generate_historical_daily_main(
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
-    source_variables, collapse_fun, (e_offset, e_scale) = TRANSFORM_MAP[target_variable]
+    transform = TRANSFORM_MAP[target_variable]
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
         print(f"loading single-levels for {month_str}")
         single_level = [
             load_variable(cd_data, sv, year, month_str, "single-levels")
-            for sv in source_variables
+            for sv in transform.source_variables
         ]
         print("collapsing")
-        ds = collapse_fun(*single_level).compute()  # type: ignore[operator]
+        ds = transform(*single_level).compute()
         # collapsing often screws the date dtype, so fix it
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
@@ -148,11 +151,11 @@ def generate_historical_daily_main(
         print(f"loading land for {month_str}")
         land = [
             load_variable(cd_data, sv, year, month_str, "land")
-            for sv in source_variables
+            for sv in transform.source_variables
         ]
         print("collapsing")
         with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
-            ds_land = collapse_fun(*land).compute()  # type: ignore[operator]
+            ds_land = transform(*land).compute()
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
         print("combining")
@@ -166,10 +169,7 @@ def generate_historical_daily_main(
         scenario="historical",
         variable=target_variable,
         year=year,
-        encoding_kwargs={
-            "add_offset": e_offset,
-            "scale_factor": e_scale,
-        },
+        encoding_kwargs=transform.encoding_kwargs,
     )
 
 

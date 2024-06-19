@@ -28,41 +28,56 @@ CONVERT_MAP = {
 #  - a transformation function
 #  - a tuple of offset and scale factors for the output for serialization
 #  - an anomaly type
-TRANSFORM_MAP = {
+TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
     "mean_temperature": (
-        ["tas"],
-        utils.identity,
-        (273.15, 0.01),
+        utils.Transform(
+            source_variables=["tas"],
+            transform_funcs=[utils.identity],
+            encoding_scale=0.01,
+            encoding_offset=273.15,
+        ),
         "additive",
     ),
     "max_temperature": (
-        ["tasmax"],
-        utils.identity,
-        (273.15, 0.01),
+        utils.Transform(
+            source_variables=["tasmax"],
+            transform_funcs=[utils.identity],
+            encoding_scale=0.01,
+            encoding_offset=273.15,
+        ),
         "additive",
     ),
     "min_temperature": (
-        ["tasmin"],
-        utils.identity,
-        (273.15, 0.01),
+        utils.Transform(
+            source_variables=["tasmin"],
+            transform_funcs=[utils.identity],
+            encoding_scale=0.01,
+            encoding_offset=273.15,
+        ),
         "additive",
     ),
     "wind_speed": (
-        ["uas", "vas"],
-        utils.vector_magnitude,
-        (0, 0.01),
+        utils.Transform(
+            source_variables=["uas", "vas"],
+            transform_funcs=[utils.vector_magnitude],
+            encoding_scale=0.01,
+        ),
         "multiplicative",
     ),
     "relative_humidity": (
-        ["hurs"],
-        utils.identity,
-        (0, 0.01),
+        utils.Transform(
+            source_variables=["hurs"],
+            transform_funcs=[utils.identity],
+            encoding_scale=0.01,
+        ),
         "multiplicative",
     ),
     "total_precipitation": (
-        ["pr"],
-        utils.identity,
-        (0, 0.1),
+        utils.Transform(
+            source_variables=["pr"],
+            transform_funcs=[utils.identity],
+            encoding_scale=0.1,
+        ),
         "multiplicative",
     ),
 }
@@ -83,6 +98,36 @@ def with_target_variable(
         choices=list(TRANSFORM_MAP.keys()),
         help="Variable to generate.",
     )
+
+
+def get_source_paths(
+    cd_data: ClimateDownscaleData,
+    source_variables: list[str],
+    cmip6_experiment: str,
+) -> list[list[Path]]:
+    models_by_var = {}
+    for source_variable in source_variables:
+        model_vars = {
+            p.stem.split(f"{cmip6_experiment}_")[1]
+            for p in cd_data.extracted_cmip6.glob(
+                f"{source_variable}_{cmip6_experiment}*.nc"
+            )
+        }
+        models_by_var[source_variable] = model_vars
+
+    shared_models = set.intersection(*models_by_var.values())
+    for var, models in models_by_var.items():
+        extra_models = models.difference(shared_models)
+        if extra_models:
+            print(var, extra_models)
+    source_paths = [
+        [
+            cd_data.extracted_cmip6 / f"{source_variable}_{cmip6_experiment}_{model}.nc"
+            for source_variable in source_variables
+        ]
+        for model in sorted(shared_models)
+    ]
+    return source_paths
 
 
 def load_and_shift_longitude(
@@ -140,7 +185,7 @@ def compute_anomaly(
     return anomaly
 
 
-def generate_scenario_daily_main(  # noqa: C901, PLR0912, PLR0915
+def generate_scenario_daily_main(  # noqa: PLR0912
     output_dir: str | Path,
     year: str | int,
     target_variable: str,
@@ -148,32 +193,10 @@ def generate_scenario_daily_main(  # noqa: C901, PLR0912, PLR0915
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
-    (source_variables, transform_fun, (e_offset, e_scale), anomaly_type) = (
-        TRANSFORM_MAP[target_variable]
+    transform, anomaly_type = TRANSFORM_MAP[target_variable]
+    source_paths = get_source_paths(
+        cd_data, transform.source_variables, cmip6_experiment
     )
-
-    models_by_var = {}
-    for source_variable in source_variables:
-        model_vars = {
-            p.stem.split(f"{cmip6_experiment}_")[1]
-            for p in cd_data.extracted_cmip6.glob(
-                f"{source_variable}_{cmip6_experiment}*.nc"
-            )
-        }
-        models_by_var[source_variable] = model_vars
-
-    shared_models = set.intersection(*models_by_var.values())
-    for var, models in models_by_var.items():
-        extra_models = models.difference(shared_models)
-        if extra_models:
-            print(var, extra_models)
-    source_paths = [
-        [
-            cd_data.extracted_cmip6 / f"{source_variable}_{cmip6_experiment}_{model}.nc"
-            for source_variable in source_variables
-        ]
-        for model in sorted(shared_models)
-    ]
 
     print("loading historical reference")
     historical_reference = cd_data.load_daily_results(
@@ -187,13 +210,11 @@ def generate_scenario_daily_main(  # noqa: C901, PLR0912, PLR0915
         pid = f"{i+1}/{len(source_paths)} {sps[0].stem}"
         print(f"{pid}: Loading reference")
         try:
-            scenario_reference = transform_fun(  # type: ignore[operator]
+            scenario_reference = transform(
                 *[load_variable(sp, "reference") for sp in sps]
             )
             print(f"{pid}: Loading target")
-            target = transform_fun(  # type: ignore[operator]
-                *[load_variable(sp, year) for sp in sps]
-            )
+            target = transform(*[load_variable(sp, year) for sp in sps])
         except KeyError:
             print(f"{pid}: Bad formatting, skipping...")
             continue
@@ -237,10 +258,7 @@ def generate_scenario_daily_main(  # noqa: C901, PLR0912, PLR0915
         scenario=cmip6_experiment,
         variable=target_variable,
         year=year,
-        encoding_kwargs={
-            "add_offset": e_offset,
-            "scale_factor": e_scale,
-        },
+        encoding_kwargs=transform.encoding_kwargs,
     )
 
 

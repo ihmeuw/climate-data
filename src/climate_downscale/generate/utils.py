@@ -1,3 +1,4 @@
+import typing
 from collections.abc import Callable
 
 import numpy as np
@@ -325,3 +326,32 @@ def interpolate_to_target_latlon(
         .interpolate_na(dim="latitude", method="nearest", fill_value="extrapolate")
         .sortby("latitude", ascending=False)
     )
+
+
+class Transform:
+    def __init__(
+        self,
+        source_variables: list[str],
+        transform_funcs: list[typing.Callable[..., xr.Dataset]],
+        encoding_scale: float = 1.0,
+        encoding_offset: float = 0.0,
+    ):
+        self.source_variables = source_variables
+        self.transform_funcs = transform_funcs
+        self.encoding_scale = encoding_scale
+        self.encoding_offset = encoding_offset
+
+    def __call__(self, *datasets: xr.Dataset) -> xr.Dataset:
+        res = self.transform_funcs[0](*datasets)
+        for transform_func in self.transform_funcs[1:]:
+            res = transform_func(res)
+        return res
+
+    @property
+    def encoding_kwargs(self) -> dict[str, float]:
+        if self.encoding_offset != 0.0 or self.encoding_scale != 1:
+            return {
+                "add_offset": self.encoding_offset,
+                "scale_factor": self.encoding_scale,
+            }
+        return {}
