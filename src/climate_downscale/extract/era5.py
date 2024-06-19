@@ -246,6 +246,9 @@ def extract_era5(  # noqa: PLR0913
             to_download.append(spec)
             to_compress.append(spec)
 
+    if not to_download:
+        print('No datasets to download')
+
     while to_download:
         downloads_left = len(to_download)
 
@@ -284,6 +287,10 @@ def extract_era5(  # noqa: PLR0913
             },
             max_attempts=1,
         )
+
+    if not to_compress:
+        print('No datasets to compress.')
+        return
 
     jobmon.run_parallel(
         runner="cdtask",
