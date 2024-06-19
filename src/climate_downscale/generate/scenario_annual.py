@@ -153,38 +153,22 @@ def with_target_variable(
 
 
 def generate_scenario_annual_main(
-    output_dir: str | Path,
-    target_variable: str,
-    scenario: str,
+    output_dir: str | Path, target_variable: str, scenario: str, year: str
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
 
-    years = (
-        clio.VALID_HISTORY_YEARS
-        if scenario == "historical"
-        else clio.VALID_FORECAST_YEARS
-    )
-
-    variables = []
-    for source_variable in transform:
-        paths = [
-            cd_data.daily_results_path(scenario, source_variable, year)
-            for year in years
+    ds = transform(
+        *[
+            xr.open_dataset(cd_data.daily_results_path(scenario, source_variable, year))
+            for source_variable in transform
         ]
-        variables.append(
-            xr.open_mfdataset(
-                paths,
-                parallel=True,
-                chunks={"date": -1, "latitude": 601, "longitude": 1200},
-            )
-        )
-    ds = transform(*variables).compute()
-
+    )
     cd_data.save_annual_results(
         ds,
         scenario=scenario,
         variable=target_variable,
+        year=year,
         encoding_kwargs=transform.encoding_kwargs,
     )
 
@@ -193,12 +177,24 @@ def generate_scenario_annual_main(
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable()
 @clio.with_cmip6_experiment(allow_historical=True)
+@clio.with_year(years=clio.VALID_HISTORY_YEARS + clio.VALID_FORECAST_YEARS)
 def generate_scenario_annual_task(
     output_dir: str,
     target_variable: str,
     cmip6_experiment: str,
+    year: str,
 ) -> None:
-    generate_scenario_annual_main(output_dir, target_variable, cmip6_experiment)
+    if year in clio.VALID_HISTORY_YEARS and cmip6_experiment != "historical":
+        msg = "Historical years must use the 'historical' experiment."
+        raise ValueError(msg)
+    if year in clio.VALID_FORECAST_YEARS and cmip6_experiment == "historical":
+        msg = (
+            f"Forecast years must use a future experiment: "
+            f"{clio.VALID_CMIP6_EXPERIMENTS}."
+        )
+        raise ValueError(msg)
+
+    generate_scenario_annual_main(output_dir, target_variable, cmip6_experiment, year)
 
 
 @click.command()  # type: ignore[arg-type]
@@ -227,34 +223,38 @@ def generate_scenario_annual(
         else [cmip6_experiment]
     )
 
-    ve = []
+    vey = []
     complete = []
     for v, e in itertools.product(variables, experiments):
-        path = cd_data.annual_results_path(scenario=e, variable=v)
-        if not path.exists() or overwrite:
-            ve.append((v, e))
-        else:
-            complete.append((v, e))
+        year_list = (
+            clio.VALID_HISTORY_YEARS if e == "historical" else clio.VALID_FORECAST_YEARS
+        )
+        for y in year_list:
+            path = cd_data.annual_results_path(scenario=e, variable=v, year=y)
+            if not path.exists() or overwrite:
+                vey.append((v, e, y))
+            else:
+                complete.append((v, e, y))
 
-    print(f"{len(complete)} tasks already done. {len(ve)} tasks to do.")
-    if not ve:
+    print(f"{len(complete)} tasks already done. {len(vey)} tasks to do.")
+    if not vey:
         return
 
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_annual",
         flat_node_args=(
-            ("target-variable", "cmip6-experiment"),
-            ve,
+            ("target-variable", "cmip6-experiment", "year"),
+            vey,
         ),
         task_args={
             "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
-            "cores": 20,
-            "memory": "250G",
-            "runtime": "600m",
+            "cores": 2,
+            "memory": "100G",
+            "runtime": "120m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,

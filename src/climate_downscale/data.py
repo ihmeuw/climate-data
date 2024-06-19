@@ -163,17 +163,20 @@ class ClimateDownscaleData:
     def annual_results(self) -> Path:
         return self.results / "annual"
 
-    def annual_results_path(self, scenario: str, variable: str) -> Path:
-        return self.annual_results / scenario / f"{variable}.nc"
+    def annual_results_path(
+        self, scenario: str, variable: str, year: int | str
+    ) -> Path:
+        return self.annual_results / scenario / variable / f"{year}.nc"
 
     def save_annual_results(
         self,
         results_ds: xr.Dataset,
         scenario: str,
         variable: str,
+        year: int | str,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        path = self.annual_results_path(scenario, variable)
+        path = self.annual_results_path(scenario, variable, year)
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
 
