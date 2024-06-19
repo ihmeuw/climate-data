@@ -3,8 +3,12 @@ from collections.abc import Callable
 import numpy as np
 import xarray as xr
 
-REFERENCE_YEARS = list(range(2018, 2024))
-REFERENCE_PERIOD = slice(f"{REFERENCE_YEARS[0]}-01-01", f"{REFERENCE_YEARS[-1]}-12-31")
+import climate_downscale.cli_options as clio
+
+REFERENCE_PERIOD = slice(
+    f"{clio.VALID_REFERENCE_YEARS[0]}-01-01",
+    f"{clio.VALID_REFERENCE_YEARS[-1]}-12-31",
+)
 TARGET_LON = xr.DataArray(
     np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
 )

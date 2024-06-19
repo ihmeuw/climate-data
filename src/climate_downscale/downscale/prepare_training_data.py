@@ -102,7 +102,7 @@ def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year()
+@clio.with_year(years=clio.VALID_HISTORY_YEARS)
 def prepare_training_data_task(output_dir: str, year: str) -> None:
     prepare_training_data_main(output_dir, year)
 
@@ -115,7 +115,7 @@ def prepare_training_data(output_dir: str, queue: str) -> None:
         runner="cdtask",
         task_name="downscale prepare_training_data",
         node_args={
-            "year": clio.VALID_YEARS,
+            "year": clio.VALID_HISTORY_YEARS,
         },
         task_args={
             "output-dir": output_dir,

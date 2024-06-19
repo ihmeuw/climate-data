@@ -175,7 +175,7 @@ def generate_historical_daily_main(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year()
+@clio.with_year(years=clio.VALID_HISTORY_YEARS)
 @with_target_variable()
 def generate_historical_daily_task(
     output_dir: str,
@@ -187,7 +187,7 @@ def generate_historical_daily_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(allow_all=True)
+@clio.with_year(years=clio.VALID_HISTORY_YEARS, allow_all=True)
 @with_target_variable(allow_all=True)
 @clio.with_queue()
 @clio.with_overwrite()
@@ -200,7 +200,7 @@ def generate_historical_daily(
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
-    years = clio.VALID_YEARS if year == clio.RUN_ALL else [year]
+    years = clio.VALID_HISTORY_YEARS if year == clio.RUN_ALL else [year]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL

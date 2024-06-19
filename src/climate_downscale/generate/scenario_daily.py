@@ -12,8 +12,6 @@ from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_downscale.generate import utils
 
-VALID_YEARS = [str(y) for y in range(max(utils.REFERENCE_YEARS) + 1, 2101)]
-
 # Map from source variable to a unit conversion function
 CONVERT_MAP = {
     "uas": utils.scale_wind_speed_height,
@@ -248,7 +246,7 @@ def generate_scenario_daily_main(  # noqa: C901, PLR0912, PLR0915
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=VALID_YEARS)
+@clio.with_year(years=clio.VALID_FORECAST_YEARS)
 @with_target_variable()
 @clio.with_cmip6_experiment()
 def generate_scenario_daily_task(
@@ -259,7 +257,7 @@ def generate_scenario_daily_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=VALID_YEARS, allow_all=True)
+@clio.with_year(years=clio.VALID_FORECAST_YEARS, allow_all=True)
 @with_target_variable(allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_queue()
@@ -274,7 +272,7 @@ def generate_scenario_daily(
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
-    years = VALID_YEARS if year == clio.RUN_ALL else [year]
+    years = clio.VALID_FORECAST_YEARS if year == clio.RUN_ALL else [year]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL

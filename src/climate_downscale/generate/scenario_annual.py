@@ -9,12 +9,7 @@ from rra_tools import jobmon
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_downscale.generate import utils
-from climate_downscale.generate.scenario_daily import VALID_YEARS
 
-YEARS = {
-    "historical": clio.VALID_YEARS,
-    "scenario": VALID_YEARS,
-}
 TEMP_THRESHOLDS = list(range(20, 35))
 
 
@@ -42,8 +37,11 @@ class Transform:
 
     @property
     def encoding_kwargs(self) -> dict[str, float]:
-        if self.encoding_offset != 0. or self.encoding_scale != 1:
-            return {"add_offset": self.encoding_offset, "scale_factor": self.encoding_scale}
+        if self.encoding_offset != 0.0 or self.encoding_scale != 1:
+            return {
+                "add_offset": self.encoding_offset,
+                "scale_factor": self.encoding_scale,
+            }
         return {}
 
 
@@ -160,27 +158,29 @@ def generate_scenario_annual_main(
     scenario: str,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
-
     transform = TRANSFORM_MAP[target_variable]
 
-    
+    years = (
+        clio.VALID_HISTORY_YEARS
+        if scenario == "historical"
+        else clio.VALID_FORECAST_YEARS
+    )
+
     variables = []
     for source_variable in transform:
-        paths = []
-        for scenario_label, year_list in YEARS.items():
-            s = "historical" if scenario_label == "historical" else scenario
-            for year in year_list:            
-                paths.append(cd_data.daily_results_path(s, source_variable, year))
+        paths = [
+            cd_data.daily_results_path(scenario, source_variable, year)
+            for year in years
+        ]
         variables.append(
             xr.open_mfdataset(
-                paths, 
-                parallel=True, 
-                chunks={'date': -1, 'latitude': 601, 'longitude': 1200},
+                paths,
+                parallel=True,
+                chunks={"date": -1, "latitude": 601, "longitude": 1200},
             )
         )
     ds = transform(*variables).compute()
-    
-    
+
     cd_data.save_annual_results(
         ds,
         scenario=scenario,
@@ -192,7 +192,7 @@ def generate_scenario_annual_main(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable()
-@clio.with_cmip6_experiment()
+@clio.with_cmip6_experiment(allow_historical=True)
 def generate_scenario_annual_task(
     output_dir: str,
     target_variable: str,
@@ -204,7 +204,7 @@ def generate_scenario_annual_task(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @with_target_variable(allow_all=True)
-@clio.with_cmip6_experiment(allow_all=True)
+@clio.with_cmip6_experiment(allow_all=True, allow_historical=True)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_annual(

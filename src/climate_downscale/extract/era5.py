@@ -75,7 +75,7 @@ def download_era5_main(
         print(f"Failed to download {era5_dataset} {era5_variable} {year} {month}")
         if download_path.exists():
             download_path.unlink()
-        raise e  # noqa: TRY201
+        raise e
 
 
 def unzip_and_compress_era5(
@@ -138,7 +138,7 @@ def unzip_and_compress_era5(
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
-@clio.with_year()
+@clio.with_year(years=clio.VALID_HISTORY_YEARS)
 @clio.with_month()
 @click.option(
     "--user",
@@ -166,7 +166,7 @@ def download_era5_task(
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
-@clio.with_year()
+@clio.with_year(years=clio.VALID_HISTORY_YEARS)
 @clio.with_month()
 def unzip_and_compress_era5_task(
     output_dir: str,
@@ -184,40 +184,14 @@ def unzip_and_compress_era5_task(
     )
 
 
-@click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_era5_dataset(allow_all=True)
-@clio.with_era5_variable(allow_all=True)
-@clio.with_year(allow_all=True)
-@clio.with_month(allow_all=True)
-@clio.with_queue()
-def extract_era5(  # noqa: PLR0913
-    output_dir: str,
-    era5_dataset: str,
-    era5_variable: str,
-    year: str,
-    month: str,
-    queue: str,
-) -> None:
-    cddata = ClimateDownscaleData(output_dir)
-    cred_path = cddata.credentials_root / "copernicus.yaml"
-    credentials = yaml.safe_load(cred_path.read_text())
-    users = list(credentials["keys"])
-    jobs_per_user = 20
-
-    datasets = (
-        clio.VALID_ERA5_DATASETS if era5_dataset == clio.RUN_ALL else [era5_dataset]
-    )
-    variables = (
-        clio.VALID_ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
-    )
-    years = clio.VALID_YEARS if year == clio.RUN_ALL else [year]
-    months = clio.VALID_MONTHS if month == clio.RUN_ALL else [month]
-
+def build_task_lists(
+    cddata: ClimateDownscaleData,
+    *spec_variables: list[str],
+) -> tuple[list[tuple[str, ...]], ...]:
     to_download = []
     to_compress = []
     complete = []
-    for spec in itertools.product(datasets, variables, years, months):
+    for spec in itertools.product(*spec_variables):
         final_out_path = cddata.extracted_era5_path(*spec)
         download_path, _ = get_download_spec(final_out_path)
 
@@ -239,15 +213,57 @@ def extract_era5(  # noqa: PLR0913
         elif download_path.exists():
             to_compress.append(spec)
         elif final_out_path.exists():
-            # We've already extracted this dataset (deleting the download path is the last step)
+            # We've already extracted this dataset
+            # (deleting the download path is the last step)
             complete.append(spec)
             continue
         else:
             to_download.append(spec)
             to_compress.append(spec)
 
+    return to_download, to_compress, complete
+
+
+@click.command()  # type: ignore[arg-type]
+@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_era5_dataset(allow_all=True)
+@clio.with_era5_variable(allow_all=True)
+@clio.with_year(years=clio.VALID_HISTORY_YEARS, allow_all=True)
+@clio.with_month(allow_all=True)
+@clio.with_queue()
+def extract_era5(
+    output_dir: str,
+    era5_dataset: str,
+    era5_variable: str,
+    year: str,
+    month: str,
+    queue: str,
+) -> None:
+    cddata = ClimateDownscaleData(output_dir)
+    cred_path = cddata.credentials_root / "copernicus.yaml"
+    credentials = yaml.safe_load(cred_path.read_text())
+    users = list(credentials["keys"])
+    jobs_per_user = 20
+
+    datasets = (
+        clio.VALID_ERA5_DATASETS if era5_dataset == clio.RUN_ALL else [era5_dataset]
+    )
+    variables = (
+        clio.VALID_ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
+    )
+    years = clio.VALID_HISTORY_YEARS if year == clio.RUN_ALL else [year]
+    months = clio.VALID_MONTHS if month == clio.RUN_ALL else [month]
+
+    to_download, to_compress, complete = build_task_lists(
+        cddata,
+        datasets,
+        variables,
+        years,
+        months,
+    )
+
     if not to_download:
-        print('No datasets to download')
+        print("No datasets to download")
 
     while to_download:
         downloads_left = len(to_download)
@@ -256,7 +272,7 @@ def extract_era5(  # noqa: PLR0913
         for _ in range(jobs_per_user):
             for user in users:
                 if to_download:
-                    download_batch.append((*to_download.pop(), user))
+                    download_batch.append((*to_download.pop(), user))  # noqa: PERF401
         if len(download_batch) != min(len(users) * jobs_per_user, downloads_left):
             msg = "Download batch size is incorrect"
             raise ValueError(msg)
@@ -289,7 +305,7 @@ def extract_era5(  # noqa: PLR0913
         )
 
     if not to_compress:
-        print('No datasets to compress.')
+        print("No datasets to compress.")
         return
 
     jobmon.run_parallel(

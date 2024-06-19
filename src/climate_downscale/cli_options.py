@@ -18,12 +18,14 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
-VALID_YEARS = [str(y) for y in range(1990, 2024)]
+VALID_HISTORY_YEARS = [str(y) for y in range(1990, 2024)]
+VALID_REFERENCE_YEARS = VALID_HISTORY_YEARS[-5:]
+VALID_FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 
 
 def with_year(
     *,
-    years: list[str] = VALID_YEARS,
+    years: list[str],
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
@@ -132,12 +134,16 @@ VALID_CMIP6_EXPERIMENTS = [
 def with_cmip6_experiment(
     *,
     allow_all: bool = False,
+    allow_historical: bool = False,
 ) -> ClickOption[_P, _T]:
+    choices = VALID_CMIP6_EXPERIMENTS[:]
+    if allow_historical:
+        choices.append("historical")
     return with_choice(
         "cmip6-experiment",
         "e",
         allow_all=allow_all,
-        choices=VALID_CMIP6_EXPERIMENTS,
+        choices=choices,
         help="CMIP6 experiment to extract.",
     )
 
@@ -204,7 +210,9 @@ def with_overwrite() -> ClickOption[_P, _T]:
 
 
 __all__ = [
-    "VALID_YEARS",
+    "VALID_HISTORY_YEARS",
+    "VALID_REFERENCE_YEARS",
+    "VALID_FORECAST_YEARS",
     "VALID_MONTHS",
     "VALID_ERA5_VARIABLES",
     "VALID_ERA5_DATASETS",

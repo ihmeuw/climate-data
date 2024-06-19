@@ -4,7 +4,6 @@ from rra_tools import jobmon
 
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
-from climate_downscale.generate import utils
 from climate_downscale.generate.historical_daily import (
     TRANSFORM_MAP,
     with_target_variable,
@@ -18,7 +17,7 @@ def generate_historical_reference_main(
     cd_data = ClimateDownscaleData(output_dir)
     paths = [
         cd_data.daily_results_path("historical", target_variable, year)
-        for year in utils.REFERENCE_YEARS
+        for year in clio.VALID_REFERENCE_YEARS
     ]
     print(f"Building reference data from: {len(paths)} files.")
 
