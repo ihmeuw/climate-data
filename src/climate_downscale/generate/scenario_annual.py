@@ -42,7 +42,9 @@ class Transform:
 
     @property
     def encoding_kwargs(self) -> dict[str, float]:
-        return {"add_offset": self.encoding_offset, "scale_factor": self.encoding_scale}
+        if self.encoding_offset != 0. or self.encoding_scale != 1:
+            return {"add_offset": self.encoding_offset, "scale_factor": self.encoding_scale}
+        return {}
 
 
 TRANSFORM_MAP = {
@@ -161,22 +163,26 @@ def generate_scenario_annual_main(
 
     transform = TRANSFORM_MAP[target_variable]
 
-    annual_data = []
-    for scenario_label, year_list in YEARS.items():
-        scenario_label = scenario if scenario_label == "scenario" else "historical"  # noqa: PLW2901
-        for year in year_list:
-            print(f"Loading {scenario_label} {year} data for {target_variable}")
-            ds = transform(
-                *[
-                    cd_data.load_daily_results(scenario_label, source_variable, year)
-                    for source_variable in transform
-                ]
+    
+    variables = []
+    for source_variable in transform:
+        paths = []
+        for scenario_label, year_list in YEARS.items():
+            s = "historical" if scenario_label == "historical" else scenario
+            for year in year_list:            
+                paths.append(cd_data.daily_results_path(s, source_variable, year))
+        variables.append(
+            xr.open_mfdataset(
+                paths, 
+                parallel=True, 
+                chunks={'date': -1, 'latitude': 601, 'longitude': 1200},
             )
-            annual_data.append(ds)
-
-    annual_ds = xr.concat(annual_data, dim="year")
+        )
+    ds = transform(*variables).compute()
+    
+    
     cd_data.save_annual_results(
-        annual_ds,
+        ds,
         scenario=scenario,
         variable=target_variable,
         encoding_kwargs=transform.encoding_kwargs,
@@ -236,7 +242,7 @@ def generate_scenario_annual(
 
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="generate scenario_daily",
+        task_name="generate scenario_annual",
         flat_node_args=(
             ("target-variable", "cmip6-experiment"),
             ve,
@@ -246,9 +252,9 @@ def generate_scenario_annual(
         },
         task_resources={
             "queue": queue,
-            "cores": 5,
-            "memory": "120G",
-            "runtime": "400m",
+            "cores": 20,
+            "memory": "250G",
+            "runtime": "600m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
