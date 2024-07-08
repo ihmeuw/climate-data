@@ -13,12 +13,12 @@ from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 warnings.filterwarnings("ignore")
 
 
-def extract_metadata(data_path: Path) -> tuple[Any]:
+def extract_metadata(data_path: Path) -> tuple[Any, ...]:
     meta = data_path.stem.split("_")
     ds = xr.open_dataset(data_path)
     year_start = ds["time.year"].min().item()
     year_end = ds["time.year"].max().item()
-    return *meta, year_start, year_end, str(data_path)
+    return *meta, year_start, year_end
 
 
 def generate_scenario_inclusion_main(
