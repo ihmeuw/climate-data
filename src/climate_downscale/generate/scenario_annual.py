@@ -3,6 +3,7 @@ from pathlib import Path
 
 import click
 import xarray as xr
+from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
 
 from climate_downscale import cli_options as clio
@@ -105,7 +106,11 @@ TRANSFORM_MAP = {
 
 
 def generate_scenario_annual_main(
-    output_dir: str | Path, target_variable: str, scenario: str, year: str, progress_bar: bool = False
+    output_dir: str | Path,
+    target_variable: str,
+    scenario: str,
+    year: str,
+    progress_bar: bool = False,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
@@ -118,11 +123,11 @@ def generate_scenario_annual_main(
     )
 
     if progress_bar:
-        with ProgressBar():
+        with ProgressBar():  # type: ignore[no-untyped-call]
             ds = ds.compute()
     else:
         ds = ds.compute()
-    
+
     cd_data.save_annual_results(
         ds,
         scenario=scenario,
@@ -167,7 +172,7 @@ def generate_scenario_annual(
     target_variable: str,
     cmip6_experiment: str,
     queue: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
@@ -177,7 +182,7 @@ def generate_scenario_annual(
         else [target_variable]
     )
     experiments = (
-        clio.VALID_CMIP6_EXPERIMENTS + ['historical']
+        [*clio.VALID_CMIP6_EXPERIMENTS, "historical"]
         if cmip6_experiment == clio.RUN_ALL
         else [cmip6_experiment]
     )

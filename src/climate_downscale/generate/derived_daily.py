@@ -1,8 +1,8 @@
 import itertools
 
 import click
+from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
-from dask.diagnostics import ProgressBar
 
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
@@ -35,27 +35,27 @@ def generate_derived_daily_main(
     target_variable: str,
     scenario: str,
     year: str,
-    progress_bar: bool = False
+    progress_bar: bool = False,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
 
-    # Empirically tested to find a good balance between 
+    # Empirically tested to find a good balance between
     # runtime and memory usage for data at this scale.
     chunks = {"latitude": -1, "longitude": -1, "date": 20}
 
     ds = transform(
         *[
-            cd_data.load_daily_results(scenario, source_variable, year).chunk(**chunks)
+            cd_data.load_daily_results(scenario, source_variable, year).chunk(**chunks)  # type: ignore[arg-type]
             for source_variable in transform.source_variables
         ]
     )
     if progress_bar:
-        with ProgressBar():
+        with ProgressBar():  # type: ignore[no-untyped-call]
             ds = ds.compute()
     else:
         ds = ds.compute()
-        
+
     cd_data.save_daily_results(
         ds,
         scenario=scenario,
@@ -99,7 +99,7 @@ def generate_derived_daily(
     target_variable: str,
     cmip6_experiment: str,
     queue: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
@@ -109,7 +109,7 @@ def generate_derived_daily(
         else [target_variable]
     )
     experiments = (
-        clio.VALID_CMIP6_EXPERIMENTS + ['historical']
+        [*clio.VALID_CMIP6_EXPERIMENTS, "historical"]
         if cmip6_experiment == clio.RUN_ALL
         else [cmip6_experiment]
     )
@@ -125,11 +125,11 @@ def generate_derived_daily(
             if path.exists() and path.stat().st_size == 0:
                 # job failed when writing, delete the file
                 path.unlink()
-                
+
             if not path.exists() or overwrite:
                 vey.append((v, e, y))
             else:
-                complete.append((v, e, y))    
+                complete.append((v, e, y))
 
     print(f"{len(complete)} tasks already done. {len(vey)} tasks to do.")
     if not vey:

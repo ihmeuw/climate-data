@@ -126,6 +126,28 @@ class ClimateDownscaleData:
     def daily_results(self) -> Path:
         return self.results / "daily"
 
+    @property
+    def results_metadata(self) -> Path:
+        return self.results / "metadata"
+
+    def save_scenario_metadata(self, df: pd.DataFrame) -> None:
+        path = self.results_metadata / "scenario_metadata.parquet"
+        touch(path, exist_ok=True)
+        df.to_parquet(path)
+
+    def load_scenario_metadata(self) -> pd.DataFrame:
+        path = self.results_metadata / "scenario_metadata.parquet"
+        return pd.read_parquet(path)
+
+    def save_scenario_inclusion_metadata(self, df: pd.DataFrame) -> None:
+        path = self.results_metadata / "scenario_inclusion_metadata.parquet"
+        touch(path, exist_ok=True)
+        df.to_parquet(path)
+
+    def load_scenario_inclusion_metadata(self) -> pd.DataFrame:
+        path = self.results_metadata / "scenario_inclusion_metadata.parquet"
+        return pd.read_parquet(path)
+
     def daily_results_path(self, scenario: str, variable: str, year: int | str) -> Path:
         return self.daily_results / scenario / variable / f"{year}.nc"
 
