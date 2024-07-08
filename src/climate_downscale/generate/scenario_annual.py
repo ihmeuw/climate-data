@@ -39,16 +39,15 @@ TRANSFORM_MAP = {
         for temp in TEMP_THRESHOLDS
     },
     "mean_heat_index": utils.Transform(
-        source_variables=["mean_temperature", "relative_humidity"],
-        transform_funcs=[utils.heat_index, utils.annual_mean],
+        source_variables=["heat_index"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C_heat_index": utils.Transform(
-            source_variables=["mean_temperature", "relative_humidity"],
+            source_variables=["heat_index"],
             transform_funcs=[
-                utils.heat_index,
                 utils.count_threshold(temp),
                 utils.annual_sum,
             ],
@@ -56,16 +55,15 @@ TRANSFORM_MAP = {
         for temp in TEMP_THRESHOLDS
     },
     "mean_humidex": utils.Transform(
-        source_variables=["mean_temperature", "relative_humidity"],
-        transform_funcs=[utils.humidex, utils.annual_mean],
+        source_variables=["humidex"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C_humidex": utils.Transform(
-            source_variables=["mean_temperature", "relative_humidity"],
+            source_variables=["humidex"],
             transform_funcs=[
-                utils.humidex,
                 utils.count_threshold(temp),
                 utils.annual_sum,
             ],
@@ -73,16 +71,15 @@ TRANSFORM_MAP = {
         for temp in TEMP_THRESHOLDS
     },
     "mean_effective_temperature": utils.Transform(
-        source_variables=["mean_temperature", "relative_humidity", "wind_speed"],
-        transform_funcs=[utils.effective_temperature, utils.annual_mean],
+        source_variables=["effective_temperature"],
+        transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
         encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C_effective_temperature": utils.Transform(
-            source_variables=["mean_temperature", "relative_humidity", "wind_speed"],
+            source_variables=["effective_temperature"],
             transform_funcs=[
-                utils.effective_temperature,
                 utils.count_threshold(temp),
                 utils.annual_sum,
             ],
@@ -108,7 +105,7 @@ TRANSFORM_MAP = {
 
 
 def generate_scenario_annual_main(
-    output_dir: str | Path, target_variable: str, scenario: str, year: str
+    output_dir: str | Path, target_variable: str, scenario: str, year: str, progress_bar: bool = False
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
@@ -119,6 +116,13 @@ def generate_scenario_annual_main(
             for source_variable in transform.source_variables
         ]
     )
+
+    if progress_bar:
+        with ProgressBar():
+            ds = ds.compute()
+    else:
+        ds = ds.compute()
+    
     cd_data.save_annual_results(
         ds,
         scenario=scenario,
@@ -173,7 +177,7 @@ def generate_scenario_annual(
         else [target_variable]
     )
     experiments = (
-        list(clio.VALID_CMIP6_EXPERIMENTS)
+        clio.VALID_CMIP6_EXPERIMENTS + ['historical']
         if cmip6_experiment == clio.RUN_ALL
         else [cmip6_experiment]
     )
@@ -207,7 +211,7 @@ def generate_scenario_annual(
         },
         task_resources={
             "queue": queue,
-            "cores": 2,
+            "cores": 3,
             "memory": "100G",
             "runtime": "120m",
             "project": "proj_rapidresponse",

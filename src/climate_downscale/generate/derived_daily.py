@@ -2,6 +2,7 @@ import itertools
 
 import click
 from rra_tools import jobmon
+from dask.diagnostics import ProgressBar
 
 from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
@@ -34,16 +35,27 @@ def generate_derived_daily_main(
     target_variable: str,
     scenario: str,
     year: str,
+    progress_bar: bool = False
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
 
+    # Empirically tested to find a good balance between 
+    # runtime and memory usage for data at this scale.
+    chunks = {"latitude": -1, "longitude": -1, "date": 20}
+
     ds = transform(
         *[
-            cd_data.load_daily_results(scenario, source_variable, year)
+            cd_data.load_daily_results(scenario, source_variable, year).chunk(**chunks)
             for source_variable in transform.source_variables
         ]
     )
+    if progress_bar:
+        with ProgressBar():
+            ds = ds.compute()
+    else:
+        ds = ds.compute()
+        
     cd_data.save_daily_results(
         ds,
         scenario=scenario,
@@ -97,7 +109,7 @@ def generate_derived_daily(
         else [target_variable]
     )
     experiments = (
-        list(clio.VALID_CMIP6_EXPERIMENTS)
+        clio.VALID_CMIP6_EXPERIMENTS + ['historical']
         if cmip6_experiment == clio.RUN_ALL
         else [cmip6_experiment]
     )
@@ -109,11 +121,15 @@ def generate_derived_daily(
             clio.VALID_HISTORY_YEARS if e == "historical" else clio.VALID_FORECAST_YEARS
         )
         for y in year_list:
-            path = cd_data.annual_results_path(scenario=e, variable=v, year=y)
+            path = cd_data.daily_results_path(scenario=e, variable=v, year=y)
+            if path.exists() and path.stat().st_size == 0:
+                # job failed when writing, delete the file
+                path.unlink()
+                
             if not path.exists() or overwrite:
                 vey.append((v, e, y))
             else:
-                complete.append((v, e, y))
+                complete.append((v, e, y))    
 
     print(f"{len(complete)} tasks already done. {len(vey)} tasks to do.")
     if not vey:
@@ -131,9 +147,9 @@ def generate_derived_daily(
         },
         task_resources={
             "queue": queue,
-            "cores": 2,
-            "memory": "100G",
-            "runtime": "120m",
+            "cores": 8,
+            "memory": "150G",
+            "runtime": "45m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
