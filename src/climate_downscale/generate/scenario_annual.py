@@ -18,19 +18,16 @@ TRANSFORM_MAP = {
         source_variables=["mean_temperature"],
         transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "mean_high_temperature": utils.Transform(
         source_variables=["max_temperature"],
         transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "mean_low_temperature": utils.Transform(
         source_variables=["min_temperature"],
         transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C": utils.Transform(
@@ -43,7 +40,6 @@ TRANSFORM_MAP = {
         source_variables=["heat_index"],
         transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C_heat_index": utils.Transform(
@@ -59,7 +55,6 @@ TRANSFORM_MAP = {
         source_variables=["humidex"],
         transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C_humidex": utils.Transform(
@@ -75,7 +70,6 @@ TRANSFORM_MAP = {
         source_variables=["effective_temperature"],
         transform_funcs=[utils.annual_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     **{
         f"days_over_{temp}C_effective_temperature": utils.Transform(

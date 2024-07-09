@@ -13,19 +13,16 @@ TRANSFORM_MAP = {
         source_variables=["mean_temperature", "relative_humidity"],
         transform_funcs=[utils.heat_index],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "humidex": utils.Transform(
         source_variables=["mean_temperature", "relative_humidity"],
         transform_funcs=[utils.humidex],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "effective_temperature": utils.Transform(
         source_variables=["mean_temperature", "relative_humidity", "wind_speed"],
         transform_funcs=[utils.effective_temperature],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
 }
 

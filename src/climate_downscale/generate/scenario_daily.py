@@ -1,3 +1,4 @@
+from collections import defaultdict
 import itertools
 from pathlib import Path
 
@@ -33,7 +34,6 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
             source_variables=["tas"],
             transform_funcs=[utils.identity],
             encoding_scale=0.01,
-            encoding_offset=273.15,
         ),
         "additive",
     ),
@@ -42,7 +42,6 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
             source_variables=["tasmax"],
             transform_funcs=[utils.identity],
             encoding_scale=0.01,
-            encoding_offset=273.15,
         ),
         "additive",
     ),
@@ -51,7 +50,6 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
             source_variables=["tasmin"],
             transform_funcs=[utils.identity],
             encoding_scale=0.01,
-            encoding_offset=273.15,
         ),
         "additive",
     ),
@@ -86,29 +84,16 @@ def get_source_paths(
     cd_data: ClimateDownscaleData,
     source_variables: list[str],
     cmip6_experiment: str,
-) -> list[list[Path]]:
-    models_by_var = {}
-    for source_variable in source_variables:
-        model_vars = {
-            p.stem.split(f"{cmip6_experiment}_")[1]
-            for p in cd_data.extracted_cmip6.glob(
-                f"{source_variable}_{cmip6_experiment}*.nc"
-            )
-        }
-        models_by_var[source_variable] = model_vars
-
-    shared_models = set.intersection(*models_by_var.values())
-    for var, models in models_by_var.items():
-        extra_models = models.difference(shared_models)
-        if extra_models:
-            print(var, extra_models)
-    source_paths = [
-        [
-            cd_data.extracted_cmip6 / f"{source_variable}_{cmip6_experiment}_{model}.nc"
-            for source_variable in source_variables
-        ]
-        for model in sorted(shared_models)
-    ]
+) -> dict[str, list[list[Path]]]:
+    inclusion_meta = cd_data.load_scenario_inclusion_metadata()[source_variables]
+    inclusion_meta = inclusion_meta[inclusion_meta.all(axis=1)]
+    source_paths = defaultdict(list)
+    for source, variant in inclusion_meta.index.tolist():
+        source_paths[source].append(
+            [cd_data.extracted_cmip6_path(v, cmip6_experiment, source, variant) 
+             for v in source_variables]
+        )    
+    
     return source_paths
 
 
@@ -187,52 +172,76 @@ def generate_scenario_daily_main(  # noqa: PLR0912
         year="reference",
     )
 
-    anomalies: dict[str, xr.Dataset] = {}
-    for i, sps in enumerate(source_paths):
-        pid = f"{i+1}/{len(source_paths)} {sps[0].stem}"
-        print(f"{pid}: Loading reference")
-        try:
-            scenario_reference = transform(
-                *[load_variable(sp, "reference") for sp in sps]
-            )
-            print(f"{pid}: Loading target")
-            target = transform(*[load_variable(sp, year) for sp in sps])
-        except KeyError:
-            print(f"{pid}: Bad formatting, skipping...")
-            continue
-        print(f"{pid}: computing anomaly")
-        s_anomaly = compute_anomaly(scenario_reference, target, anomaly_type)
-        key = f"{len(s_anomaly.latitude)}_{len(s_anomaly.longitude)}"
+    anomalies: dict[str, dict[str, tuple[int, xr.Dataset]]] = {}
+    for i, (source, variant_paths) in enumerate(source_paths.items()):
+        sid = f"Source {i+1}/{len(source_paths)}: {source}"
 
-        if key in anomalies:
-            old = anomalies[key]
-            for coord in ["latitude", "longitude"]:
-                old_c = old[coord].to_numpy()
-                new_c = s_anomaly[coord].to_numpy()
-                tol = 1e-5
-                if np.abs(old_c - new_c).max() < tol:
-                    s_anomaly = s_anomaly.assign({coord: old_c})
-                else:
-                    msg = f"{coord} does not match despite having the same subdivision"
-                    raise ValueError(msg)
-            anomalies[key] = old + s_anomaly
-        else:
-            anomalies[key] = s_anomaly
+        source_anomalies: dict[str, tuple[int, xr.Dataset]] = {}
+        for j, vps in enumerate(variant_paths):            
+            vid = f"{sid}, Variant {j+1}/{len(variant_paths)}: {vps[0].stem.split('_')[-1]}"
+            try:
+                print(f"{vid}: Loading reference")
+                sref = transform(*[load_variable(vp, "reference") for vp in vps])
+                print(f"{vid}: Loading target")
+                target = transform(*[load_variable(vp, year) for vp in vps])
+            except KeyError:
+                print(f"{vid}: Bad formatting, skipping...")
+                continue
+            
+            print(f"{vid}: computing anomaly")
+            v_anomaly = compute_anomaly(sref, target, anomaly_type)
+            
+            key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
 
-    anomaly = xr.Dataset()
-    for i, (k, v) in enumerate(anomalies.items()):
-        print(f"Downscaling {i+1}/{len(anomalies)}: {k}")
-        if anomaly.nbytes:
-            anomaly += utils.interpolate_to_target_latlon(v, method="linear")
+            if key in source_anomalies:
+                old_count, old_anomaly = source_anomalies[key]
+                
+                for coord in ["latitude", "longitude"]:
+                    old_c = old_anomaly[coord].to_numpy()
+                    new_c = v_anomaly[coord].to_numpy()
+                    tol = 1e-5
+                    
+                    if np.abs(old_c - new_c).max() < tol:
+                        v_anomaly = v_anomaly.assign({coord: old_c})
+                    else:
+                        msg = f"{coord} does not match despite having the same subdivision"
+                        raise ValueError(msg)
+                source_anomalies[key] = old_count + 1, old_anomaly + v_anomaly
+            else:
+                source_anomalies[key] = 1, v_anomaly
+        if source_anomalies:
+            anomalies[source] = source_anomalies
+
+    ensemble_anomaly = xr.Dataset()    
+    for i, (source, source_anomalies) in enumerate(anomalies.items()):
+        sid = f"Source {i+1}/{len(source_paths)}: {source}"
+        print(f"Downscaling {i+1}/{len(anomalies)}: {source}")
+
+        source_ensemble_anomaly = xr.Dataset()
+        total_count = 0
+        for j, (res, (count, v_anomaly)) in enumerate(source_anomalies.items()):
+            res_id = f"{sid}, Resolution {j} / {len(source_anomalies)}: {res}"
+            print(f"Downscaling {res_id}")
+        
+            if source_ensemble_anomaly.nbytes:
+                source_ensemble_anomaly += utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+            else:
+                source_ensemble_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+            total_count += count
+        source_ensemble_anomaly /= total_count
+
+        if ensemble_anomaly.nbytes:
+            ensemble_anomaly += source_ensemble_anomaly
         else:
-            anomaly = utils.interpolate_to_target_latlon(v, method="linear")
-    anomaly /= len(source_paths)
+            ensemble_anomaly = source_ensemble_anomaly
+    
+    ensemble_anomaly /= len(anomalies)
 
     print("Computing scenario data")
     if anomaly_type == "additive":
-        scenario_data = historical_reference + anomaly.groupby("date.month")
+        scenario_data = historical_reference + ensemble_anomaly.groupby("date.month")
     else:
-        scenario_data = historical_reference * anomaly.groupby("date.month")
+        scenario_data = historical_reference * ensemble_anomaly.groupby("date.month")
     scenario_data = scenario_data.drop_vars("month")
     print("Saving")
     cd_data.save_daily_results(

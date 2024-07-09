@@ -35,19 +35,16 @@ TRANSFORM_MAP = {
         source_variables=["2m_temperature"],
         transform_funcs=[utils.daily_mean],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "max_temperature": utils.Transform(
         source_variables=["2m_temperature"],
         transform_funcs=[utils.daily_max],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "min_temperature": utils.Transform(
         source_variables=["2m_temperature"],
         transform_funcs=[utils.daily_min],
         encoding_scale=0.01,
-        encoding_offset=273.15,
     ),
     "wind_speed": utils.Transform(
         source_variables=["10m_u_component_of_wind", "10m_v_component_of_wind"],
@@ -98,8 +95,8 @@ def load_variable(
         ds = load_and_shift_longitude(path)
         # There are some slight numerical differences in the lat/long for some of
         # the land datasets. They are gridded consistently, so just tweak the
-        # coordinates so things align.
-        ds = ds.assign_coords(latitude=utils.TARGET_LAT, longitude=utils.TARGET_LON)
+        # coordinates so things align.        
+        ds = ds.assign_coords(latitude=utils.TARGET_LAT[::-1], longitude=utils.TARGET_LON)
     else:
         ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]

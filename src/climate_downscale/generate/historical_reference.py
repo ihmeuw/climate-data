@@ -63,7 +63,7 @@ def generate_historical_reference_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
+@clio.with_target_variable(allow_all=True, variable_names=list(TRANSFORM_MAP))
 @clio.with_queue()
 def generate_historical_reference(
     output_dir: str,
