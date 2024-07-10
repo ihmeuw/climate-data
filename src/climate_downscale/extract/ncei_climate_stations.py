@@ -5,7 +5,7 @@ import click
 import pandas as pd
 from rra_tools import jobmon
 from rra_tools.cli_tools import with_choice, with_output_directory, with_queue
-from rra_tools.shell_tools import mkdir, touch, wget
+from rra_tools.shell_tools import mkdir, wget
 
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
@@ -29,9 +29,11 @@ def extract_ncei_climate_stations_main(output_dir: str | Path, year: str) -> Non
     shutil.unpack_archive(str(gz_path), year_dir)
 
     data = pd.concat([pd.read_csv(f) for f in year_dir.glob("*.csv")])
-    out_path = cd_data.ncei_climate_stations / f"{year}.parquet"
-    touch(out_path)
-    data.to_parquet(out_path)
+    data["STATION"] = data["STATION"].astype(str)
+    cd_data.save_ncei_climate_stations(data, year)
+
+    gz_path.unlink()
+    shutil.rmtree(year_dir)
 
 
 @click.command()  # type: ignore[arg-type]
@@ -52,10 +54,13 @@ def extract_ncei_climate_stations_task(output_dir: str, year: str) -> None:
 @with_queue()
 def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
-        "extract_ncei_climate_stations",
+        runner="cdtask",
+        task_name="extract ncei",
         node_args={
-            "output_dir": [output_dir],
             "year": EXTRACTION_YEARS,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -64,5 +69,4 @@ def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )

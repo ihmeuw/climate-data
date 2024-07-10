@@ -2,12 +2,10 @@ from pathlib import Path
 
 import click
 import requests
+import tqdm
 from rra_tools import jobmon
-from rra_tools.cli_tools import (
-    with_output_directory,
-    with_queue,
-)
 
+from climate_downscale import cli_options as clio
 from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
 
 API_ENDPOINT = "https://portal.opentopography.org/API/globaldem"
@@ -38,7 +36,7 @@ def extract_elevation_main(
     key = cred_path.read_text().strip()
 
     params: dict[str, int | str] = {
-        "dem_type": model_name,
+        "demtype": model_name,
         "south": lat_start,
         "north": lat_start + FETCH_SIZE,
         "west": lon_start,
@@ -47,17 +45,19 @@ def extract_elevation_main(
         "API_Key": key,
     }
 
-    response = requests.get(API_ENDPOINT, params=params, stream=True, timeout=10)
+    response = requests.get(API_ENDPOINT, params=params, stream=True, timeout=30)
     response.raise_for_status()
 
-    out_path = cd_data.srtm_elevation_gl1 / f"{model_name}_{lat_start}_{lon_start}.tif"
+    out_path = (
+        cd_data.open_topography_elevation / f"{model_name}_{lat_start}_{lon_start}.tif"
+    )
     with out_path.open("wb") as fp:
-        for chunk in response.iter_content(chunk_size=None):
+        for chunk in tqdm.tqdm(response.iter_content(chunk_size=64 * 1024**2)):
             fp.write(chunk)
 
 
 @click.command()  # type: ignore[arg-type]
-@with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(DEFAULT_ROOT)
 @click.option(
     "--model-name",
     required=True,
@@ -72,8 +72,8 @@ def extract_elevation_main(
 )
 @click.option(
     "--lon-start",
-    required=int,
-    type=float,
+    required=True,
+    type=int,
     help="Longitude of the top-left corner of the tile.",
 )
 def extract_elevation_task(
@@ -83,34 +83,47 @@ def extract_elevation_task(
     lon_start: int,
 ) -> None:
     """Download elevation data from Open Topography."""
+    invalid = True
+    if invalid:
+        msg = "Downloaded using aws cli, this implementation is not valid"
+        raise NotImplementedError(msg)
+
     extract_elevation_main(output_dir, model_name, lat_start, lon_start)
 
 
 @click.command()  # type: ignore[arg-type]
-@with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(DEFAULT_ROOT)
 @click.option(
-    "--model-name",
+    "--generate-name",
     required=True,
     type=click.Choice(ELEVATION_MODELS),
     help="Name of the elevation model to download.",
 )
-@with_queue()
+@clio.with_queue()
 def extract_elevation(
     output_dir: str,
     model_name: str,
     queue: str,
 ) -> None:
     """Download elevation data from Open Topography."""
+    invalid = True
+    if invalid:
+        msg = "Downloaded using aws cli, this implementation is not valid"
+        raise NotImplementedError(msg)
+
     lat_starts = list(range(-90, 90, FETCH_SIZE))
     lon_starts = list(range(-180, 180, FETCH_SIZE))
 
     jobmon.run_parallel(
+        runner="cdtask",
         task_name="extract_era5",
         node_args={
-            "output-dir": [output_dir],
             "model-name": [model_name],
             "lat-start": lat_starts,
             "lon-start": lon_starts,
+        },
+        task_args={
+            "output-dir": output_dir,
         },
         task_resources={
             "queue": queue,
@@ -119,5 +132,4 @@ def extract_elevation(
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
-        runner="cdtask",
     )
