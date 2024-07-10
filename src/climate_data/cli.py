@@ -1,6 +1,6 @@
 import click
 
-from climate_downscale import downscale, extract, generate
+from climate_data import downscale, extract, generate
 
 
 @click.group()

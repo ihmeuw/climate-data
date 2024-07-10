@@ -7,8 +7,8 @@ import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 
 
 def load_and_clean_climate_stations(

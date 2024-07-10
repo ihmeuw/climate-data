@@ -1,5 +1,5 @@
-site_name: "climate-downscale"
-repo_url: https://github.com//climate-downscale
+site_name: "climate-data"
+repo_url: https://github.com//climate-data
 
 theme:
   name: material
@@ -19,7 +19,7 @@ nav:
   - changelog.md
 
 watch:
-  - src/climate_downscale
+  - src/climate_data
 
 markdown_extensions:
   - abbr

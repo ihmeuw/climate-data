@@ -4,13 +4,13 @@
   "checkout": null,
   "context": {
     "cookiecutter": {
-      "author_name": "Nadim Hashmeh",
-      "author_email": "nhashmeh@uw.edu",
+      "author_name": "James Collins",
+      "author_email": "collijk@uw.edu",
       "github_username": "",
-      "project_name": "climate-downscale",
-      "project_slug": "climate-downscale",
-      "package_name": "climate_downscale",
-      "project_short_description": "Pipelines to downscale ERA5 and CMIP6 data.",
+      "project_name": "climate-data",
+      "project_slug": "climate-data",
+      "package_name": "climate_data",
+      "project_short_description": "Pipelines to extract, format, and downscale ERA5 and CMIP6 data.",
       "_template": "https://github.com/collijk/python-package-cookiecutter"
     }
   },

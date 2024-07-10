@@ -7,7 +7,7 @@ from rra_tools import jobmon
 from rra_tools.cli_tools import with_choice, with_output_directory, with_queue
 from rra_tools.shell_tools import mkdir, wget
 
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 
 EXTRACTION_YEARS = [str(y) for y in range(1990, 2024)]
 URL_TEMPLATE = (

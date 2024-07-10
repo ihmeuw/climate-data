@@ -2,9 +2,9 @@ import click
 import xarray as xr
 from rra_tools import jobmon
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
-from climate_downscale.generate.historical_daily import (
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.generate.historical_daily import (
     TRANSFORM_MAP,
 )
 

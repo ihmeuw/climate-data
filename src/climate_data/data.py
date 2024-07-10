@@ -6,7 +6,7 @@ import rasterra as rt
 import xarray as xr
 from rra_tools.shell_tools import mkdir, touch
 
-DEFAULT_ROOT = "/mnt/share/erf/climate_downscale/"
+DEFAULT_ROOT = "/mnt/share/erf/climate_data/"
 
 
 class ClimateDownscaleData:

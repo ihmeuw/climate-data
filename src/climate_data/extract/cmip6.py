@@ -5,8 +5,8 @@ import gcsfs
 import xarray as xr
 from rra_tools import jobmon, shell_tools
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 
 VARIABLE_ENCODINGS = {
     "uas": (0.0, 0.01),

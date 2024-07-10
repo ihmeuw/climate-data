@@ -1,20 +1,14 @@
-# climate-downscale
-
-[![PyPI](https://img.shields.io/pypi/v/climate-downscale?style=flat-square)](https://pypi.python.org/pypi/climate-downscale/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/climate-downscale?style=flat-square)](https://pypi.python.org/pypi/climate-downscale/)
-[![PyPI - License](https://img.shields.io/pypi/l/climate-downscale?style=flat-square)](https://pypi.python.org/pypi/climate-downscale/)
+# climate-data
 
 ---
 
-**Documentation**: [https://.github.io/climate-downscale](https://.github.io/climate-downscale)
+**Documentation**: [https://.github.io/climate-data](https://.github.io/climate-data)
 
-**Source Code**: [https://github.com/climate-downscale](https://github.com//climate-downscale)
-
-**PyPI**: [https://pypi.org/project/climate-downscale/](https://pypi.org/project/climate-downscale/)
+**Source Code**: [https://github.com/climate-data](https://github.com//climate-data)
 
 ---
 
-Pipelines to downscale ERA5 and CMIP6 data.
+Pipelines to extract, format, and downscale ERA5 and CMIP6 data.
 
 
 ## Development
@@ -25,25 +19,26 @@ Instructions using conda:
 
     Over ssh:
     ```sh
-    git clone git@github.com:ihmeuw/climate-downscale.git
+    git clone git@github.com:ihmeuw/climate-data.git
     ```
 
     Over https:
     ```sh
-    git clone https://github.com/ihmeuw/climate-downscale.git
+    git clone https://github.com/ihmeuw/climate-data.git
     ```
 
 2. Create a new conda environment.
 
     ```sh
-    conda create -n climate-downscale python=3.10
-    conda activate climate-downscale
+    conda create -n climate-data python=3.11
+    conda activate climate-data
     ```
 
 3. Install `poetry` and the project dependencies.
 
     ```sh
-    conda install poetry
+    pip install poetry
+    cd climate-data 
     poetry install
     ```
 

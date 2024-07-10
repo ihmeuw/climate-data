@@ -1,8 +1,8 @@
-from climate_downscale.downscale.prepare_predictors import (
+from climate_data.downscale.prepare_predictors import (
     prepare_predictors,
     prepare_predictors_task,
 )
-from climate_downscale.downscale.prepare_training_data import (
+from climate_data.downscale.prepare_training_data import (
     prepare_training_data,
     prepare_training_data_task,
 )

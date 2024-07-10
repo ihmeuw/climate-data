@@ -1,3 +1,3 @@
 # API documentation
 
-:::climate_downscale
+:::climate_data

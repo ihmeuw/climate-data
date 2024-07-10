@@ -1,16 +1,16 @@
 [tool.poetry]
-name = "climate-downscale"
+name = "climate-data"
 version = "0.0.1"
-description = "Pipelines to downscale ERA5 and CMIP6 data."
+description = "Pipelines to extract, format, and downscale ERA5 and CMIP6 data."
 authors = [
-    "Nadim Hashmeh <nhashmeh@uw.edu>",
+    "James Collins <collijk@uw.edu>",
 ]
 license = "BSD-3-Clause"
 readme = "README.md"
 
-documentation = "https://.github.io/climate-downscale"
-homepage = "https://.github.io/climate-downscale"
-repository = "https://github.com//climate-downscale"
+documentation = "https://.github.io/climate-data"
+homepage = "https://.github.io/climate-data"
+repository = "https://github.com//climate-data"
 
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -26,7 +26,7 @@ classifiers = [
 ]
 
 packages = [
-    { include = "climate_downscale", from = "src" }
+    { include = "climate_data", from = "src" }
 ]
 
 [tool.poetry.dependencies]
@@ -69,8 +69,8 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-cdrun = "climate_downscale.cli:cdrun"
-cdtask = "climate_downscale.cli:cdtask"
+cdrun = "climate_data.cli:cdrun"
+cdtask = "climate_data.cli:cdtask"
 
 [tool.ruff]
 target-version = "py310" # The lowest supported version
@@ -127,7 +127,7 @@ ban-relative-imports = "all"
 
 [tool.pytest.ini_options]
 addopts = """\
-    --cov climate_downscale \
+    --cov climate_data \
     --cov tests \
     --cov-report term-missing \
     --no-cov-on-fail \

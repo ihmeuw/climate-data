@@ -1,4 +1,4 @@
-def test_climate_downscale() -> None:
-    from climate_downscale import cli
+def test_climate_data() -> None:
+    from climate_data import cli
 
     assert cli

@@ -5,8 +5,8 @@ import requests
 import tqdm
 from rra_tools import jobmon
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 
 API_ENDPOINT = "https://portal.opentopography.org/API/globaldem"
 

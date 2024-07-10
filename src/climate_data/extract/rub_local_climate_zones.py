@@ -3,8 +3,8 @@ from pathlib import Path
 import click
 from rra_tools.shell_tools import wget
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 
 URL_TEMPLATE = "https://zenodo.org/records/8419340/files/{file_name}?download=1"
 FILES = [

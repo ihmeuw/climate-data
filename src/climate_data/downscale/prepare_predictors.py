@@ -6,9 +6,9 @@ import numpy as np
 import rasterra as rt
 from rra_tools import jobmon
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
-from climate_downscale.utils import make_raster_template
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.utils import make_raster_template
 
 PAD = 1
 STRIDE = clio.STRIDE

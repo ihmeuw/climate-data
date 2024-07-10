@@ -6,9 +6,9 @@ import xarray as xr
 from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
 
-from climate_downscale import cli_options as clio
-from climate_downscale.data import DEFAULT_ROOT, ClimateDownscaleData
-from climate_downscale.generate import utils
+from climate_data import cli_options as clio
+from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.generate import utils
 
 TEMP_THRESHOLDS = list(range(20, 35))
 

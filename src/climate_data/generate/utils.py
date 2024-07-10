@@ -4,7 +4,7 @@ from collections.abc import Callable
 import numpy as np
 import xarray as xr
 
-import climate_downscale.cli_options as clio
+import climate_data.cli_options as clio
 
 REFERENCE_PERIOD = slice(
     f"{clio.VALID_REFERENCE_YEARS[0]}-01-01",
