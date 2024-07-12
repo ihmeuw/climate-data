@@ -2,9 +2,9 @@
 
 ---
 
-**Documentation**: [https://.github.io/climate-data](https://.github.io/climate-data)
+**Documentation**: [https://ihmeuw.github.io/climate-data](https://ihmeuw.github.io/climate-data)
 
-**Source Code**: [https://github.com/climate-data](https://github.com//climate-data)
+**Source Code**: [https://github.com/ihmeuw/climate-data](https://github.com/ihmeuw/climate-data)
 
 ---
 
