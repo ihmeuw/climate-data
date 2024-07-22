@@ -58,7 +58,10 @@ TRANSFORM_MAP = {
     ),
     "total_precipitation": utils.Transform(
         source_variables=["total_precipitation"],
-        transform_funcs=[utils.daily_sum],
+        transform_funcs={
+            "land": [utils.daily_max],
+            "single-levels": [utils.daily_sum],
+        },
         encoding_scale=0.1,
     ),
 }
@@ -95,8 +98,10 @@ def load_variable(
         ds = load_and_shift_longitude(path)
         # There are some slight numerical differences in the lat/long for some of
         # the land datasets. They are gridded consistently, so just tweak the
-        # coordinates so things align.        
-        ds = ds.assign_coords(latitude=utils.TARGET_LAT[::-1], longitude=utils.TARGET_LON)
+        # coordinates so things align.
+        ds = ds.assign_coords(
+            latitude=utils.TARGET_LAT[::-1], longitude=utils.TARGET_LON
+        )
     else:
         ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]
@@ -121,7 +126,7 @@ def generate_historical_daily_main(
             for sv in transform.source_variables
         ]
         print("collapsing")
-        ds = transform(*single_level).compute()
+        ds = transform(*single_level, key="single-levels").compute()
         # collapsing often screws the date dtype, so fix it
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
@@ -135,7 +140,7 @@ def generate_historical_daily_main(
         ]
         print("collapsing")
         with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
-            ds_land = transform(*land).compute()
+            ds_land = transform(*land, key="land").compute()
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
         print("combining")
@@ -176,7 +181,7 @@ def generate_historical_daily(
     year: str,
     target_variable: str,
     queue: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 

@@ -332,7 +332,8 @@ class Transform:
     def __init__(
         self,
         source_variables: list[str],
-        transform_funcs: list[typing.Callable[..., xr.Dataset]],
+        transform_funcs: list[typing.Callable[..., xr.Dataset]]
+        | dict[str, list[typing.Callable[..., xr.Dataset]]],
         encoding_scale: float = 1.0,
         encoding_offset: float = 0.0,
     ):
@@ -341,9 +342,16 @@ class Transform:
         self.encoding_scale = encoding_scale
         self.encoding_offset = encoding_offset
 
-    def __call__(self, *datasets: xr.Dataset) -> xr.Dataset:
-        res = self.transform_funcs[0](*datasets)
-        for transform_func in self.transform_funcs[1:]:
+    def __call__(self, *datasets: xr.Dataset, key: str | None = None) -> xr.Dataset:
+        if isinstance(self.transform_funcs, dict):
+            if key is None:
+                msg = "Key must be provided for dict transform"
+                raise ValueError(msg)
+            transform_funcs = self.transform_funcs[key]
+        else:
+            transform_funcs = self.transform_funcs
+        res = transform_funcs[0](*datasets)
+        for transform_func in transform_funcs[1:]:
             res = transform_func(res)
         return res
 
