@@ -15,8 +15,6 @@ theme:
 
 nav:
   - Introduction: 'index.md'
-  - api_docs.md
-  - changelog.md
 
 watch:
   - src/climate_data
