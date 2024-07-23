@@ -94,7 +94,7 @@ TRANSFORM_MAP = {
     "total_precipitation": utils.Transform(
         source_variables=["total_precipitation"],
         transform_funcs=[utils.annual_sum],
-        encoding_scale=0.1,
+        encoding_scale=10,
     ),
 }
 
