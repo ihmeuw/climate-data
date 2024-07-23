@@ -141,6 +141,15 @@ def count_threshold(threshold: int | float) -> Callable[[xr.Dataset], xr.Dataset
     return count
 
 
+def count_between_threshold(
+    lower_threshold: int | float, upper_threshold: int | float
+) -> Callable[[xr.Dataset], xr.Dataset]:
+    def count(ds: xr.Dataset) -> xr.Dataset:
+        return (ds > lower_threshold) & (ds < upper_threshold)
+
+    return count
+
+
 ########################
 # Data transformations #
 ########################

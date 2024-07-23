@@ -11,6 +11,12 @@ from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_data.generate import utils
 
 TEMP_THRESHOLDS = list(range(20, 35))
+BETWEEN_TEMP_THRESHOLDS = [
+    (15, 30),
+    (20, 30),
+    (15, 35),
+    (20, 35),
+]
 
 
 TRANSFORM_MAP = {
@@ -36,6 +42,16 @@ TRANSFORM_MAP = {
         )
         for temp in TEMP_THRESHOLDS
     },
+    **{
+        f"days_under_{upper}C_over_{lower}C": utils.Transform(
+            source_variables=["mean_temperature"],
+            transform_funcs=[
+                utils.count_between_threshold(lower, upper),
+                utils.annual_sum,
+            ],
+        )
+        for lower, upper in BETWEEN_TEMP_THRESHOLDS
+    },
     "mean_heat_index": utils.Transform(
         source_variables=["heat_index"],
         transform_funcs=[utils.annual_mean],
@@ -50,6 +66,16 @@ TRANSFORM_MAP = {
             ],
         )
         for temp in TEMP_THRESHOLDS
+    },
+    **{
+        f"days_under_{upper}C_over_{lower}C_heat_index": utils.Transform(
+            source_variables=["heat_index"],
+            transform_funcs=[
+                utils.count_between_threshold(lower, upper),
+                utils.annual_sum,
+            ],
+        )
+        for lower, upper in BETWEEN_TEMP_THRESHOLDS
     },
     "mean_humidex": utils.Transform(
         source_variables=["humidex"],
@@ -66,6 +92,16 @@ TRANSFORM_MAP = {
         )
         for temp in TEMP_THRESHOLDS
     },
+    **{
+        f"days_under_{upper}C_over_{lower}C_humidex": utils.Transform(
+            source_variables=["humidex"],
+            transform_funcs=[
+                utils.count_between_threshold(lower, upper),
+                utils.annual_sum,
+            ],
+        )
+        for lower, upper in BETWEEN_TEMP_THRESHOLDS
+    },
     "mean_effective_temperature": utils.Transform(
         source_variables=["effective_temperature"],
         transform_funcs=[utils.annual_mean],
@@ -80,6 +116,16 @@ TRANSFORM_MAP = {
             ],
         )
         for temp in TEMP_THRESHOLDS
+    },
+    **{
+        f"days_under_{upper}C_over_{lower}C_effective_temperature": utils.Transform(
+            source_variables=["effective_temperature"],
+            transform_funcs=[
+                utils.count_between_threshold(lower, upper),
+                utils.annual_sum,
+            ],
+        )
+        for lower, upper in BETWEEN_TEMP_THRESHOLDS
     },
     "wind_speed": utils.Transform(
         source_variables=["wind_speed"],
