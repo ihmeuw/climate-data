@@ -154,15 +154,24 @@ class ClimateDownscaleData:
     def daily_results_path(self, scenario: str, variable: str, year: int | str) -> Path:
         return self.daily_results / scenario / variable / f"{year}.nc"
 
+    def daily_results_path_with_draws(self, scenario: str, variable: str, draw: int | str, year: int | str) -> Path:
+        return self.daily_results / scenario / variable / f"{draw}" / f"{year}.nc"
+
     def save_daily_results(
         self,
         results_ds: xr.Dataset,
         scenario: str,
         variable: str,
+        draw: int | str,
         year: int | str,
+        provenance_attribute: str,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        path = self.daily_results_path(scenario, variable, year)
+        if draw is None:
+            path = self.daily_results_path(scenario, variable, year)
+        else:
+            path  = self.daily_results_path_with_draws(scenario, variable, draw, year)
+
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
 
@@ -173,6 +182,10 @@ class ClimateDownscaleData:
             "complevel": 1,
         }
         encoding.update(encoding_kwargs)
+
+        # Add the provenance attribute
+        results_ds.attrs['provenance'] = provenance_attribute
+
         results_ds.to_netcdf(path, encoding={"value": encoding})
 
     def load_daily_results(
