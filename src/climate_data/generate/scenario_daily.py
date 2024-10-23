@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
 
+import random
+
 from climate_data import cli_options as clio
 from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_data.generate import utils
@@ -159,10 +161,13 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     year: str | int,
     target_variable: str,
     cmip6_experiment: str,
+    make_N_draws: int = 5,
 ) -> None:
+
     cd_data = ClimateDownscaleData(output_dir)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
+
     source_paths = get_source_paths(
         cd_data, transform.source_variables, cmip6_experiment
     )
@@ -173,14 +178,17 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
         variable=target_variable,
         year="reference",
     )
-
+    # loop over source, for each variant, load reference and target,
+    # compute anomaly, resample anomaly and compute scenario data
     anomalies: dict[str, dict[str, tuple[int, xr.Dataset]]] = {}
+    d_scen_data: dict[str, xr.Dataset] = {}
     for i, (source, variant_paths) in enumerate(source_paths.items()):
         sid = f"Source {i+1}/{len(source_paths)}: {source}"
 
-        source_anomalies: dict[str, tuple[int, xr.Dataset]] = {}
+        #source_anomalies: dict[str, tuple[int, xr.Dataset]] = {}
         for j, vps in enumerate(variant_paths):
             vid = f"{sid}, Variant {j+1}/{len(variant_paths)}: {vps[0].stem.split('_')[-1]}"
+            # load reference (monthly) and target (daily for a given year)
             try:
                 print(f"{vid}: Loading reference")
                 sref = transform(*[load_variable(vp, "reference") for vp in vps])
@@ -195,68 +203,45 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
 
             key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
 
-            if key in source_anomalies:
-                old_count, old_anomaly = source_anomalies[key]
+            # Is this no longer necessary because each variant is being handled independently?
+            #old_count, old_anomaly = source_anomalies[key]
+            #for coord in ["latitude", "longitude"]:
+            #        old_c = old_anomaly[coord].to_numpy()
+            #        new_c = v_anomaly[coord].to_numpy()
+            #        tol = 1e-5
+                    
+            #      if np.abs(old_c - new_c).max() < tol:
+            #          v_anomaly = v_anomaly.assign({coord: old_c})
+            #      else:
+            #          msg = f"{coord} does not match despite having the same subdivision"
+            #          raise ValueError(msg)
 
-                for coord in ["latitude", "longitude"]:
-                    old_c = old_anomaly[coord].to_numpy()
-                    new_c = v_anomaly[coord].to_numpy()
-                    tol = 1e-5
-
-                    if np.abs(old_c - new_c).max() < tol:
-                        v_anomaly = v_anomaly.assign({coord: old_c})
-                    else:
-                        msg = f"{coord} does not match despite having the same subdivision"
-                        raise ValueError(msg)
-                source_anomalies[key] = old_count + 1, old_anomaly + v_anomaly
+            # TODO use lookup table to speed up resample for repeated lat/lon?                
+            print(f"{vid}: resampling anomaly")
+            resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+            print(f"{vid}: computing scenario data")
+            if anomaly_type == "additive":
+                scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
             else:
-                source_anomalies[key] = 1, v_anomaly
-        if source_anomalies:
-            anomalies[source] = source_anomalies
+                scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
 
-    ensemble_anomaly = xr.Dataset()
-    for i, (source, source_anomalies) in enumerate(anomalies.items()):
-        sid = f"Source {i+1}/{len(source_paths)}: {source}"
-        print(f"Downscaling {i+1}/{len(anomalies)}: {source}")
+            d_scen_data[f"{source}_{vps[0].stem.split('_')[-1]}"] = scenario_data
 
-        source_ensemble_anomaly = xr.Dataset()
-        total_count = 0
-        for j, (res, (count, v_anomaly)) in enumerate(source_anomalies.items()):
-            res_id = f"{sid}, Resolution {j} / {len(source_anomalies)}: {res}"
-            print(f"Downscaling {res_id}")
-
-            if source_ensemble_anomaly.nbytes:
-                source_ensemble_anomaly += utils.interpolate_to_target_latlon(
-                    v_anomaly, method="linear"
-                )
-            else:
-                source_ensemble_anomaly = utils.interpolate_to_target_latlon(
-                    v_anomaly, method="linear"
-                )
-            total_count += count
-        source_ensemble_anomaly /= total_count
-
-        if ensemble_anomaly.nbytes:
-            ensemble_anomaly += source_ensemble_anomaly
-        else:
-            ensemble_anomaly = source_ensemble_anomaly
-
-    ensemble_anomaly /= len(anomalies)
-
-    print("Computing scenario data")
-    if anomaly_type == "additive":
-        scenario_data = historical_reference + ensemble_anomaly.groupby("date.month")
-    else:
-        scenario_data = historical_reference * ensemble_anomaly.groupby("date.month")
-    scenario_data = scenario_data.drop_vars("month")
-    print("Saving")
-    cd_data.save_daily_results(
-        scenario_data,
-        scenario=cmip6_experiment,
-        variable=target_variable,
-        year=year,
-        encoding_kwargs=transform.encoding_kwargs,
-    )
+    # TODO: sample without replacement and refill?  
+    # make repeatable
+    # random.seed(42)
+    for draw in range(make_N_draws):
+        random_key = random.choice(list(d_scen_data.keys()))
+        print(f"Writing draw {draw} from {random_key}")
+        cd_data.save_daily_results(
+            d_scen_data[random_key],
+            scenario=cmip6_experiment,
+            variable=target_variable,
+            draw=draw,
+            year=year,
+            provenance_attribute=random_key,
+            encoding_kwargs=transform.encoding_kwargs,
+        )
 
 
 @click.command()  # type: ignore[arg-type]
