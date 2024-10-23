@@ -1,7 +1,10 @@
 import typing
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
+import pandas as pd
 import xarray as xr
 
 import climate_data.cli_options as clio
@@ -150,6 +153,30 @@ def count_between_threshold(
     return count
 
 
+def _load_suitability_curve(
+    disease: str,
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    df = pd.read_parquet(
+        Path(__file__).parent / "supplementary_data" / f"{disease}_suitability.parquet"
+    )
+    t, s = df["temperature"].to_numpy(), df["suitability"].to_numpy()
+    return t, s
+
+
+def map_suitability(disease: str) -> Callable[[xr.Dataset], xr.Dataset]:
+    diseases = ["dengue", "malaria"]
+    if disease not in diseases:
+        msg = f"Invalid disease: {disease}. Must be one of {', '.join(diseases)}"
+        raise ValueError(msg)
+
+    def smap(ds: xr.Dataset) -> xr.Dataset:
+        t, s = _load_suitability_curve(disease)
+        ds["value"] = (("date", "latitude", "longitude"), np.interp(ds["value"], t, s))
+        return ds
+
+    return smap
+
+
 ########################
 # Data transformations #
 ########################
@@ -157,7 +184,7 @@ def count_between_threshold(
 
 def vector_magnitude(x: xr.Dataset, y: xr.Dataset) -> xr.Dataset:
     """Calculate the magnitude of a vector."""
-    return np.sqrt(x**2 + y**2)  # type: ignore[no-any-return]
+    return np.sqrt(x**2 + y**2)  # type: ignore[return-value]
 
 
 def buck_vapor_pressure(temperature_c: xr.Dataset) -> xr.Dataset:

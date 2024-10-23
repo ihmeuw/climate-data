@@ -57,9 +57,9 @@ def generate_scenario_inclusion_main(
     inclusion_df["include"] = inclusion_df.valid_scenarios == 5  # noqa: PLR2004
     inclusion_df = (
         inclusion_df.loc[inclusion_df.include]
-        .set_index(['source', 'variant', 'variable']).include
-        .unstack()
-        .fillna(False)
+        .set_index(["source", "variant", "variable"])
+        .include.unstack()
+        .fillna(value=False)
     )
 
     cd_data.save_scenario_metadata(meta_df)

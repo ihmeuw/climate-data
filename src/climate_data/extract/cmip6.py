@@ -36,7 +36,7 @@ def extract_cmip6_main(
     cmip6_source: str,
     cmip6_experiment: str,
     cmip6_variable: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     print(f"Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}")
     cd_data = ClimateDownscaleData(output_dir)
@@ -101,7 +101,7 @@ def extract_cmip6_task(
     cmip6_source: str,
     cmip6_experiment: str,
     cmip6_variable: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     extract_cmip6_main(
         output_dir, cmip6_source, cmip6_experiment, cmip6_variable, overwrite
@@ -121,7 +121,7 @@ def extract_cmip6(
     cmip6_experiment: str,
     cmip6_variable: str,
     queue: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     sources = (
         clio.VALID_CMIP6_SOURCES if cmip6_source == clio.RUN_ALL else [cmip6_source]

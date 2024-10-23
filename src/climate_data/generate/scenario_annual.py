@@ -52,6 +52,16 @@ TRANSFORM_MAP = {
         )
         for lower, upper in BETWEEN_TEMP_THRESHOLDS
     },
+    **{
+        f"{disease}_suitability": utils.Transform(
+            source_variables=["mean_temperature"],
+            transform_funcs=[
+                utils.map_suitability(disease),
+                utils.annual_sum,
+            ],
+        )
+        for disease in ["malaria", "dengue"]
+    },
     "mean_heat_index": utils.Transform(
         source_variables=["heat_index"],
         transform_funcs=[utils.annual_mean],

@@ -50,6 +50,7 @@ gcsfs = "^2024.6.0"
 zarr = "^2.18.2"
 types-pyyaml = "^6.0.12.20240311"
 dask = "^2024.5.2"
+pandas-stubs = "^2.2.3.241009"
 
 [tool.poetry.group.dev.dependencies]
 mkdocstrings = {version = ">=0.23", extras = ["python"]}
@@ -103,6 +104,7 @@ ignore = [
     "PD010",    # I like stack and unstack
     "FBT001",   # Boolean positional args are super common in clis
     "FBT002",   # Boolean positional args are super common in clis
+    "PD901",    # Generic df names are fine
 ]
 
 [tool.ruff.lint.per-file-ignores]

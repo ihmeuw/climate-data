@@ -38,7 +38,7 @@ Instructions using conda:
 
     ```sh
     pip install poetry
-    cd climate-data 
+    cd climate-data
     poetry install
     ```
 
