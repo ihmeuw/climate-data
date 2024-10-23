@@ -1,5 +1,5 @@
-from collections import defaultdict
 import itertools
+from collections import defaultdict
 from pathlib import Path
 
 import click
@@ -90,10 +90,12 @@ def get_source_paths(
     source_paths = defaultdict(list)
     for source, variant in inclusion_meta.index.tolist():
         source_paths[source].append(
-            [cd_data.extracted_cmip6_path(v, cmip6_experiment, source, variant) 
-             for v in source_variables]
-        )    
-    
+            [
+                cd_data.extracted_cmip6_path(v, cmip6_experiment, source, variant)
+                for v in source_variables
+            ]
+        )
+
     return source_paths
 
 
@@ -152,7 +154,7 @@ def compute_anomaly(
     return anomaly
 
 
-def generate_scenario_daily_main(  # noqa: PLR0912
+def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     output_dir: str | Path,
     year: str | int,
     target_variable: str,
@@ -177,7 +179,7 @@ def generate_scenario_daily_main(  # noqa: PLR0912
         sid = f"Source {i+1}/{len(source_paths)}: {source}"
 
         source_anomalies: dict[str, tuple[int, xr.Dataset]] = {}
-        for j, vps in enumerate(variant_paths):            
+        for j, vps in enumerate(variant_paths):
             vid = f"{sid}, Variant {j+1}/{len(variant_paths)}: {vps[0].stem.split('_')[-1]}"
             try:
                 print(f"{vid}: Loading reference")
@@ -187,20 +189,20 @@ def generate_scenario_daily_main(  # noqa: PLR0912
             except KeyError:
                 print(f"{vid}: Bad formatting, skipping...")
                 continue
-            
+
             print(f"{vid}: computing anomaly")
             v_anomaly = compute_anomaly(sref, target, anomaly_type)
-            
+
             key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
 
             if key in source_anomalies:
                 old_count, old_anomaly = source_anomalies[key]
-                
+
                 for coord in ["latitude", "longitude"]:
                     old_c = old_anomaly[coord].to_numpy()
                     new_c = v_anomaly[coord].to_numpy()
                     tol = 1e-5
-                    
+
                     if np.abs(old_c - new_c).max() < tol:
                         v_anomaly = v_anomaly.assign({coord: old_c})
                     else:
@@ -212,7 +214,7 @@ def generate_scenario_daily_main(  # noqa: PLR0912
         if source_anomalies:
             anomalies[source] = source_anomalies
 
-    ensemble_anomaly = xr.Dataset()    
+    ensemble_anomaly = xr.Dataset()
     for i, (source, source_anomalies) in enumerate(anomalies.items()):
         sid = f"Source {i+1}/{len(source_paths)}: {source}"
         print(f"Downscaling {i+1}/{len(anomalies)}: {source}")
@@ -222,11 +224,15 @@ def generate_scenario_daily_main(  # noqa: PLR0912
         for j, (res, (count, v_anomaly)) in enumerate(source_anomalies.items()):
             res_id = f"{sid}, Resolution {j} / {len(source_anomalies)}: {res}"
             print(f"Downscaling {res_id}")
-        
+
             if source_ensemble_anomaly.nbytes:
-                source_ensemble_anomaly += utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+                source_ensemble_anomaly += utils.interpolate_to_target_latlon(
+                    v_anomaly, method="linear"
+                )
             else:
-                source_ensemble_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+                source_ensemble_anomaly = utils.interpolate_to_target_latlon(
+                    v_anomaly, method="linear"
+                )
             total_count += count
         source_ensemble_anomaly /= total_count
 
@@ -234,7 +240,7 @@ def generate_scenario_daily_main(  # noqa: PLR0912
             ensemble_anomaly += source_ensemble_anomaly
         else:
             ensemble_anomaly = source_ensemble_anomaly
-    
+
     ensemble_anomaly /= len(anomalies)
 
     print("Computing scenario data")
@@ -277,7 +283,7 @@ def generate_scenario_daily(
     target_variable: str,
     cmip6_experiment: str,
     queue: str,
-    overwrite: bool,  # noqa: FBT001
+    overwrite: bool,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
