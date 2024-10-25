@@ -158,12 +158,13 @@ def compute_anomaly(
 
 def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     output_dir: str | Path,
+    draw: str | int,
     year: str | int,
     target_variable: str,
     cmip6_experiment: str,
-    make_N_draws: int = 5,
 ) -> None:
-
+    # make repeatable
+    random.seed(int(draw))
     cd_data = ClimateDownscaleData(output_dir)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
@@ -171,93 +172,96 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     source_paths = get_source_paths(
         cd_data, transform.source_variables, cmip6_experiment
     )
-
+    for i, (source, variant_paths) in enumerate(source_paths.items()):
+        sid = f"Source {i+1}/{len(source_paths)}: {source}"
+        print(sid)
+        print(variant_paths)
+    
     print("loading historical reference")
     historical_reference = cd_data.load_daily_results(
         scenario="historical",
         variable=target_variable,
         year="reference",
     )
-    # loop over source, for each variant, load reference and target,
+    # randomly select source, variant, load reference and target,
     # compute anomaly, resample anomaly and compute scenario data
-    anomalies: dict[str, dict[str, tuple[int, xr.Dataset]]] = {}
-    d_scen_data: dict[str, xr.Dataset] = {}
-    for i, (source, variant_paths) in enumerate(source_paths.items()):
-        sid = f"Source {i+1}/{len(source_paths)}: {source}"
+    source_key = random.choice(list(source_paths.keys()))
+    variant_paths = list(list(random.choice(source_paths[source_key])))
+    print(variant_paths)
+    for j, vps in enumerate(variant_paths):
+        s_variant = f"{vps.stem.split('_')[-1]}"
+        vid = f"{source_key}, Variant : {s_variant}"
+        # load reference (monthly) and target (daily for a given year)
+        try:
+            print(f"{vid}: Loading reference")
+            sref = transform(load_variable(vps, "reference"))
+            print(f"{vid}: Loading target")
+            target = transform(load_variable(vps, year))
+            # FIXME I think this will fail with windspeed, but I got confused about how to get vps 
+            # in the same way as when it was looping through the variants. Hopefully James can quickly 
+            # explain how to fix this.
+            #print(f"{vid}: Loading reference")
+            #sref = transform(*[load_variable(vp, "reference") for vp in vps])
+            #print(f"{vid}: Loading target")
+            #target = transform(*[load_variable(vp, year) for vp in vps])
 
-        #source_anomalies: dict[str, tuple[int, xr.Dataset]] = {}
-        for j, vps in enumerate(variant_paths):
-            vid = f"{sid}, Variant {j+1}/{len(variant_paths)}: {vps[0].stem.split('_')[-1]}"
-            # load reference (monthly) and target (daily for a given year)
-            try:
-                print(f"{vid}: Loading reference")
-                sref = transform(*[load_variable(vp, "reference") for vp in vps])
-                print(f"{vid}: Loading target")
-                target = transform(*[load_variable(vp, year) for vp in vps])
-            except KeyError:
-                print(f"{vid}: Bad formatting, skipping...")
-                continue
+        except KeyError:
+            print(f"{vid}: Bad formatting, skipping...")
+            continue
 
-            print(f"{vid}: computing anomaly")
-            v_anomaly = compute_anomaly(sref, target, anomaly_type)
+        print(f"{vid}: computing anomaly")
+        v_anomaly = compute_anomaly(sref, target, anomaly_type)
 
-            key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
+        # key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
 
-            # Is this no longer necessary because each variant is being handled independently?
-            #old_count, old_anomaly = source_anomalies[key]
-            #for coord in ["latitude", "longitude"]:
-            #        old_c = old_anomaly[coord].to_numpy()
-            #        new_c = v_anomaly[coord].to_numpy()
-            #        tol = 1e-5
+        # Is this no longer necessary because each variant is being handled independently?
+        #old_count, old_anomaly = source_anomalies[key]
+        #for coord in ["latitude", "longitude"]:
+        #        old_c = old_anomaly[coord].to_numpy()
+        #        new_c = v_anomaly[coord].to_numpy()
+        #        tol = 1e-5
                     
-            #      if np.abs(old_c - new_c).max() < tol:
-            #          v_anomaly = v_anomaly.assign({coord: old_c})
-            #      else:
-            #          msg = f"{coord} does not match despite having the same subdivision"
-            #          raise ValueError(msg)
+        #      if np.abs(old_c - new_c).max() < tol:
+        #          v_anomaly = v_anomaly.assign({coord: old_c})
+        #      else:
+        #          msg = f"{coord} does not match despite having the same subdivision"
+        #          raise ValueError(msg)
 
-            # TODO use lookup table to speed up resample for repeated lat/lon?                
-            print(f"{vid}: resampling anomaly")
-            resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
-            print(f"{vid}: computing scenario data")
-            if anomaly_type == "additive":
-                scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
-            else:
-                scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
+        print(f"{vid}: resampling anomaly")
+        resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+        print(f"{vid}: computing scenario data")
+        if anomaly_type == "additive":
+            scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
+        else:
+            scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
 
-            d_scen_data[f"{source}_{vps[0].stem.split('_')[-1]}"] = scenario_data
-
-    # TODO: sample without replacement and refill?  
-    # make repeatable
-    # random.seed(42)
-    for draw in range(make_N_draws):
-        random_key = random.choice(list(d_scen_data.keys()))
-        print(f"Writing draw {draw} from {random_key}")
+        print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
         cd_data.save_daily_results(
-            d_scen_data[random_key],
+            scenario_data,
             scenario=cmip6_experiment,
             variable=target_variable,
             draw=draw,
             year=year,
-            provenance_attribute=random_key,
+            provenance_attribute=f"{source_key}-{s_variant}",
             encoding_kwargs=transform.encoding_kwargs,
         )
-
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_FORECAST_YEARS)
+@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=False)
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment()
 def generate_scenario_daily_task(
-    output_dir: str, year: str, target_variable: str, cmip6_experiment: str
+    output_dir: str, draw: str, year: str, target_variable: str, cmip6_experiment: str
 ) -> None:
-    generate_scenario_daily_main(output_dir, year, target_variable, cmip6_experiment)
+    generate_scenario_daily_main(output_dir, draw, year, target_variable, cmip6_experiment)
 
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_FORECAST_YEARS, allow_all=True)
+@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=False)
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_queue()
@@ -265,6 +269,7 @@ def generate_scenario_daily_task(
 def generate_scenario_daily(
     output_dir: str,
     year: str,
+    draw: str,
     target_variable: str,
     cmip6_experiment: str,
     queue: str,
@@ -273,6 +278,7 @@ def generate_scenario_daily(
     cd_data = ClimateDownscaleData(output_dir)
 
     years = clio.VALID_FORECAST_YEARS if year == clio.RUN_ALL else [year]
+    draws = [draw]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL
@@ -286,19 +292,19 @@ def generate_scenario_daily(
 
     yve = []
     complete = []
-    for y, v, e in itertools.product(years, variables, experiments):
-        path = cd_data.daily_results_path(scenario=e, variable=v, year=y)
+    for d, y, v, e in itertools.product(draws, years, variables, experiments):
+        path = cd_data.daily_results_path(scenario=e, variable=v, year=y, draw=d)
         if not path.exists() or overwrite:
-            yve.append((y, v, e))
+            yve.append((d, y, v, e))
         else:
-            complete.append((y, v, e))
+            complete.append((d, y, v, e))
 
     print(f"{len(complete)} tasks already done. " f"Launching {len(yve)} tasks")
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_daily",
         flat_node_args=(
-            ("year", "target-variable", "cmip6-experiment"),
+            ("draw", "year", "target-variable", "cmip6-experiment"),
             yve,
         ),
         task_args={
@@ -306,8 +312,8 @@ def generate_scenario_daily(
         },
         task_resources={
             "queue": queue,
-            "cores": 5,
-            "memory": "120G",
+            "cores": 5, # 1?
+            "memory": "120G", # ? 80?
             "runtime": "400m",
             "project": "proj_rapidresponse",
         },

@@ -155,7 +155,7 @@ class ClimateDownscaleData:
         return self.daily_results / scenario / variable / f"{year}.nc"
 
     def daily_results_path_with_draws(self, scenario: str, variable: str, draw: int | str, year: int | str) -> Path:
-        return self.daily_results / scenario / variable / f"{draw}" / f"{year}.nc"
+        return self.daily_results / scenario / variable / f"{year}_{draw}.nc"
 
     def save_daily_results(
         self,
