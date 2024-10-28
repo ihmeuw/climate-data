@@ -248,7 +248,7 @@ def generate_scenario_daily_task(
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_year(years=clio.VALID_FORECAST_YEARS, allow_all=True)
-@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=False)
+@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=True)
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_queue()
@@ -265,7 +265,7 @@ def generate_scenario_daily(
     cd_data = ClimateDownscaleData(output_dir)
 
     years = clio.VALID_FORECAST_YEARS if year == clio.RUN_ALL else [year]
-    draws = [draw]
+    draws = clio.VALID_DRAWS if draw == clio.RUN_ALL else [draw]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL
@@ -280,7 +280,7 @@ def generate_scenario_daily(
     yve = []
     complete = []
     for d, y, v, e in itertools.product(draws, years, variables, experiments):
-        path = cd_data.daily_results_path(scenario=e, variable=v, year=y, draw=d)
+        path = cd_data.daily_results_path_with_draws(scenario=e, variable=v, year=y, draw=d)
         if not path.exists() or overwrite:
             yve.append((d, y, v, e))
         else:
