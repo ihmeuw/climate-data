@@ -172,10 +172,6 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     source_paths = get_source_paths(
         cd_data, transform.source_variables, cmip6_experiment
     )
-    for i, (source, variant_paths) in enumerate(source_paths.items()):
-        sid = f"Source {i+1}/{len(source_paths)}: {source}"
-        print(sid)
-        print(variant_paths)
     
     print("loading historical reference")
     historical_reference = cd_data.load_daily_results(
@@ -186,31 +182,22 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     # randomly select source, variant, load reference and target,
     # compute anomaly, resample anomaly and compute scenario data
     source_key = random.choice(list(source_paths.keys()))
-    variant_paths = list(list(random.choice(source_paths[source_key])))
-    print(variant_paths)
-    for j, vps in enumerate(variant_paths):
-        s_variant = f"{vps.stem.split('_')[-1]}"
-        vid = f"{source_key}, Variant : {s_variant}"
-        # load reference (monthly) and target (daily for a given year)
-        try:
-            print(f"{vid}: Loading reference")
-            sref = transform(load_variable(vps, "reference"))
-            print(f"{vid}: Loading target")
-            target = transform(load_variable(vps, year))
-            # FIXME I think this will fail with windspeed, but I got confused about how to get vps 
-            # in the same way as when it was looping through the variants. Hopefully James can quickly 
-            # explain how to fix this.
-            #print(f"{vid}: Loading reference")
-            #sref = transform(*[load_variable(vp, "reference") for vp in vps])
-            #print(f"{vid}: Loading target")
-            #target = transform(*[load_variable(vp, year) for vp in vps])
+    variant_paths = random.choice(source_paths[source_key])
+    s_variant = f"{variant_paths[0].stem.split('_')[-1]}"
+    vid = f"{source_key}, Variant : {s_variant}"
+    # load reference (monthly) and target (daily for a given year)
+    try:
+        print(f"{vid}: Loading reference")
+        sref = transform(*[load_variable(vp, "reference") for vp in variant_paths])
+        print(f"{vid}: Loading target")
+        target = transform(*[load_variable(vp, year) for vp in variant_paths])
 
-        except KeyError:
-            print(f"{vid}: Bad formatting, skipping...")
-            continue
+    except KeyError:
+        print(f"{vid}: Bad formatting, skipping...")
+        return
 
-        print(f"{vid}: computing anomaly")
-        v_anomaly = compute_anomaly(sref, target, anomaly_type)
+    print(f"{vid}: computing anomaly")
+    v_anomaly = compute_anomaly(sref, target, anomaly_type)
 
         # key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
 
@@ -227,16 +214,16 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
         #          msg = f"{coord} does not match despite having the same subdivision"
         #          raise ValueError(msg)
 
-        print(f"{vid}: resampling anomaly")
-        resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
-        print(f"{vid}: computing scenario data")
-        if anomaly_type == "additive":
-            scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
-        else:
-            scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
+    print(f"{vid}: resampling anomaly")
+    resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+    print(f"{vid}: computing scenario data")
+    if anomaly_type == "additive":
+        scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
+    else:
+        scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
 
-        print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
-        cd_data.save_daily_results(
+    print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
+    cd_data.save_daily_results(
             scenario_data,
             scenario=cmip6_experiment,
             variable=target_variable,
