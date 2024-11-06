@@ -154,7 +154,9 @@ class ClimateDownscaleData:
     def daily_results_path(self, scenario: str, variable: str, year: int | str) -> Path:
         return self.daily_results / scenario / variable / f"{year}.nc"
 
-    def daily_results_path_with_draws(self, scenario: str, variable: str, draw: int | str, year: int | str) -> Path:
+    def daily_results_path_with_draws(
+        self, scenario: str, variable: str, draw: int | str, year: int | str
+    ) -> Path:
         return self.daily_results / scenario / variable / f"{year}_{draw}.nc"
 
     def save_daily_results(
@@ -162,15 +164,15 @@ class ClimateDownscaleData:
         results_ds: xr.Dataset,
         scenario: str,
         variable: str,
-        draw: int | str,
+        draw: int | str | None,
         year: int | str,
-        provenance_attribute: str,
+        provenance_attribute: str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
         if draw is None:
             path = self.daily_results_path(scenario, variable, year)
         else:
-            path  = self.daily_results_path_with_draws(scenario, variable, draw, year)
+            path = self.daily_results_path_with_draws(scenario, variable, draw, year)
 
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
@@ -184,7 +186,7 @@ class ClimateDownscaleData:
         encoding.update(encoding_kwargs)
 
         # Add the provenance attribute
-        results_ds.attrs['provenance'] = provenance_attribute
+        results_ds.attrs["provenance"] = provenance_attribute
 
         results_ds.to_netcdf(path, encoding={"value": encoding})
 
@@ -193,12 +195,14 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
-        draw: int | str = None,) -> xr.Dataset:
-
+        draw: int | str | None = None,
+    ) -> xr.Dataset:
         if draw is None:
             results_path = self.daily_results_path(scenario, variable, year)
         else:
-            results_path  = self.daily_results_path_with_draws(scenario, variable, draw, year)
+            results_path = self.daily_results_path_with_draws(
+                scenario, variable, draw, year
+            )
         return xr.open_dataset(results_path)
 
     @property

@@ -386,7 +386,8 @@ class Transform:
             transform_funcs = self.transform_funcs[key]
         else:
             transform_funcs = self.transform_funcs
-        res = transform_funcs[0](*datasets) # first function is applied to the input data which can have multiple xarray datasets
+        # first function is applied to the input data which can have multiple xarray datasets
+        res = transform_funcs[0](*datasets)
         for transform_func in transform_funcs[1:]:
             res = transform_func(res)
         return res

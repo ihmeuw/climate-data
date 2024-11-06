@@ -105,6 +105,7 @@ ignore = [
     "FBT001",   # Boolean positional args are super common in clis
     "FBT002",   # Boolean positional args are super common in clis
     "PD901",    # Generic df names are fine
+    "S311",     # Not using random numbers for crypto purposes
 ]
 
 [tool.ruff.lint.per-file-ignores]

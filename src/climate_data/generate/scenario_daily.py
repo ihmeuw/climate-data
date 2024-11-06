@@ -1,14 +1,12 @@
 import itertools
+import random
 from collections import defaultdict
 from pathlib import Path
 
 import click
-import numpy as np
 import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
-
-import random
 
 from climate_data import cli_options as clio
 from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
@@ -156,7 +154,7 @@ def compute_anomaly(
     return anomaly
 
 
-def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
+def generate_scenario_daily_main(
     output_dir: str | Path,
     draw: str | int,
     year: str | int,
@@ -172,7 +170,7 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     source_paths = get_source_paths(
         cd_data, transform.source_variables, cmip6_experiment
     )
-    
+
     print("loading historical reference")
     historical_reference = cd_data.load_daily_results(
         scenario="historical",
@@ -199,21 +197,6 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
     print(f"{vid}: computing anomaly")
     v_anomaly = compute_anomaly(sref, target, anomaly_type)
 
-        # key = f"{len(v_anomaly.latitude)}_{len(v_anomaly.longitude)}"
-
-        # Is this no longer necessary because each variant is being handled independently?
-        #old_count, old_anomaly = source_anomalies[key]
-        #for coord in ["latitude", "longitude"]:
-        #        old_c = old_anomaly[coord].to_numpy()
-        #        new_c = v_anomaly[coord].to_numpy()
-        #        tol = 1e-5
-                    
-        #      if np.abs(old_c - new_c).max() < tol:
-        #          v_anomaly = v_anomaly.assign({coord: old_c})
-        #      else:
-        #          msg = f"{coord} does not match despite having the same subdivision"
-        #          raise ValueError(msg)
-
     print(f"{vid}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
     print(f"{vid}: computing scenario data")
@@ -224,14 +207,15 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
 
     print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
     cd_data.save_daily_results(
-            scenario_data,
-            scenario=cmip6_experiment,
-            variable=target_variable,
-            draw=draw,
-            year=year,
-            provenance_attribute=f"{source_key}-{s_variant}",
-            encoding_kwargs=transform.encoding_kwargs,
-        )
+        scenario_data,
+        scenario=cmip6_experiment,
+        variable=target_variable,
+        draw=draw,
+        year=year,
+        provenance_attribute=f"{source_key}-{s_variant}",
+        encoding_kwargs=transform.encoding_kwargs,
+    )
+
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
@@ -242,7 +226,9 @@ def generate_scenario_daily_main(  # noqa: PLR0912, PLR0915, C901
 def generate_scenario_daily_task(
     output_dir: str, draw: str, year: str, target_variable: str, cmip6_experiment: str
 ) -> None:
-    generate_scenario_daily_main(output_dir, draw, year, target_variable, cmip6_experiment)
+    generate_scenario_daily_main(
+        output_dir, draw, year, target_variable, cmip6_experiment
+    )
 
 
 @click.command()  # type: ignore[arg-type]
@@ -280,7 +266,9 @@ def generate_scenario_daily(
     yve = []
     complete = []
     for d, y, v, e in itertools.product(draws, years, variables, experiments):
-        path = cd_data.daily_results_path_with_draws(scenario=e, variable=v, year=y, draw=d)
+        path = cd_data.daily_results_path_with_draws(
+            scenario=e, variable=v, year=y, draw=d
+        )
         if not path.exists() or overwrite:
             yve.append((d, y, v, e))
         else:
@@ -299,8 +287,8 @@ def generate_scenario_daily(
         },
         task_resources={
             "queue": queue,
-            "cores": 5, # 1?
-            "memory": "120G", # ? 80?
+            "cores": 1,
+            "memory": "90G",
             "runtime": "400m",
             "project": "proj_rapidresponse",
         },

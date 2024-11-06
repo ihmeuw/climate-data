@@ -185,7 +185,9 @@ def with_target_variable(
         help="Variable to generate.",
     )
 
-VALID_DRAWS = [str(d) for d in range(0, 100)]
+
+VALID_DRAWS = [str(d) for d in range(250)]
+
 
 def with_draw(
     *,
