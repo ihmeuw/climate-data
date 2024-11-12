@@ -151,28 +151,27 @@ class ClimateDownscaleData:
         path = self.results_metadata / "scenario_inclusion_metadata.parquet"
         return pd.read_parquet(path)
 
-    def daily_results_path(self, scenario: str, variable: str, year: int | str) -> Path:
-        return self.daily_results / scenario / variable / f"{year}.nc"
-
-    def daily_results_path_with_draws(
-        self, scenario: str, variable: str, draw: int | str, year: int | str
+    def daily_results_path(
+        self,
+        scenario: str,
+        variable: str,
+        year: int | str,
+        draw: int | str | None = None,
     ) -> Path:
-        return self.daily_results / scenario / variable / f"{year}_{draw}.nc"
+        file_name = f"{year}.nc" if draw is None else f"{year}_{draw}.nc"
+        return self.daily_results / scenario / variable / file_name
 
     def save_daily_results(
         self,
         results_ds: xr.Dataset,
         scenario: str,
         variable: str,
-        draw: int | str | None,
         year: int | str,
+        draw: int | str | None,
         provenance_attribute: str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        if draw is None:
-            path = self.daily_results_path(scenario, variable, year)
-        else:
-            path = self.daily_results_path_with_draws(scenario, variable, draw, year)
+        path = self.daily_results_path(scenario, variable, year, draw)
 
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
@@ -200,9 +199,7 @@ class ClimateDownscaleData:
         if draw is None:
             results_path = self.daily_results_path(scenario, variable, year)
         else:
-            results_path = self.daily_results_path_with_draws(
-                scenario, variable, draw, year
-            )
+            results_path = self.daily_results_path(scenario, variable, draw, year)
         return xr.open_dataset(results_path)
 
     @property

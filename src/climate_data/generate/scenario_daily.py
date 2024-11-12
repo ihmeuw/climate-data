@@ -156,8 +156,8 @@ def compute_anomaly(
 
 def generate_scenario_daily_main(
     output_dir: str | Path,
-    draw: str | int,
     year: str | int,
+    draw: str | int,
     target_variable: str,
     cmip6_experiment: str,
 ) -> None:
@@ -184,21 +184,18 @@ def generate_scenario_daily_main(
     s_variant = f"{variant_paths[0].stem.split('_')[-1]}"
     vid = f"{source_key}, Variant : {s_variant}"
     # load reference (monthly) and target (daily for a given year)
-    try:
-        print(f"{vid}: Loading reference")
-        sref = transform(*[load_variable(vp, "reference") for vp in variant_paths])
-        print(f"{vid}: Loading target")
-        target = transform(*[load_variable(vp, year) for vp in variant_paths])
+    print(f"{vid}: Loading reference")
+    sref = transform(*[load_variable(vp, "reference") for vp in variant_paths])
 
-    except KeyError:
-        print(f"{vid}: Bad formatting, skipping...")
-        return
+    print(f"{vid}: Loading target")
+    target = transform(*[load_variable(vp, year) for vp in variant_paths])
 
     print(f"{vid}: computing anomaly")
     v_anomaly = compute_anomaly(sref, target, anomaly_type)
 
     print(f"{vid}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
+
     print(f"{vid}: computing scenario data")
     if anomaly_type == "additive":
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
@@ -210,8 +207,8 @@ def generate_scenario_daily_main(
         scenario_data,
         scenario=cmip6_experiment,
         variable=target_variable,
-        draw=draw,
         year=year,
+        draw=draw,
         provenance_attribute=f"{source_key}-{s_variant}",
         encoding_kwargs=transform.encoding_kwargs,
     )
@@ -224,10 +221,10 @@ def generate_scenario_daily_main(
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment()
 def generate_scenario_daily_task(
-    output_dir: str, draw: str, year: str, target_variable: str, cmip6_experiment: str
+    output_dir: str, year: str, draw: str, target_variable: str, cmip6_experiment: str
 ) -> None:
     generate_scenario_daily_main(
-        output_dir, draw, year, target_variable, cmip6_experiment
+        output_dir, year, draw, target_variable, cmip6_experiment
     )
 
 
@@ -266,9 +263,7 @@ def generate_scenario_daily(
     yve = []
     complete = []
     for d, y, v, e in itertools.product(draws, years, variables, experiments):
-        path = cd_data.daily_results_path_with_draws(
-            scenario=e, variable=v, year=y, draw=d
-        )
+        path = cd_data.daily_results_path(scenario=e, variable=v, year=y, draw=d)
         if not path.exists() or overwrite:
             yve.append((d, y, v, e))
         else:
