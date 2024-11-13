@@ -152,6 +152,10 @@ TRANSFORM_MAP = {
         transform_funcs=[utils.annual_sum],
         encoding_scale=10,
     ),
+    "precipitation_days": utils.Transform(
+        source_variables=["total_precipitation"],
+        transform_funcs=[utils.count_threshold(0.1), utils.annual_sum],
+    ),
 }
 
 
