@@ -163,6 +163,8 @@ class ClimateDownscaleData:
         encoding_kwargs: dict[str, Any],
     ) -> None:
         path = self.daily_results_path(scenario, variable, year)
+        if path.exists():
+            path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
 
