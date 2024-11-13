@@ -164,6 +164,13 @@ TRANSFORM_MAP = {
 }
 
 
+# Notes about what to do:
+# We want to leave the interface for this function/entry point essentially the same.  We'll add in 
+# a `draw` argument to the task function, but otherwise we'll keep the same interface. 
+# The idea here is to take a target variable in annual space, get all the source variables,
+# compute the daily source variables in memory, then collapse them to the annual target variable.
+
+
 def generate_scenario_annual_main(
     output_dir: str | Path,
     target_variable: str,
