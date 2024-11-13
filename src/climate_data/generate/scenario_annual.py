@@ -154,6 +154,15 @@ TRANSFORM_MAP = {
     ),
 }
 
+# Remove all annual variables dependent on derived_daily variables
+_excluded_source_variables = ["heat_index", "humidex", "effective_temperature"]
+
+TRANSFORM_MAP = {
+    k: v for k, v in TRANSFORM_MAP.items() if not any(
+        source_variable in _excluded_source_variables for source_variable in v.source_variables
+    )
+}
+
 
 def generate_scenario_annual_main(
     output_dir: str | Path,
