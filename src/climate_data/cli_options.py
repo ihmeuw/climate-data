@@ -186,6 +186,23 @@ def with_target_variable(
     )
 
 
+VALID_DRAWS = [str(d) for d in range(250)]
+
+
+def with_draw(
+    *,
+    draws: list[str],
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "draw",
+        "d",
+        allow_all=allow_all,
+        choices=draws,
+        help="Draw to extract data for.",
+    )
+
+
 STRIDE = 30
 LATITUDES = [str(lat) for lat in range(-90, 90, STRIDE)]
 LONGITUDES = [str(lon) for lon in range(-180, 180, STRIDE)]
@@ -228,6 +245,7 @@ __all__ = [
     "VALID_REFERENCE_YEARS",
     "VALID_FORECAST_YEARS",
     "VALID_MONTHS",
+    "VALID_DRAWS",
     "VALID_ERA5_VARIABLES",
     "VALID_ERA5_DATASETS",
     "VALID_CMIP6_SOURCES",
@@ -238,6 +256,7 @@ __all__ = [
     "LONGITUDES",
     "with_year",
     "with_month",
+    "with_draw",
     "with_era5_variable",
     "with_era5_dataset",
     "with_cmip6_source",

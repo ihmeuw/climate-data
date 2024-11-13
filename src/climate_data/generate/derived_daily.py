@@ -58,6 +58,8 @@ def generate_derived_daily_main(
         scenario=scenario,
         variable=target_variable,
         year=year,
+        draw=None,
+        provenance_attribute=None,
         encoding_kwargs=transform.encoding_kwargs,
     )
 

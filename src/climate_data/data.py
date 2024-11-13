@@ -151,8 +151,15 @@ class ClimateDownscaleData:
         path = self.results_metadata / "scenario_inclusion_metadata.parquet"
         return pd.read_parquet(path)
 
-    def daily_results_path(self, scenario: str, variable: str, year: int | str) -> Path:
-        return self.daily_results / scenario / variable / f"{year}.nc"
+    def daily_results_path(
+        self,
+        scenario: str,
+        variable: str,
+        year: int | str,
+        draw: int | str | None = None,
+    ) -> Path:
+        file_name = f"{year}.nc" if draw is None else f"{year}_{draw}.nc"
+        return self.daily_results / scenario / variable / file_name
 
     def save_daily_results(
         self,
@@ -160,9 +167,12 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
+        draw: int | str | None,
+        provenance_attribute: str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        path = self.daily_results_path(scenario, variable, year)
+        path = self.daily_results_path(scenario, variable, year, draw)
+
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
 
@@ -173,6 +183,10 @@ class ClimateDownscaleData:
             "complevel": 1,
         }
         encoding.update(encoding_kwargs)
+
+        # Add the provenance attribute
+        results_ds.attrs["provenance"] = provenance_attribute
+
         results_ds.to_netcdf(path, encoding={"value": encoding})
 
     def load_daily_results(
@@ -180,8 +194,9 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
+        draw: int | str | None = None,
     ) -> xr.Dataset:
-        results_path = self.daily_results_path(scenario, variable, year)
+        results_path = self.daily_results_path(scenario, variable, year, draw)
         return xr.open_dataset(results_path)
 
     @property
