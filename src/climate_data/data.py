@@ -196,7 +196,7 @@ class ClimateDownscaleData:
         year: int | str,
         draw: int | str | None = None,
     ) -> xr.Dataset:
-        results_path = self.daily_results_path(scenario, variable, draw, year)
+        results_path = self.daily_results_path(scenario, variable, year, draw)
         return xr.open_dataset(results_path)
 
     @property
