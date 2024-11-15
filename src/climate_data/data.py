@@ -204,9 +204,10 @@ class ClimateDownscaleData:
         return self.results / "annual"
 
     def annual_results_path(
-        self, scenario: str, variable: str, year: int | str
+        self, scenario: str, variable: str, year: int | str, draw: int | str | None
     ) -> Path:
-        return self.annual_results / scenario / variable / f"{year}.nc"
+        file_name = f"{year}.nc" if draw is None else f"{year}_{draw}.nc"
+        return self.annual_results / scenario / variable / file_name
 
     def save_annual_results(
         self,
@@ -214,9 +215,10 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
+        draw: int | str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        path = self.annual_results_path(scenario, variable, year)
+        path = self.annual_results_path(scenario, variable, year, draw)
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
 
