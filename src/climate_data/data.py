@@ -168,7 +168,6 @@ class ClimateDownscaleData:
         variable: str,
         year: int | str,
         draw: int | str | None,
-        provenance_attribute: str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
         path = self.daily_results_path(scenario, variable, year, draw)
@@ -183,9 +182,6 @@ class ClimateDownscaleData:
             "complevel": 1,
         }
         encoding.update(encoding_kwargs)
-
-        # Add the provenance attribute
-        results_ds.attrs["provenance"] = provenance_attribute
 
         results_ds.to_netcdf(path, encoding={"value": encoding})
 

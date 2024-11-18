@@ -160,7 +160,8 @@ def generate_scenario_daily_main(
     draw: str | int,
     target_variable: str,
     cmip6_experiment: str,
-) -> None:
+    write_output: bool = True,
+) -> xr.Dataset:
     # make repeatable
     random.seed(int(draw))
     cd_data = ClimateDownscaleData(output_dir)
@@ -201,17 +202,23 @@ def generate_scenario_daily_main(
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
     else:
         scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
+    # write global attributes to track prevenance
+    scenario_data.attrs["source"] = source_key
+    scenario_data.attrs["variant"] = s_variant
+    if write_output is True:
+        print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
+        cd_data.save_daily_results(
+            scenario_data,
+            scenario=cmip6_experiment,
+            variable=target_variable,
+            year=year,
+            draw=draw,
+            encoding_kwargs=transform.encoding_kwargs,
+        )
+    else:
+        print(f"{vid}: returning draw {draw} from {source_key}-{s_variant}")
 
-    print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
-    cd_data.save_daily_results(
-        scenario_data,
-        scenario=cmip6_experiment,
-        variable=target_variable,
-        year=year,
-        draw=draw,
-        provenance_attribute=f"{source_key}-{s_variant}",
-        encoding_kwargs=transform.encoding_kwargs,
-    )
+    return scenario_data
 
 
 @click.command()  # type: ignore[arg-type]
@@ -224,7 +231,7 @@ def generate_scenario_daily_task(
     output_dir: str, year: str, draw: str, target_variable: str, cmip6_experiment: str
 ) -> None:
     generate_scenario_daily_main(
-        output_dir, year, draw, target_variable, cmip6_experiment
+        output_dir, year, draw, target_variable, cmip6_experiment, write_output=True
     )
 
 

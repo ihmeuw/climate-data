@@ -2,13 +2,13 @@ import itertools
 from pathlib import Path
 
 import click
-import xarray as xr
 from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
 from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_data.generate import utils
+from climate_data.generate.scenario_daily import generate_scenario_daily_main
 
 TEMP_THRESHOLDS = list(range(20, 35))
 BETWEEN_TEMP_THRESHOLDS = [
@@ -187,13 +187,17 @@ def generate_scenario_annual_main(
     print("Loading files")
     ds = transform(
         *[
-            xr.open_dataset(
-                cd_data.daily_results_path(scenario, source_variable, year, draw)
+            generate_scenario_daily_main(
+                output_dir=output_dir,
+                year=year,
+                draw=draw,
+                target_variable=source_variable,
+                cmip6_experiment=scenario,
+                write_output=False,
             )
             for source_variable in transform.source_variables
         ]
     )
-
     if progress_bar:
         with ProgressBar():  # type: ignore[no-untyped-call]
             ds = ds.compute()
@@ -276,9 +280,9 @@ def generate_scenario_annual(
         for y in year_list:
             path = cd_data.annual_results_path(scenario=e, variable=v, year=y, draw=d)
             if not path.exists() or overwrite:
-                vey.append((v, e, y))
+                vey.append((v, e, y, d))
             else:
-                complete.append((v, e, y))
+                complete.append((v, e, y, d))
 
     print(f"{len(complete)} tasks already done. {len(vey)} tasks to do.")
     if not vey:
@@ -296,7 +300,7 @@ def generate_scenario_annual(
         },
         task_resources={
             "queue": queue,
-            "cores": 3,
+            "cores": 1,
             "memory": "100G",
             "runtime": "120m",
             "project": "proj_rapidresponse",
