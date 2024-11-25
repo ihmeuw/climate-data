@@ -48,7 +48,6 @@ def generate_historical_reference_main(
         variable=target_variable,
         year="reference",
         draw=None,
-        provenance_attribute=None,
         encoding_kwargs=encoding_kwargs,
     )
 

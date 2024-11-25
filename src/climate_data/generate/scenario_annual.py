@@ -2,13 +2,13 @@ import itertools
 from pathlib import Path
 
 import click
-import xarray as xr
 from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
 from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 from climate_data.generate import utils
+from climate_data.generate.scenario_daily import generate_scenario_daily_main
 
 TEMP_THRESHOLDS = list(range(20, 35))
 BETWEEN_TEMP_THRESHOLDS = [
@@ -154,35 +154,62 @@ TRANSFORM_MAP = {
     ),
 }
 
+# Remove all annual variables dependent on derived_daily variables
+_excluded_source_variables = ["heat_index", "humidex", "effective_temperature"]
+
+TRANSFORM_MAP = {
+    k: v
+    for k, v in TRANSFORM_MAP.items()
+    if not any(
+        source_variable in _excluded_source_variables
+        for source_variable in v.source_variables
+    )
+}
+
+
+# Notes about what to do:
+# We want to leave the interface for this function/entry point essentially the same.  We'll add in
+# a `draw` argument to the task function, but otherwise we'll keep the same interface.
+# The idea here is to take a target variable in annual space, get all the source variables,
+# compute the daily source variables in memory, then collapse them to the annual target variable.
+
 
 def generate_scenario_annual_main(
     output_dir: str | Path,
     target_variable: str,
     scenario: str,
     year: str,
+    draw: str,
     progress_bar: bool = False,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
-
+    print("Loading files")
     ds = transform(
         *[
-            xr.open_dataset(cd_data.daily_results_path(scenario, source_variable, year))
+            generate_scenario_daily_main(
+                output_dir=output_dir,
+                year=year,
+                draw=draw,
+                target_variable=source_variable,
+                cmip6_experiment=scenario,
+                write_output=False,
+            )
             for source_variable in transform.source_variables
         ]
     )
-
     if progress_bar:
         with ProgressBar():  # type: ignore[no-untyped-call]
             ds = ds.compute()
     else:
         ds = ds.compute()
-
+    print("Saving files")
     cd_data.save_annual_results(
         ds,
         scenario=scenario,
         variable=target_variable,
         year=year,
+        draw=draw,
         encoding_kwargs=transform.encoding_kwargs,
     )
 
@@ -192,11 +219,13 @@ def generate_scenario_annual_main(
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment(allow_historical=True)
 @clio.with_year(years=clio.VALID_HISTORY_YEARS + clio.VALID_FORECAST_YEARS)
+@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=False)
 def generate_scenario_annual_task(
     output_dir: str,
     target_variable: str,
     cmip6_experiment: str,
     year: str,
+    draw: str,
 ) -> None:
     if year in clio.VALID_HISTORY_YEARS and cmip6_experiment != "historical":
         msg = "Historical years must use the 'historical' experiment."
@@ -208,24 +237,29 @@ def generate_scenario_annual_task(
         )
         raise ValueError(msg)
 
-    generate_scenario_annual_main(output_dir, target_variable, cmip6_experiment, year)
+    generate_scenario_annual_main(
+        output_dir, target_variable, cmip6_experiment, year, draw
+    )
 
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True, allow_historical=True)
+@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=True)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_annual(
     output_dir: str,
     target_variable: str,
     cmip6_experiment: str,
+    draw: str,
     queue: str,
     overwrite: bool,
 ) -> None:
     cd_data = ClimateDownscaleData(output_dir)
 
+    draws = clio.VALID_DRAWS if draw == clio.RUN_ALL else [draw]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL
@@ -239,16 +273,16 @@ def generate_scenario_annual(
 
     vey = []
     complete = []
-    for v, e in itertools.product(variables, experiments):
+    for d, v, e in itertools.product(draws, variables, experiments):
         year_list = (
             clio.VALID_HISTORY_YEARS if e == "historical" else clio.VALID_FORECAST_YEARS
         )
         for y in year_list:
-            path = cd_data.annual_results_path(scenario=e, variable=v, year=y)
+            path = cd_data.annual_results_path(scenario=e, variable=v, year=y, draw=d)
             if not path.exists() or overwrite:
-                vey.append((v, e, y))
+                vey.append((v, e, y, d))
             else:
-                complete.append((v, e, y))
+                complete.append((v, e, y, d))
 
     print(f"{len(complete)} tasks already done. {len(vey)} tasks to do.")
     if not vey:
@@ -258,7 +292,7 @@ def generate_scenario_annual(
         runner="cdtask",
         task_name="generate scenario_annual",
         flat_node_args=(
-            ("target-variable", "cmip6-experiment", "year"),
+            ("target-variable", "cmip6-experiment", "year", "draw"),
             vey,
         ),
         task_args={
@@ -266,7 +300,7 @@ def generate_scenario_annual(
         },
         task_resources={
             "queue": queue,
-            "cores": 3,
+            "cores": 1,
             "memory": "100G",
             "runtime": "120m",
             "project": "proj_rapidresponse",
