@@ -1,5 +1,4 @@
 import itertools
-from typing import final
 import zipfile
 from pathlib import Path
 
@@ -89,7 +88,7 @@ def download_era5_main(
 
 def check_zipfile(zip_path: Path) -> None:
     try:
-        with zipfile.ZipFile(zip_path) as zf:
+        with zipfile.ZipFile(zip_path):
             pass
     except zipfile.BadZipFile as e:
         # Download failed or was interrupted, delete the zipfile
