@@ -39,7 +39,7 @@ class ClimateDownscaleData:
     ) -> Path:
         return (
             self.extracted_era5
-            / f"reanalysis-era5-{dataset}_{variable}_{year}_{month}.nc"
+            / f"{dataset}_{variable}_{year}_{month}.nc"
         )
 
     @property

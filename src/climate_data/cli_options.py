@@ -18,7 +18,7 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
-VALID_HISTORY_YEARS = [str(y) for y in range(1990, 2024)]
+VALID_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
 VALID_REFERENCE_YEARS = VALID_HISTORY_YEARS[-5:]
 VALID_FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 
