@@ -12,17 +12,23 @@ from rra_tools.shell_tools import touch
 from climate_data import cli_options as clio
 from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
 
-
-def get_download_spec(
-    final_out_path: Path,
-) -> tuple[Path, str]:
-    if "land" in final_out_path.stem:
-        download_path = final_out_path.with_suffix(".zip")
-        download_format = "netcdf.zip"
-    else:
-        download_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
-        download_format = "netcdf"
-    return download_path, download_format
+_NETCDF_VALID_ENCODINGS = {
+    "zlib",
+    "complevel",
+    "fletcher32",
+    "contiguous",
+    "chunksizes",
+    "shuffle",
+    "_FillValue",
+    "dtype",
+    "compression",
+    "significant_digits",
+    "quantize_mode",
+    "blosc_shuffle",
+    "szip_coding",
+    "szip_pixels_per_block",
+    "endian",
+}
 
 
 def download_era5_main(
@@ -38,7 +44,8 @@ def download_era5_main(
     final_out_path = cddata.extracted_era5_path(
         era5_dataset, era5_variable, year, month
     )
-    download_path, download_format = get_download_spec(final_out_path)
+    download_path = final_out_path.with_suffix(".zip")
+    data_format, download_format = "netcdf", "zip"
 
     if download_path.exists():
         print("Already downloaded:", download_path)
@@ -57,13 +64,14 @@ def download_era5_main(
 
         print("Downloading...")
         kwargs = {
-            "product_type": "reanalysis",
-            "variable": era5_variable,
-            "year": year,
-            "month": month,
+            "product_type": ["reanalysis"],
+            "variable": [era5_variable],
+            "year": [year],
+            "month": [month],
             "day": [f"{d:02d}" for d in range(1, 32)],
             "time": [f"{h:02d}:00" for h in range(24)],
-            "format": download_format,
+            "data_format": data_format,
+            "download_format": download_format,
         }
 
         result = copernicus.retrieve(
@@ -78,6 +86,16 @@ def download_era5_main(
         raise e
 
 
+def check_zipfile(zip_path: Path) -> None:
+    try:
+        with zipfile.ZipFile(zip_path):
+            pass
+    except zipfile.BadZipFile as e:
+        # Download failed or was interrupted, delete the zipfile
+        zip_path.unlink()
+        raise e
+
+
 def unzip_and_compress_era5(
     output_dir: str | Path,
     era5_dataset: str,
@@ -86,39 +104,36 @@ def unzip_and_compress_era5(
     month: str,
 ) -> None:
     cddata = ClimateDownscaleData(output_dir)
+
     final_out_path = cddata.extracted_era5_path(
         era5_dataset, era5_variable, year, month
     )
+
     zip_path = final_out_path.with_suffix(".zip")
+    check_zipfile(zip_path)
+
     uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
+    if uncompressed_path.exists():
+        uncompressed_path.unlink()
+    touch(uncompressed_path)
 
-    if era5_dataset == "reanalysis-era5-land":
-        print("Unzipping...")
-        # This data needs to be unzipped first.
-        if uncompressed_path.exists():
-            uncompressed_path.unlink()
-        touch(uncompressed_path)
-        try:
-            with zipfile.ZipFile(zip_path) as zf:
-                pass
-        except zipfile.BadZipFile as e:
-            # Download failed or was interrupted, delete the zipfile
-            zip_path.unlink()
-            raise e
-
-        with zipfile.ZipFile(zip_path) as zf:
-            zinfo = zf.infolist()
-            if len(zinfo) != 1:
-                msg = f"Expected a single file in {zip_path}"
-                raise ValueError(msg)
-            with uncompressed_path.open("wb") as f:
-                f.write(zf.read(zinfo[0]))
+    print("Unzipping...")
+    with zipfile.ZipFile(zip_path) as zf:
+        zinfo = zf.infolist()
+        if len(zinfo) != 1:
+            msg = f"Expected a single file in {zip_path}"
+            raise ValueError(msg)
+        with uncompressed_path.open("wb") as f:
+            f.write(zf.read(zinfo[0]))
 
     print("Compressing")
+    if final_out_path.exists():
+        final_out_path.unlink()
     touch(final_out_path)
     ds = xr.open_dataset(uncompressed_path)
     var_name = next(iter(ds))  # These are all single variable datasets
     og_encoding = ds[var_name].encoding
+    og_encoding = {k: v for k, v in og_encoding.items() if k in _NETCDF_VALID_ENCODINGS}
     ds.to_netcdf(
         final_out_path,
         encoding={
@@ -129,6 +144,7 @@ def unzip_and_compress_era5(
             }
         },
     )
+
     if zip_path.exists():
         zip_path.unlink()
     uncompressed_path.unlink()
@@ -193,11 +209,16 @@ def build_task_lists(
     complete = []
     for spec in itertools.product(*spec_variables):
         final_out_path = cddata.extracted_era5_path(*spec)
-        download_path, _ = get_download_spec(final_out_path)
+        zip_path = final_out_path.with_suffix(".zip")
+        uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
 
-        if final_out_path.exists() and download_path.exists():
+        if zip_path.exists() and uncompressed_path.exists():
             # We broke in the middle of processing this file. Don't re-download,
             # just reprocess.
+            uncompressed_path.unlink()
+            to_compress.append(spec)
+        elif uncompressed_path.exists() and final_out_path.exists():
+            # We broke while compressing. Just re-compress
             final_out_path.unlink()
             to_compress.append(spec)
         elif final_out_path.exists() and final_out_path.stat().st_size == 0:
@@ -205,12 +226,12 @@ def build_task_lists(
             final_out_path.unlink()
             to_download.append(spec)
             to_compress.append(spec)
-        elif download_path.exists() and download_path.stat().st_size == 0:
+        elif zip_path.exists() and zip_path.stat().st_size == 0:
             # We broke while downloading. Assume this file is invalid and re-download
-            download_path.unlink()
+            zip_path.unlink()
             to_download.append(spec)
             to_compress.append(spec)
-        elif download_path.exists():
+        elif zip_path.exists():
             to_compress.append(spec)
         elif final_out_path.exists():
             # We've already extracted this dataset
@@ -298,7 +319,7 @@ def extract_era5(
                 "queue": queue,
                 "cores": 1,
                 "memory": "10G",
-                "runtime": "600m",
+                "runtime": "3600m",
                 "project": "proj_rapidresponse",
             },
             max_attempts=1,
