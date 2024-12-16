@@ -37,10 +37,7 @@ class ClimateDownscaleData:
     def extracted_era5_path(
         self, dataset: str, variable: str, year: int | str, month: str
     ) -> Path:
-        return (
-            self.extracted_era5
-            / f"reanalysis-era5-{dataset}_{variable}_{year}_{month}.nc"
-        )
+        return self.extracted_era5 / f"{dataset}_{variable}_{year}_{month}.nc"
 
     @property
     def extracted_cmip6(self) -> Path:
@@ -171,7 +168,8 @@ class ClimateDownscaleData:
         encoding_kwargs: dict[str, Any],
     ) -> None:
         path = self.daily_results_path(scenario, variable, year, draw)
-
+        if path.exists():
+            path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, exist_ok=True)
 
