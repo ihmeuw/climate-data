@@ -8,11 +8,11 @@ import xarray as xr
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 
 def load_and_clean_climate_stations(
-    cd_data: ClimateDownscaleData,
+    cd_data: ClimateData,
     year: int | str,
 ) -> pd.DataFrame:
     climate_stations = cd_data.load_ncei_climate_stations(year)
@@ -40,7 +40,7 @@ def load_and_clean_climate_stations(
 
 
 def get_era5_temperature(
-    cd_data: ClimateDownscaleData,
+    cd_data: ClimateData,
     year: int | str,
     coords: dict[str, npt.NDArray[np.float64]],
 ) -> npt.NDArray[np.float64]:
@@ -63,7 +63,7 @@ def get_era5_temperature(
 
 
 def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     data = load_and_clean_climate_stations(cd_data, year)
     coords = {

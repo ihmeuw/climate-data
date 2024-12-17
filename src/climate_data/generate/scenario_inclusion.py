@@ -8,7 +8,7 @@ import xarray as xr
 from rra_tools import parallel
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 warnings.filterwarnings("ignore")
 
@@ -24,7 +24,7 @@ def extract_metadata(data_path: Path) -> tuple[Any, ...]:
 def generate_scenario_inclusion_main(
     output_dir: str | Path, *, num_cores: int = 1, progress_bar: bool = False
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
     paths = list(cd_data.extracted_cmip6.glob("*.nc"))
 
     meta_list = parallel.run_parallel(

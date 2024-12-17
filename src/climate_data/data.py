@@ -9,7 +9,7 @@ from rra_tools.shell_tools import mkdir, touch
 DEFAULT_ROOT = "/mnt/share/erf/climate_downscale/"
 
 
-class ClimateDownscaleData:
+class ClimateData:
     def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / "credentials"
@@ -42,6 +42,32 @@ class ClimateDownscaleData:
     @property
     def extracted_cmip6(self) -> Path:
         return self.extracted_data / "cmip6"
+
+    def load_koppen_geiger_model_inclusion(
+        self, *, return_full_criteria: bool = False
+    ) -> pd.DataFrame:
+        meta_path = self.extracted_cmip6 / "koppen_geiger_model_inclusion.parquet"
+        if not meta_path.exists():
+            df = pd.read_html(
+                "https://www.nature.com/articles/s41597-023-02549-6/tables/3"
+            )[0]
+            df.columns = [  # type: ignore[assignment]
+                "source_id",
+                "member_count",
+                "mean_trend",
+                "std_dev_trend",
+                "transient_climate_response",
+                "equilibrium_climate_sensitivity",
+                "included_raw",
+            ]
+            df["included"] = df["included_raw"].apply({"Yes": True, "No": False}.get)
+            touch(meta_path)
+            df.to_parquet(meta_path)
+
+        df = pd.read_parquet(meta_path)
+        if return_full_criteria:
+            return df
+        return df[["source_id", "included"]]
 
     def load_cmip6_metadata(self) -> pd.DataFrame:
         meta_path = self.extracted_cmip6 / "cmip6-metadata.parquet"

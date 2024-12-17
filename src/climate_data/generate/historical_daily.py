@@ -8,7 +8,7 @@ import xarray as xr
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 from climate_data.generate import utils
 
 # Map from source variable to a unit conversion function
@@ -77,7 +77,7 @@ def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
 
 
 def load_variable(
-    cd_data: ClimateDownscaleData,
+    cd_data: ClimateData,
     variable: str,
     year: str,
     month: str,
@@ -114,7 +114,7 @@ def generate_historical_daily_main(
     year: str,
     target_variable: str,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     transform = TRANSFORM_MAP[target_variable]
     datasets = []
@@ -184,7 +184,7 @@ def generate_historical_daily(
     queue: str,
     overwrite: bool,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     years = clio.VALID_HISTORY_YEARS if year == clio.RUN_ALL else [year]
     variables = (

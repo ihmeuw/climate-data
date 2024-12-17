@@ -5,7 +5,7 @@ from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 from climate_data.generate import utils
 
 TRANSFORM_MAP = {
@@ -34,7 +34,7 @@ def generate_derived_daily_main(
     year: str,
     progress_bar: bool = False,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
 
     # Empirically tested to find a good balance between
@@ -99,7 +99,7 @@ def generate_derived_daily(
     queue: str,
     overwrite: bool,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     variables = (
         list(TRANSFORM_MAP.keys())

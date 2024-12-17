@@ -4,7 +4,7 @@ import click
 from rra_tools.shell_tools import wget
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 URL_TEMPLATE = "https://zenodo.org/records/8419340/files/{file_name}?download=1"
 FILES = [
@@ -17,7 +17,7 @@ FILES = [
 
 
 def extract_rub_local_climate_zones_main(output_dir: str | Path) -> None:
-    data = ClimateDownscaleData(output_dir)
+    data = ClimateData(output_dir)
     out_root = data.rub_local_climate_zones
 
     for file_name in FILES:

@@ -10,7 +10,7 @@ from rra_tools import jobmon
 from rra_tools.shell_tools import touch
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 _NETCDF_VALID_ENCODINGS = {
     "zlib",
@@ -39,7 +39,7 @@ def download_era5_main(
     month: str,
     user: str,
 ) -> None:
-    cddata = ClimateDownscaleData(output_dir)
+    cddata = ClimateData(output_dir)
 
     final_out_path = cddata.extracted_era5_path(
         era5_dataset, era5_variable, year, month
@@ -103,7 +103,7 @@ def unzip_and_compress_era5(
     year: int | str,
     month: str,
 ) -> None:
-    cddata = ClimateDownscaleData(output_dir)
+    cddata = ClimateData(output_dir)
 
     final_out_path = cddata.extracted_era5_path(
         era5_dataset, era5_variable, year, month
@@ -201,7 +201,7 @@ def unzip_and_compress_era5_task(
 
 
 def build_task_lists(
-    cddata: ClimateDownscaleData,
+    cddata: ClimateData,
     *spec_variables: list[str],
 ) -> tuple[list[tuple[str, ...]], ...]:
     to_download = []
@@ -260,7 +260,7 @@ def extract_era5(
     month: str,
     queue: str,
 ) -> None:
-    cddata = ClimateDownscaleData(output_dir)
+    cddata = ClimateData(output_dir)
     cred_path = cddata.credentials_root / "copernicus.yaml"
     credentials = yaml.safe_load(cred_path.read_text())
     users = list(credentials["keys"])

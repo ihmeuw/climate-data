@@ -9,7 +9,7 @@ import xarray as xr
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 from climate_data.generate import utils
 
 # Map from source variable to a unit conversion function
@@ -81,7 +81,7 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 
 
 def get_source_paths(
-    cd_data: ClimateDownscaleData,
+    cd_data: ClimateData,
     source_variables: list[str],
     cmip6_experiment: str,
 ) -> dict[str, list[list[Path]]]:
@@ -164,7 +164,7 @@ def generate_scenario_daily_main(
 ) -> xr.Dataset:
     # make repeatable
     random.seed(int(draw))
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
 
@@ -252,7 +252,7 @@ def generate_scenario_daily(
     queue: str,
     overwrite: bool,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     years = clio.VALID_FORECAST_YEARS if year == clio.RUN_ALL else [year]
     draws = clio.VALID_DRAWS if draw == clio.RUN_ALL else [draw]

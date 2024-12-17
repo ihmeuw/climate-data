@@ -98,14 +98,28 @@ def with_era5_dataset(
 
 
 VALID_CMIP6_SOURCES = [
+    "ACCESS-CM2",
+    "AWI-CM-1-1-MR",
+    "BCC-CSM2-MR",
     "CAMS-CSM1-0",
-    "CanESM5",
+    "CESM2-WACCM",
+    "CMCC-CM2-SR5",
+    "CMCC-ESM2",
+    "CNRM-CM6-1",
+    "CNRM-CM6-1-HR",
     "CNRM-ESM2-1",
+    "FGOALS-g3",
     "GFDL-ESM4",
     "GISS-E2-1-G",
+    "IITM-ESM",
+    "INM-CM4-8",
+    "INM-CM5-0",
     "MIROC-ES2L",
     "MIROC6",
+    "MPI-ESM1-2-HR",
+    "MPI-ESM1-2-LR",
     "MRI-ESM2-0",
+    "NorESM2-MM",
 ]
 
 
@@ -123,10 +137,8 @@ def with_cmip6_source(
 
 
 VALID_CMIP6_EXPERIMENTS = [
-    "ssp119",
     "ssp126",
     "ssp245",
-    "ssp370",
     "ssp585",
 ]
 
@@ -145,30 +157,6 @@ def with_cmip6_experiment(
         allow_all=allow_all,
         choices=choices,
         help="CMIP6 experiment to extract.",
-    )
-
-
-VALID_CMIP6_VARIABLES = [
-    "uas",
-    "vas",
-    "hurs",
-    "tas",
-    "tasmin",
-    "tasmax",
-    "pr",
-]
-
-
-def with_cmip6_variable(
-    *,
-    allow_all: bool = False,
-) -> ClickOption[_P, _T]:
-    return with_choice(
-        "cmip6-variable",
-        "x",
-        allow_all=allow_all,
-        choices=VALID_CMIP6_VARIABLES,
-        help="CMIP6 variable to extract.",
     )
 
 
@@ -250,7 +238,6 @@ __all__ = [
     "VALID_ERA5_DATASETS",
     "VALID_CMIP6_SOURCES",
     "VALID_CMIP6_EXPERIMENTS",
-    "VALID_CMIP6_VARIABLES",
     "STRIDE",
     "LATITUDES",
     "LONGITUDES",
@@ -261,7 +248,6 @@ __all__ = [
     "with_era5_dataset",
     "with_cmip6_source",
     "with_cmip6_experiment",
-    "with_cmip6_variable",
     "with_lat_start",
     "with_lon_start",
     "with_output_directory",

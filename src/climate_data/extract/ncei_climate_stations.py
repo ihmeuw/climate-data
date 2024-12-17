@@ -7,7 +7,7 @@ from rra_tools import jobmon
 from rra_tools.cli_tools import with_choice, with_output_directory, with_queue
 from rra_tools.shell_tools import mkdir, wget
 
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 EXTRACTION_YEARS = [str(y) for y in range(1990, 2024)]
 URL_TEMPLATE = (
@@ -16,7 +16,7 @@ URL_TEMPLATE = (
 
 
 def extract_ncei_climate_stations_main(output_dir: str | Path, year: str) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     gz_path = cd_data.ncei_climate_stations / f"{year}.tar.gz"
     if gz_path.exists():
