@@ -1,7 +1,3 @@
-from climate_data.generate.derived_daily import (
-    generate_derived_daily,
-    generate_derived_daily_task,
-)
 from climate_data.generate.historical_daily import (
     generate_historical_daily,
     generate_historical_daily_task,
@@ -27,7 +23,6 @@ RUNNERS = {
     "historical_reference": generate_historical_reference,
     "scenario_inclusion": generate_scenario_inclusion,
     "scenario_daily": generate_scenario_daily,
-    "derived_daily": generate_derived_daily,
     "scenario_annual": generate_scenario_annual,
 }
 
@@ -36,6 +31,5 @@ TASK_RUNNERS = {
     "historical_reference": generate_historical_reference_task,
     "scenario_inclusion": generate_scenario_inclusion,
     "scenario_daily": generate_scenario_daily_task,
-    "derived_daily": generate_derived_daily_task,
     "scenario_annual": generate_scenario_annual_task,
 }

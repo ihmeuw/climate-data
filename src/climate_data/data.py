@@ -1,3 +1,17 @@
+"""
+Climate Data Management
+-----------------------
+
+This module provides a class for managing the climate data used in the project. It includes methods for
+loading and saving data, as well as for accessing the various directories where data is stored. This
+abstraction allows for easy access to the data and ensures that all data is stored in a consistent
+and organized manner. It also provides a central location for managing the data, which makes it easier
+to update and maintain the path structure of the data as needed.
+
+This module generally does not load or process data itself, though some exceptions are made for metadata
+which is generally loaded and cached on disk.
+"""
+
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +24,9 @@ DEFAULT_ROOT = "/mnt/share/erf/climate_downscale/"
 
 
 class ClimateData:
-    def __init__(self, root: str | Path) -> None:
+    """Class for managing the climate data used in the project."""
+
+    def __init__(self, root: str | Path = DEFAULT_ROOT) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / "credentials"
 
@@ -134,7 +150,9 @@ class ClimateData:
 
     def save_training_data(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.training_data / f"{year}.parquet"
-        touch(path, exist_ok=True)
+        if path.exists():
+            path.unlink()
+        touch(path)
         df.to_parquet(path)
 
     def load_training_data(self, year: int | str) -> pd.DataFrame:
@@ -226,7 +244,7 @@ class ClimateData:
     def annual_results_path(
         self, scenario: str, variable: str, year: int | str, draw: int | str | None
     ) -> Path:
-        file_name = f"{year}.nc" if draw is None else f"{year}_{draw}.nc"
+        file_name = f"{year}.nc" if draw is None else f"{year}_{int(draw):0>3}.nc"
         return self.annual_results / scenario / variable / file_name
 
     def save_annual_results(
@@ -239,8 +257,10 @@ class ClimateData:
         encoding_kwargs: dict[str, Any],
     ) -> None:
         path = self.annual_results_path(scenario, variable, year, draw)
+        if path.exists():
+            path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, exist_ok=True)
+        touch(path)
 
         encoding = {
             "dtype": "int16",
@@ -258,7 +278,17 @@ def save_raster(
     num_cores: int = 1,
     **kwargs: Any,
 ) -> None:
-    """Save a raster to a file with standard parameters."""
+    """Save a raster to a file with standard parameters.
+
+    Parameters
+    ----------
+    raster
+        The raster to save.
+    output_path
+        The path to save the raster to.
+    num_cores
+        The number of cores to use for compression.
+    """
     save_params = {
         "tiled": True,
         "blockxsize": 512,
@@ -279,7 +309,23 @@ def save_raster_to_cog(
     num_cores: int = 1,
     resampling: str = "nearest",
 ) -> None:
-    """Save a raster to a COG file."""
+    """Save a raster to a COG file.
+
+    A COG file is a cloud-optimized GeoTIFF that is optimized for use in cloud storage
+    systems. This function saves the raster to a COG file with the specified resampling
+    method.
+
+    Parameters
+    ----------
+    raster
+        The raster to save.
+    output_path
+        The path to save the raster to.
+    num_cores
+        The number of cores to use for compression.
+    resampling
+        The resampling method to use when building the overviews.
+    """
     cog_save_params = {
         "driver": "COG",
         "overview_resampling": resampling,

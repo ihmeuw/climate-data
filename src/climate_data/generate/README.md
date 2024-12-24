@@ -13,8 +13,5 @@ run in several stages:
 3.  Scenario Daily: This produces scenario projections from the CMIP6 data, ensembling
     over a curated set of GCMs and using the historical reference climatologies to
     bias-correct the data.
-4.  Derived Daily: This produces derived climate variables from the daily data, such as
-    humidex and effective temperature. This writes results to the same directories
-    as the daily data.
 5.  Scenario Annual: This produces annualized summaries of the scenario data, such as
     annual averages and extremes.

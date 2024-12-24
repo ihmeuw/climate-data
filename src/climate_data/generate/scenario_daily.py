@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import click
+import numpy as np
 import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
@@ -100,10 +101,10 @@ def get_source_paths(
 
 
 def load_and_shift_longitude(
-    ds_path: str | Path,
+    member_path: str | Path,
     time_slice: slice,
 ) -> xr.Dataset:
-    ds = xr.open_dataset(ds_path).sel(time=time_slice).compute()
+    ds = xr.open_dataset(member_path).sel(time=time_slice).compute()
     if ds.time.size == 0:
         msg = "No data in slice"
         raise KeyError(msg)
@@ -111,6 +112,22 @@ def load_and_shift_longitude(
         ds.assign_coords(lon=(ds.lon + 180) % 360 - 180)
         .sortby("lon")
         .rename({"lat": "latitude", "lon": "longitude"})
+    )
+    return ds
+
+
+def load_and_shift_longitude_and_correct_time(
+    member_path: str | Path,
+    year: str,
+) -> xr.Dataset:
+    time_slice = slice(f"{year}-01-01", f"{year}-12-31")
+    time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+    ds = load_and_shift_longitude(member_path, time_slice)
+    ds = (
+        ds.assign_coords(time=ds.time.dt.floor("D"))
+        .interp_calendar(time_range)
+        .interpolate_na(dim="time", method="nearest", fill_value="extrapolate")
+        .rename({"time": "date"})
     )
     return ds
 
@@ -124,15 +141,16 @@ def load_variable(
             {"time": "date"}
         )
     else:
-        time_slice = slice(f"{year}-01-01", f"{year}-12-31")
-        time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
-        ds = load_and_shift_longitude(member_path, time_slice)
-        ds = (
-            ds.assign_coords(time=ds.time.dt.floor("D"))
-            .interp_calendar(time_range)
-            .interpolate_na(dim="time", method="nearest", fill_value="extrapolate")
-            .rename({"time": "date"})
-        )
+        try:
+            ds = load_and_shift_longitude_and_correct_time(member_path, str(year))
+        except KeyError as e:
+            if int(year) == 2100:  # noqa: PLR2004
+                # Some datasets stop in 2099.  Just reuse the last year
+                ds = load_and_shift_longitude_and_correct_time(member_path, "2099")
+                ds.assign_coords(time=ds.date + np.timedelta64(ds.date.size, "D"))
+            else:
+                raise e
+
     variable = str(next(iter(ds)))
     conversion = CONVERT_MAP[variable]
     ds = conversion(utils.rename_val_column(ds))

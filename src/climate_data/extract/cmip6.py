@@ -1,3 +1,8 @@
+"""
+CMIP6 Data Extraction
+---------------------
+"""
+
 from pathlib import Path
 from typing import Literal, NamedTuple, ParamSpec, TypeVar
 
@@ -8,6 +13,13 @@ from rra_tools import cli_tools, jobmon, shell_tools
 
 from climate_data import cli_options as clio
 from climate_data.data import DEFAULT_ROOT, ClimateData
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+
+######################
+# Define CLI options #
+######################
 
 
 class VariableSpec(NamedTuple):
@@ -26,9 +38,6 @@ CMIP6_VARIABLES = {
     "tos": VariableSpec(273.15, 0.01, table_id="Oday"),
     "pr": VariableSpec(0.0, 1e-9),
 }
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
 
 
 def with_cmip6_variable(
@@ -188,7 +197,7 @@ def extract_cmip6(
             "queue": queue,
             "cores": 1,
             "memory": "10G",
-            "runtime": "600m",
+            "runtime": "3000m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,

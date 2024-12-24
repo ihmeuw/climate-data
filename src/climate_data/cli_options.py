@@ -1,3 +1,12 @@
+"""
+Climate Data CLI Options
+------------------------
+
+This module provides a set of CLI options for extracting climate data from the ERA5 and CMIP6 datasets.
+These options are used to specify the data to extract, such as the year, month, variable, and dataset.
+It also provides global variables representing the full space of valid values for these options.
+"""
+
 from typing import ParamSpec, TypeVar
 
 import click
@@ -18,7 +27,8 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
-VALID_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
+VALID_FULL_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
+VALID_HISTORY_YEARS = [str(y) for y in range(1990, 2021)]
 VALID_REFERENCE_YEARS = VALID_HISTORY_YEARS[-5:]
 VALID_FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 
@@ -28,6 +38,7 @@ def with_year(
     years: list[str],
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
+    """Create a CLI option for selecting a year."""
     return with_choice(
         "year",
         "y",
@@ -58,13 +69,9 @@ VALID_ERA5_VARIABLES = [
     "10m_v_component_of_wind",
     "2m_dewpoint_temperature",
     "2m_temperature",
-    "surface_net_solar_radiation",
-    "surface_net_thermal_radiation",
     "surface_pressure",
-    "surface_solar_radiation_downwards",
-    "surface_thermal_radiation_downwards",
     "total_precipitation",
-    "total_sky_direct_solar_radiation_at_surface",
+    "sea_surface_temperature",
 ]
 
 
@@ -174,12 +181,12 @@ def with_target_variable(
     )
 
 
-VALID_DRAWS = [str(d) for d in range(250)]
+VALID_DRAWS = [str(d) for d in range(100)]
 
 
 def with_draw(
     *,
-    draws: list[str],
+    draws: list[str] = VALID_DRAWS,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
