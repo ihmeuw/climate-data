@@ -2,12 +2,15 @@ name: Build and Deploy Docs
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches:
       - main
+    types:
+      - closed
 
 jobs:
   build-and-deploy-docs:
+    if: ${{ github.event.pull_request.merged }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

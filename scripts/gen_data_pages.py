@@ -90,7 +90,9 @@ by the Copernicus Climate Change Service (C3S) at ECMWF. There are three dataset
 
 """
 
-inclusion_metadata = cdata.load_scenario_inclusion_metadata()
+inclusion_metadata = pd.read_parquet(
+    Path(__file__).parent / "scenario_inclusion_metadata.parquet"
+)
 source_table = inclusion_metadata.groupby("source").sum()
 
 total_counts = pd.concat(

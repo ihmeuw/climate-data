@@ -176,7 +176,9 @@ class ClimateData:
 
     def save_scenario_metadata(self, df: pd.DataFrame) -> None:
         path = self.results_metadata / "scenario_metadata.parquet"
-        touch(path, exist_ok=True)
+        if path.exists():
+            path.unlink()
+        touch(path)
         df.to_parquet(path)
 
     def load_scenario_metadata(self) -> pd.DataFrame:
@@ -184,9 +186,14 @@ class ClimateData:
         return pd.read_parquet(path)
 
     def save_scenario_inclusion_metadata(self, df: pd.DataFrame) -> None:
-        path = self.results_metadata / "scenario_inclusion_metadata.parquet"
-        touch(path, exist_ok=True)
-        df.to_parquet(path)
+        # Need to save to our scripts directory for doc building
+        scripts_root = Path(__file__).parent.parent / "scripts"
+        for root_dir in [self.results_metadata, scripts_root]:
+            path = root_dir / "scenario_inclusion_metadata.parquet"
+            if path.exists():
+                path.unlink()
+            touch(path)
+            df.to_parquet(path)
 
     def load_scenario_inclusion_metadata(self) -> pd.DataFrame:
         path = self.results_metadata / "scenario_inclusion_metadata.parquet"
