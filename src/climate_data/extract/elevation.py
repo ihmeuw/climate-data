@@ -6,7 +6,7 @@ import tqdm
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 API_ENDPOINT = "https://portal.opentopography.org/API/globaldem"
 
@@ -31,7 +31,7 @@ def extract_elevation_main(
     lat_start: int,
     lon_start: int,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
     cred_path = cd_data.credentials_root / "open_topography.txt"
     key = cred_path.read_text().strip()
 

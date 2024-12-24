@@ -1,3 +1,10 @@
+"""
+Climate Data Extraction
+-----------------------
+
+This module contains pipelines for extracting climate data from various sources.
+"""
+
 from climate_data.extract.cmip6 import (
     extract_cmip6,
     extract_cmip6_task,

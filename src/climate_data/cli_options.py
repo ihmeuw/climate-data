@@ -1,3 +1,12 @@
+"""
+Climate Data CLI Options
+------------------------
+
+This module provides a set of CLI options for extracting climate data from the ERA5 and CMIP6 datasets.
+These options are used to specify the data to extract, such as the year, month, variable, and dataset.
+It also provides global variables representing the full space of valid values for these options.
+"""
+
 from typing import ParamSpec, TypeVar
 
 import click
@@ -18,7 +27,8 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
-VALID_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
+VALID_FULL_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
+VALID_HISTORY_YEARS = [str(y) for y in range(1990, 2021)]
 VALID_REFERENCE_YEARS = VALID_HISTORY_YEARS[-5:]
 VALID_FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 
@@ -28,6 +38,7 @@ def with_year(
     years: list[str],
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
+    """Create a CLI option for selecting a year."""
     return with_choice(
         "year",
         "y",
@@ -58,13 +69,9 @@ VALID_ERA5_VARIABLES = [
     "10m_v_component_of_wind",
     "2m_dewpoint_temperature",
     "2m_temperature",
-    "surface_net_solar_radiation",
-    "surface_net_thermal_radiation",
     "surface_pressure",
-    "surface_solar_radiation_downwards",
-    "surface_thermal_radiation_downwards",
     "total_precipitation",
-    "total_sky_direct_solar_radiation_at_surface",
+    "sea_surface_temperature",
 ]
 
 
@@ -98,14 +105,28 @@ def with_era5_dataset(
 
 
 VALID_CMIP6_SOURCES = [
+    "ACCESS-CM2",
+    "AWI-CM-1-1-MR",
+    "BCC-CSM2-MR",
     "CAMS-CSM1-0",
-    "CanESM5",
+    "CESM2-WACCM",
+    "CMCC-CM2-SR5",
+    "CMCC-ESM2",
+    "CNRM-CM6-1",
+    "CNRM-CM6-1-HR",
     "CNRM-ESM2-1",
+    "FGOALS-g3",
     "GFDL-ESM4",
     "GISS-E2-1-G",
+    "IITM-ESM",
+    "INM-CM4-8",
+    "INM-CM5-0",
     "MIROC-ES2L",
     "MIROC6",
+    "MPI-ESM1-2-HR",
+    "MPI-ESM1-2-LR",
     "MRI-ESM2-0",
+    "NorESM2-MM",
 ]
 
 
@@ -123,10 +144,8 @@ def with_cmip6_source(
 
 
 VALID_CMIP6_EXPERIMENTS = [
-    "ssp119",
     "ssp126",
     "ssp245",
-    "ssp370",
     "ssp585",
 ]
 
@@ -148,30 +167,6 @@ def with_cmip6_experiment(
     )
 
 
-VALID_CMIP6_VARIABLES = [
-    "uas",
-    "vas",
-    "hurs",
-    "tas",
-    "tasmin",
-    "tasmax",
-    "pr",
-]
-
-
-def with_cmip6_variable(
-    *,
-    allow_all: bool = False,
-) -> ClickOption[_P, _T]:
-    return with_choice(
-        "cmip6-variable",
-        "x",
-        allow_all=allow_all,
-        choices=VALID_CMIP6_VARIABLES,
-        help="CMIP6 variable to extract.",
-    )
-
-
 def with_target_variable(
     *,
     variable_names: list[str],
@@ -186,12 +181,12 @@ def with_target_variable(
     )
 
 
-VALID_DRAWS = [str(d) for d in range(250)]
+VALID_DRAWS = [str(d) for d in range(100)]
 
 
 def with_draw(
     *,
-    draws: list[str],
+    draws: list[str] = VALID_DRAWS,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
@@ -250,7 +245,6 @@ __all__ = [
     "VALID_ERA5_DATASETS",
     "VALID_CMIP6_SOURCES",
     "VALID_CMIP6_EXPERIMENTS",
-    "VALID_CMIP6_VARIABLES",
     "STRIDE",
     "LATITUDES",
     "LONGITUDES",
@@ -261,7 +255,6 @@ __all__ = [
     "with_era5_dataset",
     "with_cmip6_source",
     "with_cmip6_experiment",
-    "with_cmip6_variable",
     "with_lat_start",
     "with_lon_start",
     "with_output_directory",
