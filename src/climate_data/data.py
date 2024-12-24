@@ -1,3 +1,17 @@
+"""
+Climate Data Management
+-----------------------
+
+This module provides a class for managing the climate data used in the project. It includes methods for
+loading and saving data, as well as for accessing the various directories where data is stored. This
+abstraction allows for easy access to the data and ensures that all data is stored in a consistent
+and organized manner. It also provides a central location for managing the data, which makes it easier
+to update and maintain the path structure of the data as needed.
+
+This module generally does not load or process data itself, though some exceptions are made for metadata
+which is generally loaded and cached on disk.
+"""
+
 from pathlib import Path
 from typing import Any
 
@@ -9,8 +23,10 @@ from rra_tools.shell_tools import mkdir, touch
 DEFAULT_ROOT = "/mnt/share/erf/climate_downscale/"
 
 
-class ClimateDownscaleData:
-    def __init__(self, root: str | Path) -> None:
+class ClimateData:
+    """Class for managing the climate data used in the project."""
+
+    def __init__(self, root: str | Path = DEFAULT_ROOT) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / "credentials"
 
@@ -42,6 +58,32 @@ class ClimateDownscaleData:
     @property
     def extracted_cmip6(self) -> Path:
         return self.extracted_data / "cmip6"
+
+    def load_koppen_geiger_model_inclusion(
+        self, *, return_full_criteria: bool = False
+    ) -> pd.DataFrame:
+        meta_path = self.extracted_cmip6 / "koppen_geiger_model_inclusion.parquet"
+        if not meta_path.exists():
+            df = pd.read_html(
+                "https://www.nature.com/articles/s41597-023-02549-6/tables/3"
+            )[0]
+            df.columns = [  # type: ignore[assignment]
+                "source_id",
+                "member_count",
+                "mean_trend",
+                "std_dev_trend",
+                "transient_climate_response",
+                "equilibrium_climate_sensitivity",
+                "included_raw",
+            ]
+            df["included"] = df["included_raw"].apply({"Yes": True, "No": False}.get)
+            touch(meta_path)
+            df.to_parquet(meta_path)
+
+        df = pd.read_parquet(meta_path)
+        if return_full_criteria:
+            return df
+        return df[["source_id", "included"]]
 
     def load_cmip6_metadata(self) -> pd.DataFrame:
         meta_path = self.extracted_cmip6 / "cmip6-metadata.parquet"
@@ -108,7 +150,9 @@ class ClimateDownscaleData:
 
     def save_training_data(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.training_data / f"{year}.parquet"
-        touch(path, exist_ok=True)
+        if path.exists():
+            path.unlink()
+        touch(path)
         df.to_parquet(path)
 
     def load_training_data(self, year: int | str) -> pd.DataFrame:
@@ -132,7 +176,9 @@ class ClimateDownscaleData:
 
     def save_scenario_metadata(self, df: pd.DataFrame) -> None:
         path = self.results_metadata / "scenario_metadata.parquet"
-        touch(path, exist_ok=True)
+        if path.exists():
+            path.unlink()
+        touch(path)
         df.to_parquet(path)
 
     def load_scenario_metadata(self) -> pd.DataFrame:
@@ -140,16 +186,28 @@ class ClimateDownscaleData:
         return pd.read_parquet(path)
 
     def save_scenario_inclusion_metadata(self, df: pd.DataFrame) -> None:
-        path = self.results_metadata / "scenario_inclusion_metadata.parquet"
-        touch(path, exist_ok=True)
-        df.to_parquet(path)
+        # Need to save to our scripts directory for doc building
+        scripts_root = Path(__file__).parent.parent / "scripts"
+        for root_dir in [self.results_metadata, scripts_root]:
+            path = root_dir / "scenario_inclusion_metadata.parquet"
+            if path.exists():
+                path.unlink()
+            touch(path)
+            df.to_parquet(path)
 
     def load_scenario_inclusion_metadata(self) -> pd.DataFrame:
         path = self.results_metadata / "scenario_inclusion_metadata.parquet"
         return pd.read_parquet(path)
 
-    def daily_results_path(self, scenario: str, variable: str, year: int | str) -> Path:
-        return self.daily_results / scenario / variable / f"{year}.nc"
+    def daily_results_path(
+        self,
+        scenario: str,
+        variable: str,
+        year: int | str,
+        draw: int | str | None = None,
+    ) -> Path:
+        file_name = f"{year}.nc" if draw is None else f"{year}_{draw}.nc"
+        return self.daily_results / scenario / variable / file_name
 
     def save_daily_results(
         self,
@@ -157,9 +215,10 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
+        draw: int | str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        path = self.daily_results_path(scenario, variable, year)
+        path = self.daily_results_path(scenario, variable, year, draw)
         if path.exists():
             path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
@@ -172,6 +231,7 @@ class ClimateDownscaleData:
             "complevel": 1,
         }
         encoding.update(encoding_kwargs)
+
         results_ds.to_netcdf(path, encoding={"value": encoding})
 
     def load_daily_results(
@@ -179,8 +239,9 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
+        draw: int | str | None = None,
     ) -> xr.Dataset:
-        results_path = self.daily_results_path(scenario, variable, year)
+        results_path = self.daily_results_path(scenario, variable, year, draw)
         return xr.open_dataset(results_path)
 
     @property
@@ -188,9 +249,10 @@ class ClimateDownscaleData:
         return self.results / "annual"
 
     def annual_results_path(
-        self, scenario: str, variable: str, year: int | str
+        self, scenario: str, variable: str, year: int | str, draw: int | str | None
     ) -> Path:
-        return self.annual_results / scenario / variable / f"{year}.nc"
+        file_name = f"{year}.nc" if draw is None else f"{year}_{int(draw):0>3}.nc"
+        return self.annual_results / scenario / variable / file_name
 
     def save_annual_results(
         self,
@@ -198,11 +260,14 @@ class ClimateDownscaleData:
         scenario: str,
         variable: str,
         year: int | str,
+        draw: int | str | None,
         encoding_kwargs: dict[str, Any],
     ) -> None:
-        path = self.annual_results_path(scenario, variable, year)
+        path = self.annual_results_path(scenario, variable, year, draw)
+        if path.exists():
+            path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, exist_ok=True)
+        touch(path)
 
         encoding = {
             "dtype": "int16",
@@ -220,7 +285,17 @@ def save_raster(
     num_cores: int = 1,
     **kwargs: Any,
 ) -> None:
-    """Save a raster to a file with standard parameters."""
+    """Save a raster to a file with standard parameters.
+
+    Parameters
+    ----------
+    raster
+        The raster to save.
+    output_path
+        The path to save the raster to.
+    num_cores
+        The number of cores to use for compression.
+    """
     save_params = {
         "tiled": True,
         "blockxsize": 512,
@@ -241,7 +316,23 @@ def save_raster_to_cog(
     num_cores: int = 1,
     resampling: str = "nearest",
 ) -> None:
-    """Save a raster to a COG file."""
+    """Save a raster to a COG file.
+
+    A COG file is a cloud-optimized GeoTIFF that is optimized for use in cloud storage
+    systems. This function saves the raster to a COG file with the specified resampling
+    method.
+
+    Parameters
+    ----------
+    raster
+        The raster to save.
+    output_path
+        The path to save the raster to.
+    num_cores
+        The number of cores to use for compression.
+    resampling
+        The resampling method to use when building the overviews.
+    """
     cog_save_params = {
         "driver": "COG",
         "overview_resampling": resampling,

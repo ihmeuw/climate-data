@@ -1,3 +1,10 @@
+"""
+Climate Data Utilities
+----------------------
+
+Utility functions for working with climate data.
+"""
+
 import numpy as np
 import rasterra as rt
 import xarray as xr
@@ -6,12 +13,31 @@ from affine import Affine
 
 def to_raster(
     ds: xr.DataArray,
-    nodata: float | int,
+    no_data_value: float | int,
     lat_col: str = "lat",
     lon_col: str = "lon",
     crs: str = "EPSG:4326",
 ) -> rt.RasterArray:
-    """Convert an xarray DataArray to a RasterArray."""
+    """Convert an xarray DataArray to a RasterArray.
+
+    Parameters
+    ----------
+    ds
+        The xarray DataArray to convert.
+    no_data_value
+        The value to use for missing data. This should be consistent with the dtype of the data.
+    lat_col
+        The name of the latitude coordinate in the dataset.
+    lon_col
+        The name of the longitude coordinate in the dataset.
+    crs
+        The coordinate reference system of the data.
+
+    Returns
+    -------
+    rt.RasterArray
+        The RasterArray representation of the input data.
+    """
     lat, lon = ds[lat_col].data, ds[lon_col].data
 
     dlat = (lat[1:] - lat[:-1]).mean()
@@ -29,7 +55,7 @@ def to_raster(
         data=ds.data[::-1],
         transform=transform,
         crs=crs,
-        no_data_value=nodata,
+        no_data_value=no_data_value,
     )
 
 
@@ -40,7 +66,31 @@ def make_raster_template(
     resolution: int | float,
     crs: str = "EPSG:4326",
 ) -> rt.RasterArray:
-    """Create a raster template with the specified dimensions and resolution."""
+    """Create a raster template with the specified dimensions and resolution.
+
+    A raster template is a RasterArray with a specified extent, resolution, and CRS. The data
+    values are initialized to zero. This function is useful for creating a template to use
+    when resampling another raster to a common grid.
+
+    Parameters
+    ----------
+    x_min
+        The minimum x-coordinate of the raster.
+    y_min
+        The minimum y-coordinate of the raster.
+    stride
+        The length of one side of the raster in the x and y directions measured in the units
+        of the provided coordinate reference system.
+    resolution
+        The resolution of the raster in the units of the provided coordinate reference system.
+    crs
+        The coordinate reference system of the generated raster.
+
+    Returns
+    -------
+    rt.RasterArray
+        A raster template with the specified dimensions and resolution.
+    """
     tolerance = 1e-12
     evenly_divides = (stride % resolution < tolerance) or (
         resolution - stride % resolution < tolerance

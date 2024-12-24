@@ -1,3 +1,8 @@
+"""
+ERA5 Data Extraction
+--------------------
+"""
+
 import itertools
 import zipfile
 from pathlib import Path
@@ -10,7 +15,7 @@ from rra_tools import jobmon
 from rra_tools.shell_tools import touch
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 
 _NETCDF_VALID_ENCODINGS = {
     "zlib",
@@ -39,7 +44,7 @@ def download_era5_main(
     month: str,
     user: str,
 ) -> None:
-    cddata = ClimateDownscaleData(output_dir)
+    cddata = ClimateData(output_dir)
 
     final_out_path = cddata.extracted_era5_path(
         era5_dataset, era5_variable, year, month
@@ -103,7 +108,7 @@ def unzip_and_compress_era5(
     year: int | str,
     month: str,
 ) -> None:
-    cddata = ClimateDownscaleData(output_dir)
+    cddata = ClimateData(output_dir)
 
     final_out_path = cddata.extracted_era5_path(
         era5_dataset, era5_variable, year, month
@@ -154,7 +159,7 @@ def unzip_and_compress_era5(
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
-@clio.with_year(years=clio.VALID_HISTORY_YEARS)
+@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS)
 @clio.with_month()
 @click.option(
     "--user",
@@ -182,7 +187,7 @@ def download_era5_task(
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
-@clio.with_year(years=clio.VALID_HISTORY_YEARS)
+@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS)
 @clio.with_month()
 def unzip_and_compress_era5_task(
     output_dir: str,
@@ -201,13 +206,21 @@ def unzip_and_compress_era5_task(
 
 
 def build_task_lists(
-    cddata: ClimateDownscaleData,
+    cddata: ClimateData,
     *spec_variables: list[str],
 ) -> tuple[list[tuple[str, ...]], ...]:
     to_download = []
     to_compress = []
     complete = []
     for spec in itertools.product(*spec_variables):
+        dataset, variable, *_ = spec
+        if (
+            variable == "sea_surface_temperature"
+            and dataset != "reanalysis-era5-single-levels"
+        ):
+            # This variable is only available in the single levels dataset
+            continue
+
         final_out_path = cddata.extracted_era5_path(*spec)
         zip_path = final_out_path.with_suffix(".zip")
         uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
@@ -249,7 +262,7 @@ def build_task_lists(
 @clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset(allow_all=True)
 @clio.with_era5_variable(allow_all=True)
-@clio.with_year(years=clio.VALID_HISTORY_YEARS, allow_all=True)
+@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS, allow_all=True)
 @clio.with_month(allow_all=True)
 @clio.with_queue()
 def extract_era5(
@@ -260,7 +273,7 @@ def extract_era5(
     month: str,
     queue: str,
 ) -> None:
-    cddata = ClimateDownscaleData(output_dir)
+    cddata = ClimateData(output_dir)
     cred_path = cddata.credentials_root / "copernicus.yaml"
     credentials = yaml.safe_load(cred_path.read_text())
     users = list(credentials["keys"])
@@ -272,7 +285,7 @@ def extract_era5(
     variables = (
         clio.VALID_ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
     )
-    years = clio.VALID_HISTORY_YEARS if year == clio.RUN_ALL else [year]
+    years = clio.VALID_FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
     months = clio.VALID_MONTHS if month == clio.RUN_ALL else [month]
 
     to_download, to_compress, complete = build_task_lists(

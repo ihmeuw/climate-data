@@ -44,18 +44,17 @@ scikit-learn = "^1.4.2"
 rra-tools = "^1.0.10"
 netcdf4 = "^1.7.2"
 pyarrow = "^16.0.0"
-types-requests = "^2.31.0.20240406"
-types-tqdm = "^4.66.0.20240417"
 gcsfs = "^2024.6.0"
 zarr = "^2.18.2"
-types-pyyaml = "^6.0.12.20240311"
 dask = "^2024.5.2"
-pandas-stubs = "^2.2.3.241009"
+lxml = "^5.3.0"
+
 
 [tool.poetry.group.dev.dependencies]
 mkdocstrings = {version = ">=0.23", extras = ["python"]}
 mkdocs-material = "*"
 mkdocs-table-reader-plugin = "*"
+mkdocs-gen-files = "^0.5.0"
 mypy = "*"
 pre-commit = "*"
 pymdown-extensions = "*"
@@ -64,6 +63,13 @@ pytest-github-actions-annotate-failures = "*"
 pytest-cov = "*"
 python-kacl = "*"
 ruff = ">=0.2.0"
+pandas-stubs = "^2.2.3.241009"
+types-pyyaml = "^6.0.12.20240311"
+types-requests = "^2.31.0.20240406"
+types-tqdm = "^4.66.0.20240417"
+mkdocs-literate-nav = "^0.6.1"
+mkdocs-section-index = "^0.3.9"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -76,7 +82,6 @@ cdtask = "climate_data.cli:cdtask"
 [tool.ruff]
 target-version = "py310" # The lowest supported version
 exclude = [
-    "temperature",
 ]
 
 [tool.ruff.lint]
@@ -86,7 +91,6 @@ exclude = [
 # For individual ignore cases, prefer inline `# noqa`s within the code.
 select = ["ALL"]
 exclude = [
-    "temperature",
 ]
 ignore = [
     "COM812",   # flake8 missing trailing comma, formatter handles
@@ -105,6 +109,7 @@ ignore = [
     "FBT001",   # Boolean positional args are super common in clis
     "FBT002",   # Boolean positional args are super common in clis
     "PD901",    # Generic df names are fine
+    "S311",     # Not using random numbers for crypto purposes
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -112,6 +117,9 @@ ignore = [
     "S101",     # "Use of `assert` detected"
     "ARG",      # "Unused function argument". Fixtures are often unused.
     "S105",     # "Possible hardcoded password".
+]
+"scripts/**" = [
+    "INP001",   # "Scripts are not part of a package."
 ]
 
 [tool.ruff.lint.mccabe]
@@ -148,7 +156,6 @@ exclude_lines = [
 strict = true  # See all the enabled flags `mypy --help | grep -A 10 'Strict mode'`
 disallow_any_unimported = true
 exclude = [
-    "temperature",
 ]
 
 # If you need to ignore something for some specific module,

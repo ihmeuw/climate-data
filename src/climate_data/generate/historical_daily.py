@@ -8,7 +8,7 @@ import xarray as xr
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 from climate_data.generate import utils
 
 # Map from source variable to a unit conversion function
@@ -17,13 +17,8 @@ CONVERT_MAP = {
     "10m_v_component_of_wind": utils.scale_wind_speed_height,
     "2m_dewpoint_temperature": utils.kelvin_to_celsius,
     "2m_temperature": utils.kelvin_to_celsius,
-    "surface_net_solar_radiation": utils.identity,
-    "surface_net_thermal_radiation": utils.identity,
     "surface_pressure": utils.identity,
-    "surface_solar_radiation_downwards": utils.identity,
-    "surface_thermal_radiation_downwards": utils.identity,
     "total_precipitation": utils.meter_to_millimeter,
-    "total_sky_direct_solar_radiation_at_surface": utils.identity,
 }
 
 # Map from target variable to:
@@ -59,8 +54,8 @@ TRANSFORM_MAP = {
     "total_precipitation": utils.Transform(
         source_variables=["total_precipitation"],
         transform_funcs={
-            "land": [utils.daily_max],
-            "single-levels": [utils.daily_sum],
+            "reanalysis-era5-land": [utils.daily_max],
+            "reanalysis-era5-single-levels": [utils.daily_sum],
         },
         encoding_scale=0.1,
     ),
@@ -68,7 +63,10 @@ TRANSFORM_MAP = {
 
 
 def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
-    ds = xr.open_dataset(ds_path).chunk(time=24)
+    ds = xr.open_dataset(ds_path)
+    if "valid_time" in ds.coords:
+        ds = ds.rename({"valid_time": "time"})
+    ds = ds.chunk(time=24)
     with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
         ds = ds.assign_coords(longitude=(ds.longitude + 180) % 360 - 180).sortby(
             "longitude"
@@ -77,24 +75,14 @@ def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
 
 
 def load_variable(
-    cd_data: ClimateDownscaleData,
+    cd_data: ClimateData,
     variable: str,
     year: str,
     month: str,
-    dataset: str = "single-levels",
+    dataset: str = "era5-single-levels",
 ) -> xr.Dataset:
     path = cd_data.extracted_era5_path(dataset, variable, year, month)
-    if dataset == "land" and not path.exists():
-        if variable != "total_sky_direct_solar_radiation_at_surface":
-            # We only fallback for the one dataset, otherwise extraction failed.
-            msg = f"Land dataset not found for {variable}. Extraction likely failed."
-            raise ValueError(msg)
-        # If the land dataset doesn't exist, fall back to the single-levels dataset
-        path = cd_data.extracted_era5_path("single-levels", variable, year, month)
-        ds = load_and_shift_longitude(path)
-        # We expect this to already be in the correct grid, so interpolate.
-        ds = utils.interpolate_to_target_latlon(ds)
-    elif dataset == "land":
+    if dataset == "reanalysis-era5-land":
         ds = load_and_shift_longitude(path)
         # There are some slight numerical differences in the lat/long for some of
         # the land datasets. They are gridded consistently, so just tweak the
@@ -114,7 +102,7 @@ def generate_historical_daily_main(
     year: str,
     target_variable: str,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
     transform = TRANSFORM_MAP[target_variable]
     datasets = []
@@ -122,11 +110,11 @@ def generate_historical_daily_main(
         month_str = f"{month:02d}"
         print(f"loading single-levels for {month_str}")
         single_level = [
-            load_variable(cd_data, sv, year, month_str, "single-levels")
+            load_variable(cd_data, sv, year, month_str, "reanalysis-era5-single-levels")
             for sv in transform.source_variables
         ]
         print("collapsing")
-        ds = transform(*single_level, key="single-levels").compute()
+        ds = transform(*single_level, key="reanalysis-era5-single-levels").compute()
         # collapsing often screws the date dtype, so fix it
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
@@ -135,12 +123,12 @@ def generate_historical_daily_main(
 
         print(f"loading land for {month_str}")
         land = [
-            load_variable(cd_data, sv, year, month_str, "land")
+            load_variable(cd_data, sv, year, month_str, "reanalysis-era5-land")
             for sv in transform.source_variables
         ]
         print("collapsing")
         with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
-            ds_land = transform(*land, key="land").compute()
+            ds_land = transform(*land, key="reanalysis-era5-land").compute()
         ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
         print("combining")
@@ -154,13 +142,14 @@ def generate_historical_daily_main(
         scenario="historical",
         variable=target_variable,
         year=year,
+        draw=None,
         encoding_kwargs=transform.encoding_kwargs,
     )
 
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=clio.VALID_HISTORY_YEARS)
+@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS)
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
 def generate_historical_daily_task(
     output_dir: str,
@@ -172,7 +161,7 @@ def generate_historical_daily_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=clio.VALID_HISTORY_YEARS, allow_all=True)
+@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS, allow_all=True)
 @clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
 @clio.with_queue()
 @clio.with_overwrite()
@@ -183,9 +172,9 @@ def generate_historical_daily(
     queue: str,
     overwrite: bool,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
 
-    years = clio.VALID_HISTORY_YEARS if year == clio.RUN_ALL else [year]
+    years = clio.VALID_FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL

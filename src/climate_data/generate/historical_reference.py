@@ -3,7 +3,7 @@ import xarray as xr
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 from climate_data.generate.historical_daily import (
     TRANSFORM_MAP,
 )
@@ -13,7 +13,7 @@ def generate_historical_reference_main(
     output_dir: str,
     target_variable: str,
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
     paths = [
         cd_data.daily_results_path("historical", target_variable, year)
         for year in clio.VALID_REFERENCE_YEARS
@@ -47,6 +47,7 @@ def generate_historical_reference_main(
         scenario="historical",
         variable=target_variable,
         year="reference",
+        draw=None,
         encoding_kwargs=encoding_kwargs,
     )
 

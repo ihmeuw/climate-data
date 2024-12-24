@@ -7,7 +7,7 @@ import rasterra as rt
 from rra_tools import jobmon
 
 from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateDownscaleData
+from climate_data.data import DEFAULT_ROOT, ClimateData
 from climate_data.utils import make_raster_template
 
 PAD = 1
@@ -15,7 +15,7 @@ STRIDE = clio.STRIDE
 
 
 def load_elevation(
-    cd_data: ClimateDownscaleData,
+    cd_data: ClimateData,
     latitudes: Sequence[int],
     longitudes: Sequence[int],
 ) -> rt.RasterArray:
@@ -56,7 +56,7 @@ def load_elevation(
 
 
 def load_lcz_data(
-    cd_data: ClimateDownscaleData, latitudes: Sequence[int], longitudes: Sequence[int]
+    cd_data: ClimateData, latitudes: Sequence[int], longitudes: Sequence[int]
 ) -> rt.RasterArray:
     path = cd_data.rub_local_climate_zones / "lcz_filter_v3.tif"
     bounds = (longitudes[0], latitudes[0], longitudes[-1], latitudes[-1])
@@ -66,7 +66,7 @@ def load_lcz_data(
 def prepare_predictors_main(
     output_dir: str | Path, lat_start: int, lon_start: int
 ) -> None:
-    cd_data = ClimateDownscaleData(output_dir)
+    cd_data = ClimateData(output_dir)
     predictors = {}
 
     longitudes = range(lon_start - PAD, lon_start + STRIDE + PAD)
