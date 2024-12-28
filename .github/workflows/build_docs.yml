@@ -10,12 +10,12 @@ on:
 
 jobs:
   build-and-deploy-docs:
-    if: ${{ github.event.pull_request.merged }}
+    if: ${{ github.event.pull_request.merged }} or ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
-      # - uses: actions/checkout@v4
-      #   with:
-      #     token: ${{ secrets.GH_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
       - uses: ./.github/actions/python-poetry-env
       - name: Deploy docs
         run: poetry run mkdocs gh-deploy --force
