@@ -186,7 +186,7 @@ prohibitively expensive.
 
     - Daily Storage Root: `{cdata.daily_results}`
     - Naming Convention: `{{SCENARIO}}/{{DAILY_VARIABLE}}/{{YEAR}}.nc` (historical data only)
-        - `{{SCENARIO}}`: Generally, only historical data is available at the daily level, so this will be `historical`. 
+        - `{{SCENARIO}}`: Generally, only historical data is available at the daily level, so this will be `historical`.
         - `{{DAILY_VARIABLE}}`: The name of the variable being stored.
         - `{{YEAR}}`: The year of the data being stored.
     - Annual Storage Root: `{cdata.results}`

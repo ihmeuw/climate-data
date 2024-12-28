@@ -11,6 +11,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -189,9 +191,7 @@ def generate_scenario_daily_main(
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
 
-    source_paths = get_source_paths(
-        cdata, transform.source_variables, cmip6_experiment
-    )
+    source_paths = get_source_paths(cdata, transform.source_variables, cmip6_experiment)
 
     print("loading historical reference")
     historical_reference = cdata.load_daily_results(

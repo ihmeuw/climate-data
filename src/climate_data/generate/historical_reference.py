@@ -4,6 +4,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -58,7 +60,6 @@ def generate_historical_reference_main(
 @click.command()  # type: ignore[arg-type]
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_output_directory(cdc.MODEL_ROOT)
-
 def generate_historical_reference_task(
     target_variable: str,
     output_dir: str,

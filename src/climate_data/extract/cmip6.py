@@ -12,6 +12,8 @@ from rra_tools import jobmon, shell_tools
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -40,7 +42,7 @@ def extract_cmip6_main(
     cdata = ClimateData(output_dir)
     meta = cdata.load_cmip6_metadata()
 
-    *_, offset, scale, table_id =  cdc.CMIP6_VARIABLES.get(cmip6_variable)
+    *_, offset, scale, table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
 
     mask = (
         (meta.source_id == cmip6_source)
@@ -106,10 +108,10 @@ def extract_cmip6_task(
     overwrite: bool,
 ) -> None:
     extract_cmip6_main(
-        cmip6_variable, 
-        cmip6_experiment, 
+        cmip6_variable,
+        cmip6_experiment,
         cmip6_source,
-        output_dir, 
+        output_dir,
         overwrite,
     )
 
@@ -138,14 +140,16 @@ def extract_cmip6(
     capture model inclusion criteria as it does not account for the year range avaialable
     in the data. This determiniation is made when we proccess the data in later steps.
     """
-    sources = (
-        cdc.CMIP6_SOURCES if cmip6_source == clio.RUN_ALL else [cmip6_source]
-    )
+    sources = cdc.CMIP6_SOURCES if cmip6_source == clio.RUN_ALL else [cmip6_source]
     experiments = (
-        cdc.CMIP6_EXPERIMENTS if cmip6_experiment == clio.RUN_ALL else [cmip6_experiment]
+        cdc.CMIP6_EXPERIMENTS
+        if cmip6_experiment == clio.RUN_ALL
+        else [cmip6_experiment]
     )
     variables = (
-        cdc.CMIP6_VARIABLES.names() if cmip6_variable == clio.RUN_ALL else [cmip6_variable]
+        cdc.CMIP6_VARIABLES.names()
+        if cmip6_variable == clio.RUN_ALL
+        else [cmip6_variable]
     )
 
     overwrite_arg = {"overwrite": None} if overwrite else {}

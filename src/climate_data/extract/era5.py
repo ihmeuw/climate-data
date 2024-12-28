@@ -16,6 +16,8 @@ from rra_tools.shell_tools import touch
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -49,9 +51,7 @@ def download_era5_main(
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    final_out_path = cdata.extracted_era5_path(
-        era5_dataset, era5_variable, year, month
-    )
+    final_out_path = cdata.extracted_era5_path(era5_dataset, era5_variable, year, month)
     download_path = final_out_path.with_suffix(".zip")
     data_format, download_format = "netcdf", "zip"
 
@@ -113,9 +113,7 @@ def unzip_and_compress_era5(
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    final_out_path = cdata.extracted_era5_path(
-        era5_dataset, era5_variable, year, month
-    )
+    final_out_path = cdata.extracted_era5_path(era5_dataset, era5_variable, year, month)
 
     zip_path = final_out_path.with_suffix(".zip")
     check_zipfile(zip_path)
@@ -184,7 +182,6 @@ def download_era5_task(
 
 
 @click.command()  # type: ignore[arg-type]
-
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
 @clio.with_month()
@@ -280,12 +277,8 @@ def extract_era5(
     users = list(credentials["keys"])
     jobs_per_user = 20
 
-    datasets = (
-        cdc.ERA5_DATASETS if era5_dataset == clio.RUN_ALL else [era5_dataset]
-    )
-    variables = (
-        cdc.ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
-    )
+    datasets = cdc.ERA5_DATASETS if era5_dataset == clio.RUN_ALL else [era5_dataset]
+    variables = cdc.ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
     years = cdc.FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
     months = cdc.MONTHS if month == clio.RUN_ALL else [month]
 
