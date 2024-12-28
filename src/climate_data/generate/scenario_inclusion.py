@@ -65,9 +65,7 @@ def generate_scenario_inclusion_main(
         .reset_index()
     )
 
-    inclusion_df["include"] = inclusion_df.valid_scenarios == len(
-        clio.VALID_CMIP6_EXPERIMENTS
-    )
+    inclusion_df["include"] = inclusion_df.valid_scenarios == len(cdc.CMIP6_EXPERIMENTS)
     inclusion_df = (
         inclusion_df.loc[inclusion_df.include]
         .set_index(["source", "variant", "variable"])

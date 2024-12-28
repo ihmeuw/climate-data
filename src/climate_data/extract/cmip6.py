@@ -158,8 +158,8 @@ def extract_cmip6(
         runner="cdtask",
         task_name="extract cmip6",
         node_args={
-            "cmip6-source": sources,
-            "cmip6-experiment": experiments,
+            "cmip6-source": list(sources),
+            "cmip6-experiment": list(experiments),
             "cmip6-variable": variables,
         },
         task_args={

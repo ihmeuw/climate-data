@@ -25,7 +25,7 @@ def extract_ncei_climate_stations_main(year: int | str, output_dir: str | Path) 
     gz_path = cdata.ncei_climate_stations / f"{year}.tar.gz"
     if gz_path.exists():
         gz_path.unlink()
-    year_dir = cdata.ncei_climate_stations / year
+    year_dir = cdata.ncei_climate_stations / str(year)
     mkdir(year_dir, exist_ok=True)
 
     url = URL_TEMPLATE.format(year=year)

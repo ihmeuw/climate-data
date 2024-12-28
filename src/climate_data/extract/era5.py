@@ -5,6 +5,7 @@ ERA5 Data Extraction
 
 import itertools
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
 
 import cdsapi
@@ -205,7 +206,7 @@ def unzip_and_compress_era5_task(
 
 def build_task_lists(
     cdata: ClimateData,
-    *spec_variables: list[str],
+    *spec_variables: Sequence[str],
 ) -> tuple[list[tuple[str, ...]], ...]:
     to_download = []
     to_compress = []

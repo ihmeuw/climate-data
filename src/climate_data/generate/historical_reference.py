@@ -21,7 +21,7 @@ def generate_historical_reference_main(
     cdata = ClimateData(output_dir)
     paths = [
         cdata.daily_results_path("historical", target_variable, year)
-        for year in clio.VALID_REFERENCE_YEARS
+        for year in cdc.REFERENCE_YEARS
     ]
     print(f"Building reference data from: {len(paths)} files.")
 

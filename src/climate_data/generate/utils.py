@@ -299,16 +299,17 @@ class Transform:
     def __call__(self, *datasets: xr.Dataset, key: str | None = None) -> xr.Dataset:
         if len(datasets) > 1:
             # Enforce consistency in the spatial dimensions of the input datasets
-            datasets = list(datasets)
-            target_lat = datasets[0].latitude
-            target_lon = datasets[0].longitude
-            for i in range(1, len(datasets)):
-                datasets[i] = interpolate_to_target_latlon(
-                    datasets[i],
+            datasets_list = list(datasets)
+            target_lat = datasets_list[0].latitude
+            target_lon = datasets_list[0].longitude
+            for i in range(1, len(datasets_list)):
+                datasets_list[i] = interpolate_to_target_latlon(
+                    datasets_list[i],
                     method="linear",
                     target_lon=target_lon,
                     target_lat=target_lat,
                 )
+            datasets = tuple(datasets_list)
 
         if isinstance(self.transform_funcs, dict):
             if key is None:

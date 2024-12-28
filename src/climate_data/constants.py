@@ -166,7 +166,7 @@ class _CMIP6Variables(NamedTuple):
         return [v.name for v in self]
 
     def get(self, name: str) -> CMIP6Variable:
-        return getattr(self, name)
+        return getattr(self, name)  # type: ignore[no-any-return]
 
     def to_dict(self) -> dict[str, CMIP6Variable]:
         return {v.name: v for v in self}

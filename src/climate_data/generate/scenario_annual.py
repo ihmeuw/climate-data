@@ -134,7 +134,7 @@ def generate_scenario_annual_main(
     if scenario == "historical":
         # Symlink all the other draws to the same file
         source = cdata.annual_results_path(scenario, target_variable, year, "0")
-        for d in clio.VALID_DRAWS:
+        for d in cdc.DRAWS:
             if d == "0":
                 continue
             destination = cdata.annual_results_path(scenario, target_variable, year, d)

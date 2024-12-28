@@ -165,8 +165,8 @@ def prepare_predictors(output_dir: str, queue: str) -> None:
         runner="cdtask",
         task_name="downscale prepare_predictors",
         node_args={
-            "lat-start": clio.LATITUDES,
-            "lon-start": clio.LONGITUDES,
+            "lat-start": LATITUDES,
+            "lon-start": LONGITUDES,
         },
         task_args={
             "output-dir": output_dir,

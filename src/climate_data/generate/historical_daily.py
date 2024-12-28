@@ -182,7 +182,7 @@ def generate_historical_daily_main(
     assert set(ds_year.coords) == {"date", "latitude", "longitude"}
     assert set(ds_year.data_vars) == {"value"}
     assert ds_year["value"].dtype == "float32"
-    assert ds_year["value"].notnull().all().item()
+    assert ds_year["value"].notna().all().item()
 
     cdata.save_daily_results(
         ds_year,
