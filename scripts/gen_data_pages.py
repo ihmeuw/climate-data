@@ -22,7 +22,7 @@ the available climate variables.
 
 ## Data Organization
 
-The root of the climate data is located at `{cdata.root}`. There are {len([p for p in cdata.root.glob('*') if p.is_dir()])}
+The root of the climate data is located at `{cdata.root}`. There are several
 subdirectories in the root directory, but only the extracted data directory `{cdata.extracted_data.stem}` and the results
 directory `{cdata.results.stem}` are relevant to users of the database.
 
@@ -40,7 +40,6 @@ The file tree with subdirectories is as follows:
     ├── {cdata.annual_results.stem}/
     │   └── {{SCENARIO}}/
     │       └── {{ANNUAL_VARIABLE}}/
-    │           ├── {{YEAR}}.nc
     │           └── {{YEAR}}_{{DRAW}}.nc
     ├── {cdata.daily_results.stem}/
     │   └── {{SCENARIO}}/
@@ -50,7 +49,7 @@ The file tree with subdirectories is as follows:
 
 ```
 
-Specifics of the values the markers above take on can be found in the following sections.
+The file patterns will be explained in more detail in the following sections.
 """
 
 extraction_header_content = """## Extracted Data
@@ -63,7 +62,7 @@ additional data sources that have been extracted to serve as covariates in a for
 era5_page_content = f"""### ERA5 Data
 
 The [ECMWF Reanalysis v5 (ERA5)](https://www.ecmwf.int/en/forecasts/dataset/ecmwf-reanalysis-v5) is the
-fifth generation ECMWF atmospheric reanalysis of the global climate covering the period from January 1940 to present. ERA5 is produced
+fifth generation ECMWF atmospheric reanalysis of the global climate covering the period from January 1950 to present. ERA5 is produced
 by the Copernicus Climate Change Service (C3S) at ECMWF. There are three datasets of note:
 
   - [The Complete ERA5 global atmospheric reanalysis](https://cds.climate.copernicus.eu/datasets/reanalysis-era5-complete?tab=overview):
@@ -182,6 +181,16 @@ processed_data_content = f"""## Processed Data
 The processed data is stored in the `{cdata.results}` directory, organized by scenario, variable, and year.
 We generally only generate annual results, as storing daily results for all models and all variables would be
 prohibitively expensive.
+
+### Storage and Naming Conventions
+
+    - Daily Storage Root: `{cdata.daily_results}`
+    - Naming Convention: `{{SCENARIO}}/{{DAILY_VARIABLE}}/{{YEAR}}.nc` (historical data only)
+        - `{{SCENARIO}}`: Generally, only historical data is available at the daily level, so this will be `historical`. 
+        - `{{DAILY_VARIABLE}}`: The name of the variable being stored.
+        - `{{YEAR}}`: The year of the data being stored.
+    - Annual Storage Root: `{cdata.results}`
+    - Naming Convention: `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}.nc` or `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}_{{DRAW}}.nc`
 
 ### Pipeline Stages
 

@@ -23,19 +23,15 @@ from rra_tools.cli_tools import (
     with_verbose,
 )
 
+from climate_data import constants as cdc
+
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 
 
-VALID_FULL_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
-VALID_HISTORY_YEARS = [str(y) for y in range(1990, 2021)]
-VALID_REFERENCE_YEARS = VALID_HISTORY_YEARS[-5:]
-VALID_FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
-
-
 def with_year(
-    *,
     years: list[str],
+    *,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     """Create a CLI option for selecting a year."""
@@ -48,9 +44,6 @@ def with_year(
     )
 
 
-VALID_MONTHS = [f"{i:02d}" for i in range(1, 13)]
-
-
 def with_month(
     *,
     allow_all: bool = False,
@@ -59,20 +52,9 @@ def with_month(
         "month",
         "m",
         allow_all=allow_all,
-        choices=VALID_MONTHS,
+        choices=cdc.MONTHS,
         help="Month to extract data for.",
     )
-
-
-VALID_ERA5_VARIABLES = [
-    "10m_u_component_of_wind",
-    "10m_v_component_of_wind",
-    "2m_dewpoint_temperature",
-    "2m_temperature",
-    "surface_pressure",
-    "total_precipitation",
-    "sea_surface_temperature",
-]
 
 
 def with_era5_variable(
@@ -83,12 +65,9 @@ def with_era5_variable(
         "era5-variable",
         "x",
         allow_all=allow_all,
-        choices=VALID_ERA5_VARIABLES,
+        choices=cdc.ERA5_VARIABLES,
         help="Variable to extract.",
     )
-
-
-VALID_ERA5_DATASETS = ["reanalysis-era5-land", "reanalysis-era5-single-levels"]
 
 
 def with_era5_dataset(
@@ -99,35 +78,9 @@ def with_era5_dataset(
         "era5-dataset",
         "d",
         allow_all=allow_all,
-        choices=VALID_ERA5_DATASETS,
+        choices=cdc.ERA5_DATASETS,
         help="Dataset to extract.",
     )
-
-
-VALID_CMIP6_SOURCES = [
-    "ACCESS-CM2",
-    "AWI-CM-1-1-MR",
-    "BCC-CSM2-MR",
-    "CAMS-CSM1-0",
-    "CESM2-WACCM",
-    "CMCC-CM2-SR5",
-    "CMCC-ESM2",
-    "CNRM-CM6-1",
-    "CNRM-CM6-1-HR",
-    "CNRM-ESM2-1",
-    "FGOALS-g3",
-    "GFDL-ESM4",
-    "GISS-E2-1-G",
-    "IITM-ESM",
-    "INM-CM4-8",
-    "INM-CM5-0",
-    "MIROC-ES2L",
-    "MIROC6",
-    "MPI-ESM1-2-HR",
-    "MPI-ESM1-2-LR",
-    "MRI-ESM2-0",
-    "NorESM2-MM",
-]
 
 
 def with_cmip6_source(
@@ -138,38 +91,40 @@ def with_cmip6_source(
         "cmip6-source",
         "s",
         allow_all=allow_all,
-        choices=VALID_CMIP6_SOURCES,
+        choices=cdc.CMIP6_SOURCES,
         help="CMIP6 source to extract.",
     )
-
-
-VALID_CMIP6_EXPERIMENTS = [
-    "ssp126",
-    "ssp245",
-    "ssp585",
-]
 
 
 def with_cmip6_experiment(
     *,
     allow_all: bool = False,
-    allow_historical: bool = False,
 ) -> ClickOption[_P, _T]:
-    choices = VALID_CMIP6_EXPERIMENTS[:]
-    if allow_historical:
-        choices.append("historical")
     return with_choice(
         "cmip6-experiment",
         "e",
         allow_all=allow_all,
-        choices=choices,
+        choices=cdc.CMIP6_EXPERIMENTS,
         help="CMIP6 experiment to extract.",
     )
 
 
-def with_target_variable(
+def with_cmip6_variable(
     *,
+    allow_all: bool = False,
+) -> ClickOption[_P, _T]:
+    return with_choice(
+        "cmip6-variable",
+        "x",
+        allow_all=allow_all,
+        choices=[v.name for v in cdc.CMIP6_VARIABLES],
+        help="CMIP6 variable to extract.",
+    )
+
+
+def with_target_variable(
     variable_names: list[str],
+    *,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
@@ -181,49 +136,27 @@ def with_target_variable(
     )
 
 
-VALID_DRAWS = [str(d) for d in range(100)]
-
-
 def with_draw(
     *,
-    draws: list[str] = VALID_DRAWS,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
         "draw",
-        "d",
         allow_all=allow_all,
-        choices=draws,
-        help="Draw to extract data for.",
+        choices=cdc.DRAWS,
+        help="Draw to process.",
     )
 
 
-STRIDE = 30
-LATITUDES = [str(lat) for lat in range(-90, 90, STRIDE)]
-LONGITUDES = [str(lon) for lon in range(-180, 180, STRIDE)]
-
-
-def with_lat_start(
+def with_scenario(
     *,
     allow_all: bool = False,
 ) -> ClickOption[_P, _T]:
     return with_choice(
-        "lat-start",
+        "scenario",
         allow_all=allow_all,
-        choices=LATITUDES,
-        help="Latitude of the top-left corner of the tile.",
-    )
-
-
-def with_lon_start(
-    *,
-    allow_all: bool = False,
-) -> ClickOption[_P, _T]:
-    return with_choice(
-        "lon-start",
-        allow_all=allow_all,
-        choices=LONGITUDES,
-        help="Longitude of the top-left corner of the tile.",
+        choices=cdc.SCENARIOS,
+        help="Scenario to process.",
     )
 
 
@@ -236,19 +169,7 @@ def with_overwrite() -> ClickOption[_P, _T]:
 
 
 __all__ = [
-    "LATITUDES",
-    "LONGITUDES",
     "RUN_ALL",
-    "STRIDE",
-    "VALID_CMIP6_EXPERIMENTS",
-    "VALID_CMIP6_SOURCES",
-    "VALID_DRAWS",
-    "VALID_ERA5_DATASETS",
-    "VALID_ERA5_VARIABLES",
-    "VALID_FORECAST_YEARS",
-    "VALID_HISTORY_YEARS",
-    "VALID_MONTHS",
-    "VALID_REFERENCE_YEARS",
     "ClickOption",
     "with_choice",
     "with_cmip6_experiment",
@@ -258,14 +179,16 @@ __all__ = [
     "with_era5_dataset",
     "with_era5_variable",
     "with_input_directory",
-    "with_lat_start",
-    "with_lon_start",
     "with_month",
     "with_num_cores",
     "with_output_directory",
     "with_overwrite",
+    "with_overwrite",
+    "with_progress_bar",
     "with_progress_bar",
     "with_queue",
+    "with_scenario",
+    "with_target_variable",
     "with_verbose",
     "with_year",
 ]

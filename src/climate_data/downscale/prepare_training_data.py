@@ -7,15 +7,18 @@ import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 
 
 def load_and_clean_climate_stations(
-    cd_data: ClimateData,
+    cdata: ClimateData,
     year: int | str,
 ) -> pd.DataFrame:
-    climate_stations = cd_data.load_ncei_climate_stations(year)
+    climate_stations = cdata.load_ncei_climate_stations(year)
     column_map = {
         "DATE": "date",
         "LATITUDE": "lat",
@@ -40,7 +43,7 @@ def load_and_clean_climate_stations(
 
 
 def get_era5_temperature(
-    cd_data: ClimateData,
+    cdata: ClimateData,
     year: int | str,
     coords: dict[str, npt.NDArray[np.float64]],
 ) -> npt.NDArray[np.float64]:
@@ -48,7 +51,7 @@ def get_era5_temperature(
     lon = xr.DataArray(coords["lon"], dims=["points"])
     time = xr.DataArray(coords["date"], dims=["points"])
 
-    era5 = cd_data.load_daily_results("historical", "tas", year)
+    era5 = cdata.load_daily_results("historical", "tas", year)
     era5 = (
         era5.assign_coords(longitude=(((era5.longitude + 180) % 360) - 180))
         .sortby(["latitude", "longitude"])
@@ -62,23 +65,23 @@ def get_era5_temperature(
     return era5["value"].to_numpy()
 
 
-def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
-    cd_data = ClimateData(output_dir)
+def prepare_training_data_main(year: int | str, output_dir: str | Path) -> None:
+    cdata = ClimateData(output_dir)
 
-    data = load_and_clean_climate_stations(cd_data, year)
+    data = load_and_clean_climate_stations(cdata, year)
     coords = {
         "lon": data["lon"].to_numpy(),
         "lat": data["lat"].to_numpy(),
         "date": data["date"].to_numpy(),
     }
 
-    data["era5_temperature"] = get_era5_temperature(cd_data, year, coords)
+    data["era5_temperature"] = get_era5_temperature(cdata, year, coords)
 
     # Elevation pieces
-    data["target_elevation"] = cd_data.load_predictor("elevation_target").select(
+    data["target_elevation"] = cdata.load_predictor("elevation_target").select(
         coords["lon"], coords["lat"]
     )
-    data["era5_elevation"] = cd_data.load_predictor("elevation_era5").select(
+    data["era5_elevation"] = cdata.load_predictor("elevation_era5").select(
         coords["lon"], coords["lat"]
     )
 
@@ -90,32 +93,32 @@ def prepare_training_data_main(output_dir: str | Path, year: str) -> None:
     ]
 
     # Local climate zone
-    data["target_lcz"] = cd_data.load_predictor("lcz_target").select(
+    data["target_lcz"] = cdata.load_predictor("lcz_target").select(
         coords["lon"], coords["lat"]
     )
-    data["era5_lcz"] = cd_data.load_predictor("lcz_era5").select(
+    data["era5_lcz"] = cdata.load_predictor("lcz_era5").select(
         coords["lon"], coords["lat"]
     )
 
-    cd_data.save_training_data(data, year)
+    cdata.save_training_data(data, year)
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=clio.VALID_HISTORY_YEARS)
-def prepare_training_data_task(output_dir: str, year: str) -> None:
-    prepare_training_data_main(output_dir, year)
+@clio.with_year(years=cdc.FULL_HISTORY_YEARS)
+@clio.with_output_directory(cdc.MODEL_ROOT)
+def prepare_training_data_task(year: str, output_dir: str) -> None:
+    prepare_training_data_main(year, output_dir)
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def prepare_training_data(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
         runner="cdtask",
         task_name="downscale prepare_training_data",
         node_args={
-            "year": clio.VALID_HISTORY_YEARS,
+            "year": cdc.FULL_HISTORY_YEARS,
         },
         task_args={
             "output-dir": output_dir,

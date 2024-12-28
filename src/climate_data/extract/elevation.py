@@ -5,8 +5,13 @@ import requests
 import tqdm
 from rra_tools import jobmon
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+)
+from climate_data import (
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 
 API_ENDPOINT = "https://portal.opentopography.org/API/globaldem"
 
@@ -26,13 +31,13 @@ FETCH_SIZE = 5  # degrees, should be small enough for any model
 
 
 def extract_elevation_main(
-    output_dir: str | Path,
     model_name: str,
     lat_start: int,
     lon_start: int,
+    output_dir: str | Path,
 ) -> None:
-    cd_data = ClimateData(output_dir)
-    cred_path = cd_data.credentials_root / "open_topography.txt"
+    cdata = ClimateData(output_dir)
+    cred_path = cdata.credentials_root / "open_topography.txt"
     key = cred_path.read_text().strip()
 
     params: dict[str, int | str] = {
@@ -49,7 +54,7 @@ def extract_elevation_main(
     response.raise_for_status()
 
     out_path = (
-        cd_data.open_topography_elevation / f"{model_name}_{lat_start}_{lon_start}.tif"
+        cdata.open_topography_elevation / f"{model_name}_{lat_start}_{lon_start}.tif"
     )
     with out_path.open("wb") as fp:
         for chunk in tqdm.tqdm(response.iter_content(chunk_size=64 * 1024**2)):
@@ -57,7 +62,6 @@ def extract_elevation_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
 @click.option(
     "--model-name",
     required=True,
@@ -76,11 +80,12 @@ def extract_elevation_main(
     type=int,
     help="Longitude of the top-left corner of the tile.",
 )
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def extract_elevation_task(
-    output_dir: str,
     model_name: str,
     lat_start: int,
     lon_start: int,
+    output_dir: str,
 ) -> None:
     """Download elevation data from Open Topography."""
     invalid = True
@@ -88,21 +93,21 @@ def extract_elevation_task(
         msg = "Downloaded using aws cli, this implementation is not valid"
         raise NotImplementedError(msg)
 
-    extract_elevation_main(output_dir, model_name, lat_start, lon_start)
+    extract_elevation_main(model_name, lat_start, lon_start, output_dir)
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
 @click.option(
     "--generate-name",
     required=True,
     type=click.Choice(ELEVATION_MODELS),
     help="Name of the elevation model to download.",
 )
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def extract_elevation(
-    output_dir: str,
     model_name: str,
+    output_dir: str,
     queue: str,
 ) -> None:
     """Download elevation data from Open Topography."""
@@ -116,7 +121,7 @@ def extract_elevation(
 
     jobmon.run_parallel(
         runner="cdtask",
-        task_name="extract_era5",
+        task_name="extract elevation",
         node_args={
             "model-name": [model_name],
             "lat-start": lat_starts,

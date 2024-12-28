@@ -1,25 +1,60 @@
 from collections.abc import Sequence
 from pathlib import Path
+from typing import ParamSpec, TypeVar
 
 import click
 import numpy as np
 import rasterra as rt
 from rra_tools import jobmon
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+)
+from climate_data import (
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 from climate_data.utils import make_raster_template
 
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+
 PAD = 1
-STRIDE = clio.STRIDE
+STRIDE = 30
+LATITUDES = [str(lat) for lat in range(-90, 90, STRIDE)]
+LONGITUDES = [str(lon) for lon in range(-180, 180, STRIDE)]
+
+
+def with_lat_start(
+    *,
+    allow_all: bool = False,
+) -> clio.ClickOption[_P, _T]:
+    return clio.with_choice(
+        "lat-start",
+        allow_all=allow_all,
+        choices=LATITUDES,
+        help="Latitude of the top-left corner of the tile.",
+    )
+
+
+def with_lon_start(
+    *,
+    allow_all: bool = False,
+) -> clio.ClickOption[_P, _T]:
+    return clio.with_choice(
+        "lon-start",
+        allow_all=allow_all,
+        choices=LONGITUDES,
+        help="Longitude of the top-left corner of the tile.",
+    )
 
 
 def load_elevation(
-    cd_data: ClimateData,
+    cdata: ClimateData,
     latitudes: Sequence[int],
     longitudes: Sequence[int],
 ) -> rt.RasterArray:
-    data_root = cd_data.open_topography_elevation / "SRTM_GL3_srtm"
+    data_root = cdata.open_topography_elevation / "SRTM_GL3_srtm"
     paths = []
     for lon in longitudes:
         lon_stub = f"E{lon:03}" if lon >= 0 else f"W{-lon:03}"
@@ -56,18 +91,21 @@ def load_elevation(
 
 
 def load_lcz_data(
-    cd_data: ClimateData, latitudes: Sequence[int], longitudes: Sequence[int]
+    cdata: ClimateData, latitudes: Sequence[int], longitudes: Sequence[int]
 ) -> rt.RasterArray:
-    path = cd_data.rub_local_climate_zones / "lcz_filter_v3.tif"
+    path = cdata.rub_local_climate_zones / "lcz_filter_v3.tif"
     bounds = (longitudes[0], latitudes[0], longitudes[-1], latitudes[-1])
     return rt.load_raster(path, bounds=bounds)
 
 
 def prepare_predictors_main(
-    output_dir: str | Path, lat_start: int, lon_start: int
+    lat_start: str | int,
+    lon_start: str | int,
+    output_dir: str | Path,
 ) -> None:
-    cd_data = ClimateData(output_dir)
-    predictors = {}
+    lat_start = int(lat_start)
+    lon_start = int(lon_start)
+    cdata = ClimateData(output_dir)
 
     longitudes = range(lon_start - PAD, lon_start + STRIDE + PAD)
     latitudes = range(lat_start - PAD, lat_start + STRIDE + PAD)
@@ -87,9 +125,10 @@ def prepare_predictors_main(
         resolution=0.01,
     )
 
-    elevation = load_elevation(cd_data, latitudes, longitudes)
-    lcz = load_lcz_data(cd_data, latitudes, longitudes)
+    elevation = load_elevation(cdata, latitudes, longitudes)
+    lcz = load_lcz_data(cdata, latitudes, longitudes)
 
+    predictors = {}
     predictors["elevation_target"] = elevation.resample_to(
         template_target, resampling="average"
     )
@@ -103,31 +142,31 @@ def prepare_predictors_main(
     predictors["lcz_target"] = lcz.resample_to(template_target, resampling="mode")
 
     for name, predictor in predictors.items():
-        cd_data.save_predictor(predictor, name, lat_start, lon_start)
+        cdata.save_predictor(predictor, name, lat_start, lon_start)
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_lat_start(allow_all=False)
-@clio.with_lon_start(allow_all=False)
-@clio.with_output_directory(DEFAULT_ROOT)
+@with_lat_start(allow_all=False)
+@with_lon_start(allow_all=False)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def prepare_predictors_task(
     lat_start: str,
     lon_start: str,
     output_dir: str,
 ) -> None:
-    prepare_predictors_main(output_dir, int(lat_start), int(lon_start))
+    prepare_predictors_main(lat_start, lon_start, output_dir)
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def prepare_predictors(output_dir: str, queue: str) -> None:
     jobmon.run_parallel(
         runner="cdtask",
         task_name="downscale prepare_predictors",
         node_args={
-            "lat-start": clio.LATITUDES,
-            "lon-start": clio.LONGITUDES,
+            "lat-start": LATITUDES,
+            "lon-start": LONGITUDES,
         },
         task_args={
             "output-dir": output_dir,

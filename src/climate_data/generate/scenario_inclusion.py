@@ -7,8 +7,13 @@ import pandas as pd
 import xarray as xr
 from rra_tools import parallel
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+)
+from climate_data import (
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 
 warnings.filterwarnings("ignore")
 
@@ -28,8 +33,8 @@ def extract_metadata(data_path: Path) -> tuple[Any, ...]:
 def generate_scenario_inclusion_main(
     output_dir: str | Path, *, num_cores: int = 1, progress_bar: bool = False
 ) -> None:
-    cd_data = ClimateData(output_dir)
-    paths = list(cd_data.extracted_cmip6.glob("*.nc"))
+    cdata = ClimateData(output_dir)
+    paths = list(cdata.extracted_cmip6.glob("*.nc"))
 
     meta_list = parallel.run_parallel(
         extract_metadata,
@@ -60,21 +65,19 @@ def generate_scenario_inclusion_main(
         .reset_index()
     )
 
-    inclusion_df["include"] = inclusion_df.valid_scenarios == len(
-        clio.VALID_CMIP6_EXPERIMENTS
-    )
+    inclusion_df["include"] = inclusion_df.valid_scenarios == len(cdc.CMIP6_EXPERIMENTS)
     inclusion_df = (
         inclusion_df.loc[inclusion_df.include]
         .set_index(["source", "variant", "variable"])
         .include.unstack()
         .fillna(value=False)
     )
-    cd_data.save_scenario_metadata(meta_df)
-    cd_data.save_scenario_inclusion_metadata(inclusion_df)
+    cdata.save_scenario_metadata(meta_df)
+    cdata.save_scenario_inclusion_metadata(inclusion_df)
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_num_cores(default=10)
 @clio.with_progress_bar()
 def generate_scenario_inclusion(

@@ -34,7 +34,7 @@ python = ">=3.10, <3.13"
 click = "*"
 numpy = "^2.1.0"
 pandas = "^2.2.2"
-rasterra = "^0.6.0"
+rasterra = "^0.6.1"
 shapely = "^2.0.4"
 geopandas = "^1.0.1"
 xarray = "^2024.11.0"
@@ -48,13 +48,16 @@ gcsfs = "^2024.6.0"
 zarr = "^2.18.2"
 dask = "^2024.5.2"
 lxml = "^5.3.0"
+pydantic = "^2.10.4"
 
 
 [tool.poetry.group.dev.dependencies]
-mkdocstrings = {version = ">=0.23", extras = ["python"]}
+mkdocstrings = {version = "*", extras = ["python"]}
 mkdocs-material = "*"
 mkdocs-table-reader-plugin = "*"
-mkdocs-gen-files = "^0.5.0"
+mkdocs-gen-files = "*"
+mkdocs-literate-nav = "*"
+mkdocs-section-index = "*"
 mypy = "*"
 pre-commit = "*"
 pymdown-extensions = "*"
@@ -62,14 +65,11 @@ pytest = "*"
 pytest-github-actions-annotate-failures = "*"
 pytest-cov = "*"
 python-kacl = "*"
-ruff = ">=0.2.0"
-pandas-stubs = "^2.2.3.241009"
-types-pyyaml = "^6.0.12.20240311"
-types-requests = "^2.31.0.20240406"
-types-tqdm = "^4.66.0.20240417"
-mkdocs-literate-nav = "^0.6.1"
-mkdocs-section-index = "^0.3.9"
-
+ruff = "*"
+pandas-stubs = "*"
+types-pyyaml = "*"
+types-requests = "*"
+types-tqdm = "*"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

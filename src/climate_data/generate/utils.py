@@ -7,19 +7,6 @@ import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 
-import climate_data.cli_options as clio
-
-REFERENCE_PERIOD = slice(
-    f"{clio.VALID_REFERENCE_YEARS[0]}-01-01",
-    f"{clio.VALID_REFERENCE_YEARS[-1]}-12-31",
-)
-TARGET_LON = xr.DataArray(
-    np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
-)
-TARGET_LAT = xr.DataArray(
-    np.round(np.arange(-90.0, 90.1, 0.1, dtype="float32"), 1), dims="latitude"
-)
-
 #############################
 # Standard unit conversions #
 #############################
@@ -250,9 +237,44 @@ def rename_val_column(ds: xr.Dataset) -> xr.Dataset:
 def interpolate_to_target_latlon(
     ds: xr.Dataset,
     method: str = "nearest",
+    target_lon: xr.DataArray | None = None,
+    target_lat: xr.DataArray | None = None,
 ) -> xr.Dataset:
+    """Interpolate a dataset to a target latitude and longitude grid.
+
+    Parameters
+    ----------
+    ds
+        Dataset to interpolate
+    method
+        Interpolation method
+    target_lon
+        Target longitude grid
+    target_lat
+        Target latitude grid
+
+    Returns
+    -------
+    xr.Dataset
+        Interpolated dataset
+    """
+    valid_lat_lon = (target_lat is not None and target_lon is not None) or (
+        target_lat is None and target_lon is None
+    )
+    if not valid_lat_lon:
+        msg = "Both target_lat and target_lon must be provided or neither"
+        raise ValueError(msg)
+    if target_lon is None:
+        # Avoid cyclic imports
+        from climate_data.constants import TARGET_LON, TARGET_LAT  # noqa: I001
+
+        target_lon = TARGET_LON
+        target_lat = TARGET_LAT
+
+        target_lon = np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1)
+
     return (
-        ds.interp(longitude=TARGET_LON, latitude=TARGET_LAT, method=method)  # type: ignore[arg-type]
+        ds.interp(longitude=target_lon, latitude=target_lat, method=method)  # type: ignore[arg-type]
         .interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")
         .sortby("latitude")
         .interpolate_na(dim="latitude", method="nearest", fill_value="extrapolate")
@@ -275,6 +297,20 @@ class Transform:
         self.encoding_offset = encoding_offset
 
     def __call__(self, *datasets: xr.Dataset, key: str | None = None) -> xr.Dataset:
+        if len(datasets) > 1:
+            # Enforce consistency in the spatial dimensions of the input datasets
+            datasets_list = list(datasets)
+            target_lat = datasets_list[0].latitude
+            target_lon = datasets_list[0].longitude
+            for i in range(1, len(datasets_list)):
+                datasets_list[i] = interpolate_to_target_latlon(
+                    datasets_list[i],
+                    method="linear",
+                    target_lon=target_lon,
+                    target_lat=target_lat,
+                )
+            datasets = tuple(datasets_list)
+
         if isinstance(self.transform_funcs, dict):
             if key is None:
                 msg = "Key must be provided for dict transform"

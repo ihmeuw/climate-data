@@ -14,8 +14,13 @@ import yaml
 from rra_tools import jobmon
 from rra_tools.shell_tools import touch
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+)
+from climate_data import (
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 
 _NETCDF_VALID_ENCODINGS = {
     "zlib",
@@ -37,18 +42,16 @@ _NETCDF_VALID_ENCODINGS = {
 
 
 def download_era5_main(
-    output_dir: str | Path,
     era5_dataset: str,
     era5_variable: str,
-    year: int | str,
     month: str,
+    year: int | str,
     user: str,
+    output_dir: str | Path,
 ) -> None:
-    cddata = ClimateData(output_dir)
+    cdata = ClimateData(output_dir)
 
-    final_out_path = cddata.extracted_era5_path(
-        era5_dataset, era5_variable, year, month
-    )
+    final_out_path = cdata.extracted_era5_path(era5_dataset, era5_variable, year, month)
     download_path = final_out_path.with_suffix(".zip")
     data_format, download_format = "netcdf", "zip"
 
@@ -61,7 +64,7 @@ def download_era5_main(
 
         print("Connecting to copernicus")
 
-        cred_path = cddata.credentials_root / "copernicus.yaml"
+        cred_path = cdata.credentials_root / "copernicus.yaml"
         credentials = yaml.safe_load(cred_path.read_text())
         url = credentials["url"]
         key = credentials["keys"][user]
@@ -102,17 +105,15 @@ def check_zipfile(zip_path: Path) -> None:
 
 
 def unzip_and_compress_era5(
-    output_dir: str | Path,
     era5_dataset: str,
     era5_variable: str,
-    year: int | str,
     month: str,
+    year: int | str,
+    output_dir: str | Path,
 ) -> None:
-    cddata = ClimateData(output_dir)
+    cdata = ClimateData(output_dir)
 
-    final_out_path = cddata.extracted_era5_path(
-        era5_dataset, era5_variable, year, month
-    )
+    final_out_path = cdata.extracted_era5_path(era5_dataset, era5_variable, year, month)
 
     zip_path = final_out_path.with_suffix(".zip")
     check_zipfile(zip_path)
@@ -156,57 +157,54 @@ def unzip_and_compress_era5(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
-@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS)
 @clio.with_month()
-@click.option(
-    "--user",
-    type=str,
-)
+@clio.with_year(years=cdc.FULL_HISTORY_YEARS)
+@click.option("--user", type=str)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def download_era5_task(
-    output_dir: str,
     era5_dataset: str,
     era5_variable: str,
-    year: str,
     month: str,
+    year: str,
     user: str,
+    output_dir: str,
 ) -> None:
     download_era5_main(
-        output_dir,
         era5_dataset,
         era5_variable,
-        year,
         month,
+        year,
         user,
+        output_dir,
     )
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
-@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS)
 @clio.with_month()
+@clio.with_year(years=cdc.FULL_HISTORY_YEARS)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def unzip_and_compress_era5_task(
-    output_dir: str,
     era5_dataset: str,
     era5_variable: str,
-    year: str,
     month: str,
+    year: str,
+    output_dir: str,
 ) -> None:
     unzip_and_compress_era5(
-        output_dir,
         era5_dataset,
         era5_variable,
-        year,
         month,
+        year,
+        output_dir,
     )
 
 
 def build_task_lists(
-    cddata: ClimateData,
+    cdata: ClimateData,
     *spec_variables: list[str],
 ) -> tuple[list[tuple[str, ...]], ...]:
     to_download = []
@@ -215,13 +213,13 @@ def build_task_lists(
     for spec in itertools.product(*spec_variables):
         dataset, variable, *_ = spec
         if (
-            variable == "sea_surface_temperature"
-            and dataset != "reanalysis-era5-single-levels"
+            variable == cdc.ERA5_VARIABLES.sea_surface_temperature
+            and dataset != cdc.ERA5_DATASETS.reanalysis_era5_single_levels
         ):
             # This variable is only available in the single levels dataset
             continue
 
-        final_out_path = cddata.extracted_era5_path(*spec)
+        final_out_path = cdata.extracted_era5_path(*spec)
         zip_path = final_out_path.with_suffix(".zip")
         uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
 
@@ -259,11 +257,11 @@ def build_task_lists(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
 @clio.with_era5_dataset(allow_all=True)
 @clio.with_era5_variable(allow_all=True)
-@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS, allow_all=True)
 @clio.with_month(allow_all=True)
+@clio.with_year(years=cdc.FULL_HISTORY_YEARS, allow_all=True)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def extract_era5(
     output_dir: str,
@@ -273,23 +271,23 @@ def extract_era5(
     month: str,
     queue: str,
 ) -> None:
-    cddata = ClimateData(output_dir)
-    cred_path = cddata.credentials_root / "copernicus.yaml"
+    cdata = ClimateData(output_dir)
+    cred_path = cdata.credentials_root / "copernicus.yaml"
     credentials = yaml.safe_load(cred_path.read_text())
     users = list(credentials["keys"])
     jobs_per_user = 20
 
     datasets = (
-        clio.VALID_ERA5_DATASETS if era5_dataset == clio.RUN_ALL else [era5_dataset]
+        list(cdc.ERA5_DATASETS) if era5_dataset == clio.RUN_ALL else [era5_dataset]
     )
     variables = (
-        clio.VALID_ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
+        list(cdc.ERA5_VARIABLES) if era5_variable == clio.RUN_ALL else [era5_variable]
     )
-    years = clio.VALID_FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
-    months = clio.VALID_MONTHS if month == clio.RUN_ALL else [month]
+    years = cdc.FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
+    months = cdc.MONTHS if month == clio.RUN_ALL else [month]
 
     to_download, to_compress, complete = build_task_lists(
-        cddata,
+        cdata,
         datasets,
         variables,
         years,

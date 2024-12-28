@@ -3,8 +3,11 @@ from pathlib import Path
 import click
 from rra_tools.shell_tools import wget
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 
 URL_TEMPLATE = "https://zenodo.org/records/8419340/files/{file_name}?download=1"
 FILES = [
@@ -27,6 +30,6 @@ def extract_rub_local_climate_zones_main(output_dir: str | Path) -> None:
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def extract_rub_local_climate_zones(output_dir: str) -> None:
     extract_rub_local_climate_zones_main(output_dir)
