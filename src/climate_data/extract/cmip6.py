@@ -4,53 +4,17 @@ CMIP6 Data Extraction
 """
 
 from pathlib import Path
-from typing import Literal, NamedTuple, ParamSpec, TypeVar
 
 import click
 import gcsfs
 import xarray as xr
-from rra_tools import cli_tools, jobmon, shell_tools
+from rra_tools import jobmon, shell_tools
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-
-######################
-# Define CLI options #
-######################
-
-
-class VariableSpec(NamedTuple):
-    shift: float
-    scale: float
-    table_id: Literal["day", "Oday"] = "day"
-
-
-CMIP6_VARIABLES = {
-    "uas": VariableSpec(0.0, 0.01),
-    "vas": VariableSpec(0.0, 0.01),
-    "hurs": VariableSpec(0.0, 0.01),
-    "tas": VariableSpec(273.15, 0.01),
-    "tasmin": VariableSpec(273.15, 0.01),
-    "tasmax": VariableSpec(273.15, 0.01),
-    "tos": VariableSpec(273.15, 0.01, table_id="Oday"),
-    "pr": VariableSpec(0.0, 1e-9),
-}
-
-
-def with_cmip6_variable(
-    *,
-    allow_all: bool = False,
-) -> cli_tools.ClickOption[_P, _T]:
-    return cli_tools.with_choice(
-        "cmip6-variable",
-        "x",
-        allow_all=allow_all,
-        choices=list(CMIP6_VARIABLES),
-        help="CMIP6 variable to extract.",
-    )
+from climate_data import (
+    cli_options as clio,
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 
 
 def load_cmip_data(zarr_path: str) -> xr.Dataset:
@@ -66,17 +30,17 @@ def load_cmip_data(zarr_path: str) -> xr.Dataset:
 
 
 def extract_cmip6_main(
-    output_dir: str | Path,
-    cmip6_source: str,
-    cmip6_experiment: str,
     cmip6_variable: str,
+    cmip6_experiment: str,
+    cmip6_source: str,
+    output_dir: str | Path,
     overwrite: bool,
 ) -> None:
     print(f"Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}")
-    cd_data = ClimateData(output_dir)
-    meta = cd_data.load_cmip6_metadata()
+    cdata = ClimateData(output_dir)
+    meta = cdata.load_cmip6_metadata()
 
-    shift, scale, table_id = CMIP6_VARIABLES[cmip6_variable]
+    *_, offset, scale, table_id =  cdc.CMIP6_VARIABLES.get(cmip6_variable)
 
     mask = (
         (meta.source_id == cmip6_source)
@@ -90,7 +54,7 @@ def extract_cmip6_main(
 
     for i, (member, zstore_path) in enumerate(meta_subset.items()):
         item = f"{i}/{len(meta_subset)} {member}"
-        out_path = cd_data.extracted_cmip6_path(
+        out_path = cdata.extracted_cmip6_path(
             cmip6_variable,
             cmip6_experiment,
             cmip6_source,
@@ -104,15 +68,18 @@ def extract_cmip6_main(
             print("Extracting", item)
             cmip_data = load_cmip_data(zstore_path)
 
-            shell_tools.touch(out_path, exist_ok=True)
             print("Writing to", out_path)
+            if out_path.exists():
+                out_path.unlink()
+            shell_tools.touch(out_path)
+
             cmip_data.to_netcdf(
                 out_path,
                 encoding={
                     cmip6_variable: {
                         "dtype": "int16",
                         "scale_factor": scale,
-                        "add_offset": shift,
+                        "add_offset": offset,
                         "_FillValue": -32767,
                         "zlib": True,
                         "complevel": 1,
@@ -126,28 +93,32 @@ def extract_cmip6_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_cmip6_source()
+@clio.with_cmip6_variable()
 @clio.with_cmip6_experiment()
-@with_cmip6_variable()
+@clio.with_cmip6_source()
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_overwrite()
 def extract_cmip6_task(
-    output_dir: str,
-    cmip6_source: str,
-    cmip6_experiment: str,
     cmip6_variable: str,
+    cmip6_experiment: str,
+    cmip6_source: str,
+    output_dir: str,
     overwrite: bool,
 ) -> None:
     extract_cmip6_main(
-        output_dir, cmip6_source, cmip6_experiment, cmip6_variable, overwrite
+        cmip6_variable, 
+        cmip6_experiment, 
+        cmip6_source,
+        output_dir, 
+        overwrite,
     )
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_cmip6_source(allow_all=True)
+@clio.with_cmip6_variable(allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
-@with_cmip6_variable(allow_all=True)
-@clio.with_output_directory(DEFAULT_ROOT)
+@clio.with_cmip6_source(allow_all=True)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def extract_cmip6(
@@ -168,15 +139,13 @@ def extract_cmip6(
     in the data. This determiniation is made when we proccess the data in later steps.
     """
     sources = (
-        clio.VALID_CMIP6_SOURCES if cmip6_source == clio.RUN_ALL else [cmip6_source]
+        cdc.CMIP6_SOURCES if cmip6_source == clio.RUN_ALL else [cmip6_source]
     )
     experiments = (
-        clio.VALID_CMIP6_EXPERIMENTS
-        if cmip6_experiment == clio.RUN_ALL
-        else [cmip6_experiment]
+        cdc.CMIP6_EXPERIMENTS if cmip6_experiment == clio.RUN_ALL else [cmip6_experiment]
     )
     variables = (
-        list(CMIP6_VARIABLES) if cmip6_variable == clio.RUN_ALL else [cmip6_variable]
+        cdc.CMIP6_VARIABLES.names() if cmip6_variable == clio.RUN_ALL else [cmip6_variable]
     )
 
     overwrite_arg = {"overwrite": None} if overwrite else {}

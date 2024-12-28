@@ -6,8 +6,11 @@ import xarray as xr
 from dask.diagnostics.progress import ProgressBar
 from rra_tools import jobmon
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 from climate_data.generate import utils
 from climate_data.generate.scenario_daily import generate_scenario_daily_main
 
@@ -76,14 +79,14 @@ TRANSFORM_MAP = {
 
 
 def generate_scenario_annual_main(
-    output_dir: str | Path,
     target_variable: str,
     scenario: str,
     year: str,
     draw: str,
+    output_dir: str | Path,
     progress_bar: bool = False,
 ) -> None:
-    cd_data = ClimateData(output_dir)
+    cdata = ClimateData(output_dir)
     transform = TRANSFORM_MAP[target_variable]
 
     print("Loading files")
@@ -91,7 +94,7 @@ def generate_scenario_annual_main(
         ds = transform(
             *[
                 xr.open_dataset(
-                    cd_data.daily_results_path(scenario, source_variable, year)
+                    cdata.daily_results_path(scenario, source_variable, year)
                 )
                 for source_variable in transform.source_variables
             ]
@@ -117,7 +120,7 @@ def generate_scenario_annual_main(
         ds = ds.compute()
 
     print("Saving files")
-    cd_data.save_annual_results(
+    cdata.save_annual_results(
         ds,
         scenario=scenario,
         variable=target_variable,
@@ -128,11 +131,11 @@ def generate_scenario_annual_main(
 
     if scenario == "historical":
         # Symlink all the other draws to the same file
-        source = cd_data.annual_results_path(scenario, target_variable, year, "0")
+        source = cdata.annual_results_path(scenario, target_variable, year, "0")
         for d in clio.VALID_DRAWS:
             if d == "0":
                 continue
-            destination = cd_data.annual_results_path(
+            destination = cdata.annual_results_path(
                 scenario, target_variable, year, d
             )
             if destination.exists():
@@ -141,57 +144,55 @@ def generate_scenario_annual_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
-@clio.with_cmip6_experiment(allow_historical=True)
-@clio.with_year(years=clio.VALID_FULL_HISTORY_YEARS + clio.VALID_FORECAST_YEARS)
-@clio.with_draw(allow_all=False)
+@clio.with_target_variable(list(TRANSFORM_MAP))
+@clio.with_scenario()
+@clio.with_year(cdc.FULL_HISTORY_YEARS + cdc.FORECAST_YEARS)
+@clio.with_draw()
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_scenario_annual_task(
-    output_dir: str,
     target_variable: str,
-    cmip6_experiment: str,
+    scenario: str,
     year: str,
     draw: str,
+    output_dir: str,
 ) -> None:
-    if year in clio.VALID_HISTORY_YEARS and cmip6_experiment != "historical":
+    if year in cdc.HISTORY_YEARS and scenario != "historical":
         msg = "Historical years must use the 'historical' experiment."
         raise ValueError(msg)
-    if year in clio.VALID_FORECAST_YEARS and cmip6_experiment == "historical":
+    if year in cdc.FORECAST_YEARS and scenario == "historical":
         msg = (
             f"Forecast years must use a future experiment: "
-            f"{clio.VALID_CMIP6_EXPERIMENTS}."
+            f"{cdc.CMIP6_EXPERIMENTS}."
         )
         raise ValueError(msg)
 
-    if cmip6_experiment == "historical" and draw != "0":
+    if scenario == "historical" and draw != "0":
         msg = "Historical years must use draw 0."
         raise ValueError(msg)
 
     generate_scenario_annual_main(
-        output_dir, target_variable, cmip6_experiment, year, draw
+        output_dir, target_variable, scenario, year, draw
     )
 
 
 def build_arg_list(
     target_variable: str,
-    cmip6_experiment: str,
+    scenario: str,
     draw: str,
     output_dir: str,
     overwrite: bool,
 ) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str]]]:
-    cd_data = ClimateData(output_dir)
+    cdata = ClimateData(output_dir)
 
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL
         else [target_variable]
     )
-    experiments = (
-        [*clio.VALID_CMIP6_EXPERIMENTS, "historical"]
-        if cmip6_experiment == clio.RUN_ALL
-        else [cmip6_experiment]
+    scenarios = (
+        cdc.SCENARIOS if scenario == clio.RUN_ALL else [scenario]
     )
-    draws = clio.VALID_DRAWS if draw == clio.RUN_ALL else [draw]
+    draws = cdc.DRAWS if draw == clio.RUN_ALL else [draw]
 
     to_run, complete = [], []
     trc, cc = 0, 0
@@ -201,27 +202,24 @@ def build_arg_list(
         print_template.format(v="VARIABLE", e="EXPERIMENT", tra="TO_RUN", ca="COMPLETE")
     )
 
-    for v, e in itertools.product(variables, experiments):
-        if e == "historical":
-            if v in ["wind_speed", "relative_humidity"]:
-                years = clio.VALID_HISTORY_YEARS
-            else:
-                years = clio.VALID_FULL_HISTORY_YEARS
+    for v, s in itertools.product(variables, scenarios):
+        if s == "historical":
+            years = cdc.FULL_HISTORY_YEARS
             run_draws = ["0"]
         else:
-            years = clio.VALID_FORECAST_YEARS
+            years = cdc.FORECAST_YEARS
             run_draws = draws
 
         for y, d in itertools.product(years, run_draws):
-            path = cd_data.annual_results_path(scenario=e, variable=v, year=y, draw=d)
+            path = cdata.annual_results_path(scenario=s, variable=v, year=y, draw=d)
             if not path.exists():
-                to_run.append((v, e, y, d))
+                to_run.append((v, s, y, d))
             else:
-                complete.append((v, e, y, d))
+                complete.append((v, s, y, d))
 
         tra, ca = len(to_run) - trc, len(complete) - cc
         trc, cc = len(to_run), len(complete)
-        print(print_template.format(v=v, e=e, tra=tra, ca=ca))
+        print(print_template.format(v=v, e=s, tra=tra, ca=ca))
 
     if overwrite:
         to_run += complete
@@ -231,23 +229,23 @@ def build_arg_list(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
-@clio.with_cmip6_experiment(allow_all=True, allow_historical=True)
+@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
+@clio.with_scenario(allow_all=True)
 @clio.with_draw(allow_all=True)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_annual(
     output_dir: str,
     target_variable: str,
-    cmip6_experiment: str,
+    scenario: str,
     draw: str,
     queue: str,
     overwrite: bool,
 ) -> None:
     to_run, complete = build_arg_list(
         target_variable,
-        cmip6_experiment,
+        scenario,
         draw,
         output_dir,
         overwrite,
@@ -262,7 +260,7 @@ def generate_scenario_annual(
         runner="cdtask",
         task_name="generate scenario_annual",
         flat_node_args=(
-            ("target-variable", "cmip6-experiment", "year", "draw"),
+            ("target-variable", "scenario", "year", "draw"),
             to_run,
         ),
         task_args={
@@ -271,8 +269,8 @@ def generate_scenario_annual(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "100G",
-            "runtime": "120m",
+            "memory": "200G",
+            "runtime": "240m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,

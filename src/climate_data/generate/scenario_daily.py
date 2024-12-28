@@ -9,8 +9,11 @@ import pandas as pd
 import xarray as xr
 from rra_tools import jobmon
 
-from climate_data import cli_options as clio
-from climate_data.data import DEFAULT_ROOT, ClimateData
+from climate_data import (
+    cli_options as clio,
+    constants as cdc,
+)
+from climate_data.data import ClimateData
 from climate_data.generate import utils
 
 # Map from source variable to a unit conversion function
@@ -82,17 +85,17 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 
 
 def get_source_paths(
-    cd_data: ClimateData,
+    cdata: ClimateData,
     source_variables: list[str],
     cmip6_experiment: str,
 ) -> dict[str, list[list[Path]]]:
-    inclusion_meta = cd_data.load_scenario_inclusion_metadata()[source_variables]
+    inclusion_meta = cdata.load_scenario_inclusion_metadata()[source_variables]
     inclusion_meta = inclusion_meta[inclusion_meta.all(axis=1)]
     source_paths = defaultdict(list)
     for source, variant in inclusion_meta.index.tolist():
         source_paths[source].append(
             [
-                cd_data.extracted_cmip6_path(v, cmip6_experiment, source, variant)
+                cdata.extracted_cmip6_path(v, cmip6_experiment, source, variant)
                 for v in source_variables
             ]
         )
@@ -104,7 +107,7 @@ def load_and_shift_longitude(
     member_path: str | Path,
     time_slice: slice,
 ) -> xr.Dataset:
-    ds = xr.open_dataset(member_path).sel(time=time_slice).compute()
+    ds = xr.open_dataset(member_path).sortby("time").sel(time=time_slice).compute()
     if ds.time.size == 0:
         msg = "No data in slice"
         raise KeyError(msg)
@@ -137,7 +140,7 @@ def load_variable(
     year: str | int,
 ) -> xr.Dataset:
     if year == "reference":
-        ds = load_and_shift_longitude(member_path, utils.REFERENCE_PERIOD).rename(
+        ds = load_and_shift_longitude(member_path, cdc.REFERENCE_PERIOD).rename(
             {"time": "date"}
         )
     else:
@@ -173,25 +176,25 @@ def compute_anomaly(
 
 
 def generate_scenario_daily_main(
-    output_dir: str | Path,
-    year: str | int,
-    draw: str | int,
     target_variable: str,
     cmip6_experiment: str,
+    year: str | int,
+    draw: str | int,
+    output_dir: str | Path,
     write_output: bool = True,
 ) -> xr.Dataset:
     # make repeatable
     random.seed(int(draw))
-    cd_data = ClimateData(output_dir)
+    cdata = ClimateData(output_dir)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
 
     source_paths = get_source_paths(
-        cd_data, transform.source_variables, cmip6_experiment
+        cdata, transform.source_variables, cmip6_experiment
     )
 
     print("loading historical reference")
-    historical_reference = cd_data.load_daily_results(
+    historical_reference = cdata.load_daily_results(
         scenario="historical",
         variable=target_variable,
         year="reference",
@@ -225,7 +228,7 @@ def generate_scenario_daily_main(
     scenario_data.attrs["variant"] = s_variant
     if write_output is True:
         print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
-        cd_data.save_daily_results(
+        cdata.save_daily_results(
             scenario_data,
             scenario=cmip6_experiment,
             variable=target_variable,
@@ -240,47 +243,51 @@ def generate_scenario_daily_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=clio.VALID_FORECAST_YEARS)
-@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=False)
-@clio.with_target_variable(variable_names=list(TRANSFORM_MAP))
+@clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment()
+@clio.with_year(cdc.FORECAST_YEARS)
+@clio.with_draw()
+@clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_scenario_daily_task(
-    output_dir: str, year: str, draw: str, target_variable: str, cmip6_experiment: str
+    target_variable: str,
+    cmip6_experiment: str,
+    year: str,
+    draw: str,
+    output_dir: str,
 ) -> None:
     generate_scenario_daily_main(
-        output_dir, year, draw, target_variable, cmip6_experiment, write_output=True
+        target_variable, cmip6_experiment, year, draw, output_dir, write_output=True
     )
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_output_directory(DEFAULT_ROOT)
-@clio.with_year(years=clio.VALID_FORECAST_YEARS, allow_all=True)
-@clio.with_draw(draws=clio.VALID_DRAWS, allow_all=True)
-@clio.with_target_variable(variable_names=list(TRANSFORM_MAP), allow_all=True)
+@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
+@clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
+@clio.with_draw(allow_all=True)
+@clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_daily(
-    output_dir: str,
-    year: str,
-    draw: str,
     target_variable: str,
     cmip6_experiment: str,
+    year: str,
+    draw: str,
+    output_dir: str,
     queue: str,
     overwrite: bool,
 ) -> None:
-    cd_data = ClimateData(output_dir)
+    cdata = ClimateData(output_dir)
 
-    years = clio.VALID_FORECAST_YEARS if year == clio.RUN_ALL else [year]
-    draws = clio.VALID_DRAWS if draw == clio.RUN_ALL else [draw]
+    years = cdc.FORECAST_YEARS if year == clio.RUN_ALL else [year]
+    draws = cdc.DRAWS if draw == clio.RUN_ALL else [draw]
     variables = (
         list(TRANSFORM_MAP.keys())
         if target_variable == clio.RUN_ALL
         else [target_variable]
     )
     experiments = (
-        list(clio.VALID_CMIP6_EXPERIMENTS)
+        list(cdc.CMIP6_EXPERIMENTS)
         if cmip6_experiment == clio.RUN_ALL
         else [cmip6_experiment]
     )
@@ -288,7 +295,7 @@ def generate_scenario_daily(
     yve = []
     complete = []
     for d, y, v, e in itertools.product(draws, years, variables, experiments):
-        path = cd_data.daily_results_path(scenario=e, variable=v, year=y, draw=d)
+        path = cdata.daily_results_path(scenario=e, variable=v, year=y, draw=d)
         if not path.exists() or overwrite:
             yve.append((d, y, v, e))
         else:

@@ -20,13 +20,13 @@ import rasterra as rt
 import xarray as xr
 from rra_tools.shell_tools import mkdir, touch
 
-DEFAULT_ROOT = "/mnt/share/erf/climate_downscale/"
+from climate_data import constants as cdc
 
 
 class ClimateData:
     """Class for managing the climate data used in the project."""
 
-    def __init__(self, root: str | Path = DEFAULT_ROOT) -> None:
+    def __init__(self, root: str | Path = cdc.MODEL_ROOT) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / "credentials"
 
