@@ -52,10 +52,10 @@ pydantic = "^2.10.4"
 
 
 [tool.poetry.group.dev.dependencies]
-mkdocstrings = {version = ">=0.23", extras = ["python"]}
+mkdocstrings = {version = "*", extras = ["python"]}
 mkdocs-material = "*"
 mkdocs-table-reader-plugin = "*"
-mkdocs-gen-files = "^0.5.0"
+mkdocs-gen-files = "*"
 mypy = "*"
 pre-commit = "*"
 pymdown-extensions = "*"
@@ -63,13 +63,13 @@ pytest = "*"
 pytest-github-actions-annotate-failures = "*"
 pytest-cov = "*"
 python-kacl = "*"
-ruff = ">=0.2.0"
-pandas-stubs = "^2.2.3.241009"
-types-pyyaml = "^6.0.12.20240311"
-types-requests = "^2.31.0.20240406"
-types-tqdm = "^4.66.0.20240417"
-mkdocs-literate-nav = "^0.6.1"
-mkdocs-section-index = "^0.3.9"
+ruff = "*"
+pandas-stubs = "*"
+types-pyyaml = "*"
+types-requests = "*"
+types-tqdm = "*"
+mkdocs-literate-nav = "*"
+mkdocs-section-index = "*"
 
 
 [build-system]
