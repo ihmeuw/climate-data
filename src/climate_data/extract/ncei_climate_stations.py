@@ -8,6 +8,8 @@ from rra_tools.shell_tools import mkdir, wget
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData

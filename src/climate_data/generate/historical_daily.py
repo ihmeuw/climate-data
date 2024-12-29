@@ -9,6 +9,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -52,7 +54,7 @@ TRANSFORM_MAP = {
     ),
     "wind_speed": utils.Transform(
         source_variables=[
-            cdc.ERA5_VARIABLES.u_component_of_wind, 
+            cdc.ERA5_VARIABLES.u_component_of_wind,
             cdc.ERA5_VARIABLES.v_component_of_wind,
         ],
         transform_funcs=[utils.vector_magnitude, utils.daily_mean],
@@ -102,9 +104,7 @@ def load_variable(
         # There are some slight numerical differences in the lat/long for some of
         # the land datasets. They are gridded consistently, so just tweak the
         # coordinates so things align.
-        ds = ds.assign_coords(
-            latitude=cdc.TARGET_LAT[::-1], longitude=cdc.TARGET_LON
-        )
+        ds = ds.assign_coords(latitude=cdc.TARGET_LAT[::-1], longitude=cdc.TARGET_LON)
     else:
         ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]
@@ -125,11 +125,19 @@ def generate_historical_daily_main(
         month_str = f"{month:02d}"
         print(f"loading single-levels for {month_str}")
         single_level = [
-            load_variable(cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_single_levels)
+            load_variable(
+                cdata,
+                sv,
+                year,
+                month_str,
+                cdc.ERA5_DATASETS.reanalysis_era5_single_levels,
+            )
             for sv in transform.source_variables
         ]
         print("collapsing")
-        ds = transform(*single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels).compute()
+        ds = transform(
+            *single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels
+        ).compute()
         # collapsing often screws the date dtype, so fix it
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
@@ -142,12 +150,16 @@ def generate_historical_daily_main(
         else:
             print(f"loading land for {month_str}")
             land = [
-                load_variable(cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land)
+                load_variable(
+                    cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land
+                )
                 for sv in transform.source_variables
             ]
             print("collapsing")
             with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
-                ds_land = transform(*land, key=cdc.ERA5_DATASETS.reanalysis_era5_land).compute()
+                ds_land = transform(
+                    *land, key=cdc.ERA5_DATASETS.reanalysis_era5_land
+                ).compute()
             ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
             print("combining")
@@ -186,7 +198,7 @@ def generate_historical_daily_main(
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_year(cdc.FULL_HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
-def generate_historical_daily_task(    
+def generate_historical_daily_task(
     target_variable: str,
     year: str,
     output_dir: str,

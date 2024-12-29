@@ -8,6 +8,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -135,9 +137,7 @@ def generate_scenario_annual_main(
         for d in clio.VALID_DRAWS:
             if d == "0":
                 continue
-            destination = cdata.annual_results_path(
-                scenario, target_variable, year, d
-            )
+            destination = cdata.annual_results_path(scenario, target_variable, year, d)
             if destination.exists():
                 destination.unlink()
             destination.symlink_to(source)
@@ -161,8 +161,7 @@ def generate_scenario_annual_task(
         raise ValueError(msg)
     if year in cdc.FORECAST_YEARS and scenario == "historical":
         msg = (
-            f"Forecast years must use a future experiment: "
-            f"{cdc.CMIP6_EXPERIMENTS}."
+            f"Forecast years must use a future experiment: " f"{cdc.CMIP6_EXPERIMENTS}."
         )
         raise ValueError(msg)
 
@@ -170,9 +169,7 @@ def generate_scenario_annual_task(
         msg = "Historical years must use draw 0."
         raise ValueError(msg)
 
-    generate_scenario_annual_main(
-        output_dir, target_variable, scenario, year, draw
-    )
+    generate_scenario_annual_main(output_dir, target_variable, scenario, year, draw)
 
 
 def build_arg_list(
@@ -189,9 +186,7 @@ def build_arg_list(
         if target_variable == clio.RUN_ALL
         else [target_variable]
     )
-    scenarios = (
-        cdc.SCENARIOS if scenario == clio.RUN_ALL else [scenario]
-    )
+    scenarios = cdc.SCENARIOS if scenario == clio.RUN_ALL else [scenario]
     draws = cdc.DRAWS if draw == clio.RUN_ALL else [draw]
 
     to_run, complete = [], []
