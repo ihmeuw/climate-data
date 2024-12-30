@@ -187,7 +187,7 @@ class ClimateData:
 
     def save_scenario_inclusion_metadata(self, df: pd.DataFrame) -> None:
         # Need to save to our scripts directory for doc building
-        scripts_root = Path(__file__).parent.parent / "scripts"
+        scripts_root = Path(__file__).parent.parent.parent / "scripts"
         for root_dir in [self.results_metadata, scripts_root]:
             path = root_dir / "scenario_inclusion_metadata.parquet"
             if path.exists():

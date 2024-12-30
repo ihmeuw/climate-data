@@ -261,7 +261,7 @@ def generate_scenario_daily_task(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
+@clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
 @clio.with_draw(allow_all=True)
@@ -269,45 +269,32 @@ def generate_scenario_daily_task(
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_daily(
-    target_variable: str,
-    cmip6_experiment: str,
-    year: str,
-    draw: str,
+    target_variable: list[str],
+    cmip6_experiment: list[str],
+    year: list[str],
+    draw: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    years = cdc.FORECAST_YEARS if year == clio.RUN_ALL else [year]
-    draws = cdc.DRAWS if draw == clio.RUN_ALL else [draw]
-    variables = (
-        list(TRANSFORM_MAP.keys())
-        if target_variable == clio.RUN_ALL
-        else [target_variable]
-    )
-    experiments = (
-        list(cdc.CMIP6_EXPERIMENTS)
-        if cmip6_experiment == clio.RUN_ALL
-        else [cmip6_experiment]
-    )
-
-    yve = []
+    veyd = []
     complete = []
-    for d, y, v, e in itertools.product(draws, years, variables, experiments):
+    for v, e, y, d in itertools.product(target_variable, cmip6_experiment, year, draw):
         path = cdata.daily_results_path(scenario=e, variable=v, year=y, draw=d)
         if not path.exists() or overwrite:
-            yve.append((d, y, v, e))
+            veyd.append((d, y, v, e))
         else:
             complete.append((d, y, v, e))
 
-    print(f"{len(complete)} tasks already done. " f"Launching {len(yve)} tasks")
+    print(f"{len(complete)} tasks already done. " f"Launching {len(veyd)} tasks")
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_daily",
         flat_node_args=(
-            ("draw", "year", "target-variable", "cmip6-experiment"),
-            yve,
+            ("target-variable", "cmip6-experiment", "year", "draw"),
+            veyd,
         ),
         task_args={
             "output-dir": output_dir,

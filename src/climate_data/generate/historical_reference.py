@@ -58,7 +58,7 @@ def generate_historical_reference_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP))
+@clio.with_target_variable(TRANSFORM_MAP)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_historical_reference_task(
     target_variable: str,
@@ -68,23 +68,19 @@ def generate_historical_reference_task(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
+@clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def generate_historical_reference(
-    target_variable: str,
+    target_variable: list[str],
     output_dir: str,
     queue: str,
 ) -> None:
-    variables = (
-        list(TRANSFORM_MAP) if target_variable == clio.RUN_ALL else [target_variable]
-    )
-
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate historical_reference",
         node_args={
-            "target-variable": variables,
+            "target-variable": target_variable,
         },
         task_args={
             "output-dir": output_dir,
