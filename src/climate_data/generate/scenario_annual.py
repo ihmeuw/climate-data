@@ -8,6 +8,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -132,12 +134,10 @@ def generate_scenario_annual_main(
     if scenario == "historical":
         # Symlink all the other draws to the same file
         source = cdata.annual_results_path(scenario, target_variable, year, "0")
-        for d in clio.VALID_DRAWS:
+        for d in cdc.DRAWS:
             if d == "0":
                 continue
-            destination = cdata.annual_results_path(
-                scenario, target_variable, year, d
-            )
+            destination = cdata.annual_results_path(scenario, target_variable, year, d)
             if destination.exists():
                 destination.unlink()
             destination.symlink_to(source)
@@ -161,8 +161,7 @@ def generate_scenario_annual_task(
         raise ValueError(msg)
     if year in cdc.FORECAST_YEARS and scenario == "historical":
         msg = (
-            f"Forecast years must use a future experiment: "
-            f"{cdc.CMIP6_EXPERIMENTS}."
+            f"Forecast years must use a future experiment: " f"{cdc.CMIP6_EXPERIMENTS}."
         )
         raise ValueError(msg)
 
@@ -171,29 +170,18 @@ def generate_scenario_annual_task(
         raise ValueError(msg)
 
     generate_scenario_annual_main(
-        output_dir, target_variable, scenario, year, draw
+        target_variable, scenario, year, draw, output_dir, progress_bar=False
     )
 
 
 def build_arg_list(
-    target_variable: str,
-    scenario: str,
-    draw: str,
+    variables: list[str],
+    scenarios: list[str],
+    draws: list[str],
     output_dir: str,
     overwrite: bool,
 ) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str]]]:
     cdata = ClimateData(output_dir)
-
-    variables = (
-        list(TRANSFORM_MAP.keys())
-        if target_variable == clio.RUN_ALL
-        else [target_variable]
-    )
-    scenarios = (
-        cdc.SCENARIOS if scenario == clio.RUN_ALL else [scenario]
-    )
-    draws = cdc.DRAWS if draw == clio.RUN_ALL else [draw]
-
     to_run, complete = [], []
     trc, cc = 0, 0
 
@@ -229,17 +217,17 @@ def build_arg_list(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
+@clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_scenario(allow_all=True)
 @clio.with_draw(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_annual(
+    target_variable: list[str],
+    scenario: list[str],
+    draw: list[str],
     output_dir: str,
-    target_variable: str,
-    scenario: str,
-    draw: str,
     queue: str,
     overwrite: bool,
 ) -> None:
@@ -269,7 +257,7 @@ def generate_scenario_annual(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "200G",
+            "memory": "100G",
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },

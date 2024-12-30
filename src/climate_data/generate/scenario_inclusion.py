@@ -9,6 +9,8 @@ from rra_tools import parallel
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -63,9 +65,7 @@ def generate_scenario_inclusion_main(
         .reset_index()
     )
 
-    inclusion_df["include"] = inclusion_df.valid_scenarios == len(
-        clio.VALID_CMIP6_EXPERIMENTS
-    )
+    inclusion_df["include"] = inclusion_df.valid_scenarios == len(cdc.CMIP6_EXPERIMENTS)
     inclusion_df = (
         inclusion_df.loc[inclusion_df.include]
         .set_index(["source", "variant", "variable"])

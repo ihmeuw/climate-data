@@ -1,10 +1,9 @@
 from pathlib import Path
-from typing import NamedTuple, Literal
+from typing import Literal, NamedTuple
 
-from pydantic import BaseModel
 import numpy as np
 import xarray as xr
-
+from pydantic import BaseModel
 
 ##############
 # File roots #
@@ -40,12 +39,15 @@ TARGET_LAT = xr.DataArray(
 
 # Extraction Constants
 
+
 class _ERA5Datasets(NamedTuple):
     # Use named tuple so that we can access the dataset names as attributes
     reanalysis_era5_land: str = "reanalysis-era5-land"
     reanalysis_era5_single_levels: str = "reanalysis-era5-single-levels"
 
+
 ERA5_DATASETS = _ERA5Datasets()
+
 
 class _ERA5Variables(NamedTuple):
     u_component_of_wind: str = "10m_u_component_of_wind"
@@ -55,6 +57,7 @@ class _ERA5Variables(NamedTuple):
     surface_pressure: str = "surface_pressure"
     total_precipitation: str = "total_precipitation"
     sea_surface_temperature: str = "sea_surface_temperature"
+
 
 ERA5_VARIABLES = _ERA5Variables()
 
@@ -83,10 +86,12 @@ CMIP6_SOURCES = [
     "NorESM2-MM",
 ]
 
+
 class _CMIP6Experiments(NamedTuple):
     ssp126: str = "ssp126"
     ssp245: str = "ssp245"
     ssp585: str = "ssp585"
+
 
 CMIP6_EXPERIMENTS = _CMIP6Experiments()
 
@@ -161,7 +166,7 @@ class _CMIP6Variables(NamedTuple):
         return [v.name for v in self]
 
     def get(self, name: str) -> CMIP6Variable:
-        return getattr(self, name)
+        return getattr(self, name)  # type: ignore[no-any-return]
 
     def to_dict(self) -> dict[str, CMIP6Variable]:
         return {v.name: v for v in self}
@@ -181,10 +186,12 @@ TARGET_LAT = xr.DataArray(
 
 DRAWS = [str(d) for d in range(100)]
 
+
 class _Scenarios(NamedTuple):
     historical: str = "historical"
     ssp126: str = "ssp126"
     ssp245: str = "ssp245"
     ssp585: str = "ssp585"
+
 
 SCENARIOS = _Scenarios()

@@ -258,9 +258,8 @@ def interpolate_to_target_latlon(
     xr.Dataset
         Interpolated dataset
     """
-    valid_lat_lon = (
-        (target_lat is not None and target_lon is not None)
-        or (target_lat is None and target_lon is None)
+    valid_lat_lon = (target_lat is not None and target_lon is not None) or (
+        target_lat is None and target_lon is None
     )
     if not valid_lat_lon:
         msg = "Both target_lat and target_lon must be provided or neither"
@@ -268,6 +267,7 @@ def interpolate_to_target_latlon(
     if target_lon is None:
         # Avoid cyclic imports
         from climate_data.constants import TARGET_LON, TARGET_LAT  # noqa: I001
+
         target_lon = TARGET_LON
         target_lat = TARGET_LAT
 
@@ -299,13 +299,17 @@ class Transform:
     def __call__(self, *datasets: xr.Dataset, key: str | None = None) -> xr.Dataset:
         if len(datasets) > 1:
             # Enforce consistency in the spatial dimensions of the input datasets
-            datasets = list(datasets)
-            target_lat = datasets[0].latitude
-            target_lon = datasets[0].longitude
-            for i in range(1, len(datasets)):
-                datasets[i] = interpolate_to_target_latlon(
-                    datasets[i], method="linear", target_lon=target_lon, target_lat=target_lat
+            datasets_list = list(datasets)
+            target_lat = datasets_list[0].latitude
+            target_lon = datasets_list[0].longitude
+            for i in range(1, len(datasets_list)):
+                datasets_list[i] = interpolate_to_target_latlon(
+                    datasets_list[i],
+                    method="linear",
+                    target_lon=target_lon,
+                    target_lat=target_lat,
                 )
+            datasets = tuple(datasets_list)
 
         if isinstance(self.transform_funcs, dict):
             if key is None:

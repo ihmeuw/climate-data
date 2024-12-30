@@ -7,6 +7,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -91,7 +93,7 @@ def extract_elevation_task(
         msg = "Downloaded using aws cli, this implementation is not valid"
         raise NotImplementedError(msg)
 
-    extract_elevation_main(output_dir, model_name, lat_start, lon_start)
+    extract_elevation_main(model_name, lat_start, lon_start, output_dir)
 
 
 @click.command()  # type: ignore[arg-type]

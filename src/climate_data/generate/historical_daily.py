@@ -9,6 +9,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -52,7 +54,7 @@ TRANSFORM_MAP = {
     ),
     "wind_speed": utils.Transform(
         source_variables=[
-            cdc.ERA5_VARIABLES.u_component_of_wind, 
+            cdc.ERA5_VARIABLES.u_component_of_wind,
             cdc.ERA5_VARIABLES.v_component_of_wind,
         ],
         transform_funcs=[utils.vector_magnitude, utils.daily_mean],
@@ -102,14 +104,54 @@ def load_variable(
         # There are some slight numerical differences in the lat/long for some of
         # the land datasets. They are gridded consistently, so just tweak the
         # coordinates so things align.
-        ds = ds.assign_coords(
-            latitude=cdc.TARGET_LAT[::-1], longitude=cdc.TARGET_LON
-        )
+        ds = ds.assign_coords(latitude=cdc.TARGET_LAT[::-1], longitude=cdc.TARGET_LON)
     else:
         ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]
     ds = conversion(utils.rename_val_column(ds))
     return ds
+
+
+def validate_output(ds: xr.Dataset, year: str) -> None:  # noqa: C901
+    error_msg_parts = []
+
+    attrs_to_check = (
+        ("dims", "dimensions", {"date", "latitude", "longitude"}),
+        ("coords", "coordinates", {"date", "latitude", "longitude"}),
+        ("data_vars", "data variables", {"value"}),
+    )
+    for attr, name, expected in attrs_to_check:
+        actual = set(getattr(ds, attr))
+        missing = expected - actual
+        extra = actual - expected
+        if missing:
+            error_msg_parts.append(f"Missing {name}: {missing}")
+        if extra:
+            error_msg_parts.append(f"Extra {name}: {extra}")
+
+    if ds.date.min() != pd.Timestamp(f"{year}-01-01"):
+        error_msg_parts.append(f"Unexpected start date: {ds.date.min()}")
+    if ds.date.max() != pd.Timestamp(f"{year}-12-31"):
+        error_msg_parts.append(f"Unexpected end date: {ds.date.max()}")
+    num_days = 366 if int(year) % 4 == 0 else 365
+    if ds.dims["date"] != num_days:
+        error_msg_parts.append(f"Unexpected number of days: {ds.dims['date']}")
+
+    if not (ds.latitude == cdc.TARGET_LAT[::-1]).all().item():
+        error_msg_parts.append("Unexpected latitude")
+    if not (ds.longitude == cdc.TARGET_LON).all().item():
+        error_msg_parts.append("Unexpected longitude")
+
+    if str(ds["value"].dtype) not in ["float32", "float64"]:
+        error_msg_parts.append(f"Unexpected dtype: {ds['value'].dtype}")
+
+    if ds["value"].isnull().any().item():  # noqa: PD003
+        error_msg_parts.append("Unexpected NaNs")
+
+    if error_msg_parts:
+        errors = "\n".join(error_msg_parts)
+        msg = f"{len(error_msg_parts)} errors in output for {year}:" + "\n" + errors
+        raise ValueError(msg)
 
 
 def generate_historical_daily_main(
@@ -125,11 +167,19 @@ def generate_historical_daily_main(
         month_str = f"{month:02d}"
         print(f"loading single-levels for {month_str}")
         single_level = [
-            load_variable(cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_single_levels)
+            load_variable(
+                cdata,
+                sv,
+                year,
+                month_str,
+                cdc.ERA5_DATASETS.reanalysis_era5_single_levels,
+            )
             for sv in transform.source_variables
         ]
         print("collapsing")
-        ds = transform(*single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels).compute()
+        ds = transform(
+            *single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels
+        ).compute()
         # collapsing often screws the date dtype, so fix it
         ds = ds.assign(date=pd.to_datetime(ds.date))
 
@@ -142,12 +192,16 @@ def generate_historical_daily_main(
         else:
             print(f"loading land for {month_str}")
             land = [
-                load_variable(cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land)
+                load_variable(
+                    cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land
+                )
                 for sv in transform.source_variables
             ]
             print("collapsing")
             with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
-                ds_land = transform(*land, key=cdc.ERA5_DATASETS.reanalysis_era5_land).compute()
+                ds_land = transform(
+                    *land, key=cdc.ERA5_DATASETS.reanalysis_era5_land
+                ).compute()
             ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
             print("combining")
@@ -158,19 +212,7 @@ def generate_historical_daily_main(
     if "number" in ds_year:
         ds_year = ds_year.drop_vars("number")
 
-    # do some validation
-    assert set(ds_year.dims) == {"date", "latitude", "longitude"}
-    assert ds_year.date.min() == pd.Timestamp(f"{year}-01-01")
-    assert ds_year.date.max() == pd.Timestamp(f"{year}-12-31")
-    num_days = 366 if int(year) % 4 == 0 else 365
-    assert ds_year.dims["date"] == num_days
-    assert (ds_year.latitude == cdc.TARGET_LAT[::-1]).all().item()
-    assert (ds_year.longitude == cdc.TARGET_LON).all().item()
-
-    assert set(ds_year.coords) == {"date", "latitude", "longitude"}
-    assert set(ds_year.data_vars) == {"value"}
-    assert ds_year["value"].dtype == "float32"
-    assert ds_year["value"].notnull().all().item()
+    validate_output(ds_year, year)
 
     cdata.save_daily_results(
         ds_year,
@@ -183,10 +225,10 @@ def generate_historical_daily_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP))
+@clio.with_target_variable(TRANSFORM_MAP)
 @clio.with_year(cdc.FULL_HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
-def generate_historical_daily_task(    
+def generate_historical_daily_task(
     target_variable: str,
     year: str,
     output_dir: str,
@@ -195,29 +237,23 @@ def generate_historical_daily_task(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
+@clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_year(cdc.FULL_HISTORY_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_historical_daily(
-    target_variable: str,
-    year: str,
+    target_variable: list[str],
+    year: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    years = cdc.FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
-    variables = (
-        list(TRANSFORM_MAP.keys())
-        if target_variable == clio.RUN_ALL
-        else [target_variable]
-    )
     years_and_variables = []
     complete = []
-    for y, v in itertools.product(years, variables):
+    for v, y in itertools.product(target_variable, year):
         path = cdata.daily_results_path("historical", v, y)
         if not path.exists() or overwrite:
             years_and_variables.append((y, v))

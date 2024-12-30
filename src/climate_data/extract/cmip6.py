@@ -12,6 +12,8 @@ from rra_tools import jobmon, shell_tools
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -30,9 +32,9 @@ def load_cmip_data(zarr_path: str) -> xr.Dataset:
 
 
 def extract_cmip6_main(
-    cmip6_variable: str,
-    cmip6_experiment: str,
     cmip6_source: str,
+    cmip6_experiment: str,
+    cmip6_variable: str,
     output_dir: str | Path,
     overwrite: bool,
 ) -> None:
@@ -40,7 +42,7 @@ def extract_cmip6_main(
     cdata = ClimateData(output_dir)
     meta = cdata.load_cmip6_metadata()
 
-    *_, offset, scale, table_id =  cdc.CMIP6_VARIABLES.get(cmip6_variable)
+    *_, offset, scale, table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
 
     mask = (
         (meta.source_id == cmip6_source)
@@ -93,38 +95,38 @@ def extract_cmip6_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_cmip6_variable()
-@clio.with_cmip6_experiment()
 @clio.with_cmip6_source()
+@clio.with_cmip6_experiment()
+@clio.with_cmip6_variable()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_overwrite()
 def extract_cmip6_task(
-    cmip6_variable: str,
-    cmip6_experiment: str,
     cmip6_source: str,
+    cmip6_experiment: str,
+    cmip6_variable: str,
     output_dir: str,
     overwrite: bool,
 ) -> None:
     extract_cmip6_main(
-        cmip6_variable, 
-        cmip6_experiment, 
         cmip6_source,
-        output_dir, 
+        cmip6_experiment,
+        cmip6_variable,
+        output_dir,
         overwrite,
     )
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_cmip6_variable(allow_all=True)
-@clio.with_cmip6_experiment(allow_all=True)
 @clio.with_cmip6_source(allow_all=True)
+@clio.with_cmip6_experiment(allow_all=True)
+@clio.with_cmip6_variable(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def extract_cmip6(
-    cmip6_source: str,
-    cmip6_experiment: str,
-    cmip6_variable: str,
+    cmip6_source: list[str],
+    cmip6_experiment: list[str],
+    cmip6_variable: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
@@ -138,25 +140,15 @@ def extract_cmip6(
     capture model inclusion criteria as it does not account for the year range avaialable
     in the data. This determiniation is made when we proccess the data in later steps.
     """
-    sources = (
-        cdc.CMIP6_SOURCES if cmip6_source == clio.RUN_ALL else [cmip6_source]
-    )
-    experiments = (
-        cdc.CMIP6_EXPERIMENTS if cmip6_experiment == clio.RUN_ALL else [cmip6_experiment]
-    )
-    variables = (
-        cdc.CMIP6_VARIABLES.names() if cmip6_variable == clio.RUN_ALL else [cmip6_variable]
-    )
-
     overwrite_arg = {"overwrite": None} if overwrite else {}
 
     jobmon.run_parallel(
         runner="cdtask",
         task_name="extract cmip6",
         node_args={
-            "cmip6-source": sources,
-            "cmip6-experiment": experiments,
-            "cmip6-variable": variables,
+            "cmip6-source": cmip6_source,
+            "cmip6-experiment": cmip6_experiment,
+            "cmip6-variable": cmip6_variable,
         },
         task_args={
             "output-dir": output_dir,

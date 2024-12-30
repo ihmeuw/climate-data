@@ -1,6 +1,6 @@
-from typing import ParamSpec, TypeVar
 from collections.abc import Sequence
 from pathlib import Path
+from typing import ParamSpec, TypeVar
 
 import click
 import numpy as np
@@ -9,11 +9,12 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
 from climate_data.utils import make_raster_template
-
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
@@ -98,7 +99,9 @@ def load_lcz_data(
 
 
 def prepare_predictors_main(
-    lat_start: str | int, lon_start: str | int, output_dir: str | Path,
+    lat_start: str | int,
+    lon_start: str | int,
+    output_dir: str | Path,
 ) -> None:
     lat_start = int(lat_start)
     lon_start = int(lon_start)
@@ -162,8 +165,8 @@ def prepare_predictors(output_dir: str, queue: str) -> None:
         runner="cdtask",
         task_name="downscale prepare_predictors",
         node_args={
-            "lat-start": clio.LATITUDES,
-            "lon-start": clio.LONGITUDES,
+            "lat-start": LATITUDES,
+            "lon-start": LONGITUDES,
         },
         task_args={
             "output-dir": output_dir,

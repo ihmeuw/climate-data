@@ -4,6 +4,8 @@ from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -19,7 +21,7 @@ def generate_historical_reference_main(
     cdata = ClimateData(output_dir)
     paths = [
         cdata.daily_results_path("historical", target_variable, year)
-        for year in clio.VALID_REFERENCE_YEARS
+        for year in cdc.REFERENCE_YEARS
     ]
     print(f"Building reference data from: {len(paths)} files.")
 
@@ -56,9 +58,8 @@ def generate_historical_reference_main(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP))
+@clio.with_target_variable(TRANSFORM_MAP)
 @clio.with_output_directory(cdc.MODEL_ROOT)
-
 def generate_historical_reference_task(
     target_variable: str,
     output_dir: str,
@@ -67,23 +68,19 @@ def generate_historical_reference_task(
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_target_variable(list(TRANSFORM_MAP), allow_all=True)
+@clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def generate_historical_reference(
-    target_variable: str,
+    target_variable: list[str],
     output_dir: str,
     queue: str,
 ) -> None:
-    variables = (
-        list(TRANSFORM_MAP) if target_variable == clio.RUN_ALL else [target_variable]
-    )
-
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate historical_reference",
         node_args={
-            "target-variable": variables,
+            "target-variable": target_variable,
         },
         task_args={
             "output-dir": output_dir,

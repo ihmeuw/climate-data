@@ -5,6 +5,7 @@ ERA5 Data Extraction
 
 import itertools
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
 
 import cdsapi
@@ -16,6 +17,8 @@ from rra_tools.shell_tools import touch
 
 from climate_data import (
     cli_options as clio,
+)
+from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
@@ -49,9 +52,7 @@ def download_era5_main(
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    final_out_path = cdata.extracted_era5_path(
-        era5_dataset, era5_variable, year, month
-    )
+    final_out_path = cdata.extracted_era5_path(era5_dataset, era5_variable, year, month)
     download_path = final_out_path.with_suffix(".zip")
     data_format, download_format = "netcdf", "zip"
 
@@ -113,9 +114,7 @@ def unzip_and_compress_era5(
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    final_out_path = cdata.extracted_era5_path(
-        era5_dataset, era5_variable, year, month
-    )
+    final_out_path = cdata.extracted_era5_path(era5_dataset, era5_variable, year, month)
 
     zip_path = final_out_path.with_suffix(".zip")
     check_zipfile(zip_path)
@@ -184,7 +183,6 @@ def download_era5_task(
 
 
 @click.command()  # type: ignore[arg-type]
-
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
 @clio.with_month()
@@ -206,55 +204,85 @@ def unzip_and_compress_era5_task(
     )
 
 
+TaskSpec = tuple[str, str, str, str]
+
+
 def build_task_lists(
     cdata: ClimateData,
-    *spec_variables: list[str],
-) -> tuple[list[tuple[str, ...]], ...]:
+    datasets: Sequence[str],
+    variables: Sequence[str],
+    years: Sequence[str],
+    months: Sequence[str],
+) -> tuple[list[TaskSpec], list[TaskSpec], list[TaskSpec]]:
     to_download = []
     to_compress = []
     complete = []
-    for spec in itertools.product(*spec_variables):
-        dataset, variable, *_ = spec
+
+    tdc, tcc, cc = 0, 0, 0
+    print_template = "{v:<25} {d:<25} {tdc:>15} {tcc:>15} {cc:>15}"
+    print(
+        print_template.format(
+            v="VARIABLE",
+            d="DATASET",
+            tdc="TO_DOWNLOAD",
+            tcc="TO_COMPRESS",
+            cc="COMPLETE",
+        )
+    )
+
+    for v, d in itertools.product(variables, datasets):
         if (
-            variable == cdc.ERA5_VARIABLES.sea_surface_temperature
-            and dataset != cdc.ERA5_DATASETS.reanalysis_era5_single_levels
+            v == cdc.ERA5_VARIABLES.sea_surface_temperature
+            and d != cdc.ERA5_DATASETS.reanalysis_era5_single_levels
         ):
             # This variable is only available in the single levels dataset
             continue
+        for y, m in itertools.product(years, months):
+            spec = (d, v, y, m)
+            final_out_path = cdata.extracted_era5_path(*spec)
+            zip_path = final_out_path.with_suffix(".zip")
+            uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
 
-        final_out_path = cdata.extracted_era5_path(*spec)
-        zip_path = final_out_path.with_suffix(".zip")
-        uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
+            if zip_path.exists() and uncompressed_path.exists():
+                # We broke in the middle of processing this file. Don't re-download,
+                # just reprocess.
+                uncompressed_path.unlink()
+                to_compress.append(spec)
+            elif uncompressed_path.exists() and final_out_path.exists():
+                # We broke while compressing. Just re-compress
+                final_out_path.unlink()
+                to_compress.append(spec)
+            elif final_out_path.exists() and final_out_path.stat().st_size == 0:
+                # Some other kind of error happened
+                final_out_path.unlink()
+                to_download.append(spec)
+                to_compress.append(spec)
+            elif zip_path.exists() and zip_path.stat().st_size == 0:
+                # We broke while downloading. Assume this file is invalid and re-download
+                zip_path.unlink()
+                to_download.append(spec)
+                to_compress.append(spec)
+            elif zip_path.exists():
+                to_compress.append(spec)
+            elif final_out_path.exists():
+                # We've already extracted this dataset
+                # (deleting the download path is the last step)
+                complete.append(spec)
+                continue
+            else:
+                to_download.append(spec)
+                to_compress.append(spec)
 
-        if zip_path.exists() and uncompressed_path.exists():
-            # We broke in the middle of processing this file. Don't re-download,
-            # just reprocess.
-            uncompressed_path.unlink()
-            to_compress.append(spec)
-        elif uncompressed_path.exists() and final_out_path.exists():
-            # We broke while compressing. Just re-compress
-            final_out_path.unlink()
-            to_compress.append(spec)
-        elif final_out_path.exists() and final_out_path.stat().st_size == 0:
-            # Some other kind of error happened
-            final_out_path.unlink()
-            to_download.append(spec)
-            to_compress.append(spec)
-        elif zip_path.exists() and zip_path.stat().st_size == 0:
-            # We broke while downloading. Assume this file is invalid and re-download
-            zip_path.unlink()
-            to_download.append(spec)
-            to_compress.append(spec)
-        elif zip_path.exists():
-            to_compress.append(spec)
-        elif final_out_path.exists():
-            # We've already extracted this dataset
-            # (deleting the download path is the last step)
-            complete.append(spec)
-            continue
-        else:
-            to_download.append(spec)
-            to_compress.append(spec)
+        tra, tca, ca = (
+            len(to_download) - tdc,
+            len(to_compress) - tcc,
+            len(complete) - cc,
+        )
+        tdc, tcc, cc = len(to_download), len(to_compress), len(complete)
+
+        print(
+            print_template.format(d=d.split("era5-")[1], v=v, tdc=tra, tcc=tca, cc=ca)
+        )
 
     return to_download, to_compress, complete
 
@@ -267,11 +295,11 @@ def build_task_lists(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def extract_era5(
+    era5_dataset: list[str],
+    era5_variable: list[str],
+    year: list[str],
+    month: list[str],
     output_dir: str,
-    era5_dataset: str,
-    era5_variable: str,
-    year: str,
-    month: str,
     queue: str,
 ) -> None:
     cdata = ClimateData(output_dir)
@@ -280,26 +308,18 @@ def extract_era5(
     users = list(credentials["keys"])
     jobs_per_user = 20
 
-    datasets = (
-        cdc.ERA5_DATASETS if era5_dataset == clio.RUN_ALL else [era5_dataset]
-    )
-    variables = (
-        cdc.ERA5_VARIABLES if era5_variable == clio.RUN_ALL else [era5_variable]
-    )
-    years = cdc.FULL_HISTORY_YEARS if year == clio.RUN_ALL else [year]
-    months = cdc.MONTHS if month == clio.RUN_ALL else [month]
-
     to_download, to_compress, complete = build_task_lists(
         cdata,
-        datasets,
-        variables,
-        years,
-        months,
+        era5_dataset,
+        era5_variable,
+        year,
+        month,
     )
 
     if not to_download:
         print("No datasets to download")
 
+    download_statuses = []
     while to_download:
         downloads_left = len(to_download)
 
@@ -319,7 +339,7 @@ def extract_era5(
             "jobs",
         )
 
-        jobmon.run_parallel(
+        status = jobmon.run_parallel(
             runner="cdtask",
             task_name="extract era5_download",
             flat_node_args=(
@@ -338,12 +358,13 @@ def extract_era5(
             },
             max_attempts=1,
         )
+        download_statuses.append(status)
 
     if not to_compress:
         print("No datasets to compress.")
         return
 
-    jobmon.run_parallel(
+    compress_status = jobmon.run_parallel(
         runner="cdtask",
         task_name="extract era5_compress",
         flat_node_args=(
@@ -363,3 +384,11 @@ def extract_era5(
         max_attempts=1,
         concurrency_limit=500,
     )
+
+    if any(s != "D" for s in download_statuses):
+        msg = "Some downloads failed. Re-run the pipeline to retry failed tasks."
+        raise RuntimeError(msg)
+
+    if compress_status != "D":
+        msg = "Compression failed. Re-run the pipeline to retry failed tasks."
+        raise RuntimeError(msg)
