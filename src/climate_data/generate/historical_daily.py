@@ -149,7 +149,8 @@ def validate_output(ds: xr.Dataset, year: str) -> None:  # noqa: C901
         error_msg_parts.append("Unexpected NaNs")
 
     if error_msg_parts:
-        msg = f"{len(error_msg_parts)} errors in output for {year}:\n {'\n'.join(error_msg_parts)}"
+        errors = "\n".join(error_msg_parts)
+        msg = f"{len(error_msg_parts)} errors in output for {year}:" + "\n" + errors
         raise ValueError(msg)
 
 
