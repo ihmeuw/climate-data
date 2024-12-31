@@ -152,7 +152,7 @@ def load_variable(
             if int(year) == 2100:  # noqa: PLR2004
                 # Some datasets stop in 2099.  Just reuse the last year
                 ds = load_and_shift_longitude_and_correct_time(member_path, "2099")
-                ds.assign_coords(time=ds.date + np.timedelta64(ds.date.size, "D"))
+                ds = ds.assign_coords(date=ds.date + np.timedelta64(ds.date.size, "D"))
             else:
                 raise e
 

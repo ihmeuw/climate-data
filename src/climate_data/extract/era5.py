@@ -382,7 +382,6 @@ def extract_era5(
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
-        concurrency_limit=500,
     )
 
     if any(s != "D" for s in download_statuses):

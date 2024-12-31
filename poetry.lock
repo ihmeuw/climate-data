@@ -3661,22 +3661,24 @@ requests = ">=2.0.1,<3.0.0"
 
 [[package]]
 name = "rra-tools"
-version = "1.0.17"
+version = "1.0.19"
 description = "Common utilities for IHME Rapid Response team pipelines."
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "rra_tools-1.0.17-py3-none-any.whl", hash = "sha256:f84b86a9235204b79b12302f7bf58b54760f25faeef1da06abaa6954f59d39a9"},
-    {file = "rra_tools-1.0.17.tar.gz", hash = "sha256:ffbddf359a415721f4dc28a63541d87481891af3343506223fa0971201bab005"},
+    {file = "rra_tools-1.0.19-py3-none-any.whl", hash = "sha256:0bf3d901ee7f0f35668206bdc2429f7de62d51015d41a46f4e087c0c8600ce5f"},
+    {file = "rra_tools-1.0.19.tar.gz", hash = "sha256:84588cd8faec47e0dc77fce999c9c5dec672e066c5b13b764d8d37623a5e0cff"},
 ]
 
 [package.dependencies]
 click = "*"
 deep-translator = ">=1.11.4,<2.0.0"
 loguru = ">=0.7.2,<0.8.0"
+matplotlib = ">=3.10.0,<4.0.0"
 pandas = ">=1.5"
 pathos = ">=0.3.2,<0.4.0"
 requests = ">=2.32.2,<3.0.0"
+seaborn = ">=0.13.2,<0.14.0"
 tqdm = ">=4.66.4,<5.0.0"
 
 [[package]]
@@ -3823,6 +3825,27 @@ numpy = ">=1.23.5,<2.3"
 dev = ["cython-lint (>=0.12.2)", "doit (>=0.36.0)", "mypy (==1.10.0)", "pycodestyle", "pydevtool", "rich-click", "ruff (>=0.0.292)", "types-psutil", "typing_extensions"]
 doc = ["jupyterlite-pyodide-kernel", "jupyterlite-sphinx (>=0.13.1)", "jupytext", "matplotlib (>=3.5)", "myst-nb", "numpydoc", "pooch", "pydata-sphinx-theme (>=0.15.2)", "sphinx (>=5.0.0,<=7.3.7)", "sphinx-design (>=0.4.0)"]
 test = ["Cython", "array-api-strict (>=2.0)", "asv", "gmpy2", "hypothesis (>=6.30)", "meson", "mpmath", "ninja", "pooch", "pytest", "pytest-cov", "pytest-timeout", "pytest-xdist", "scikit-umfpack", "threadpoolctl"]
+
+[[package]]
+name = "seaborn"
+version = "0.13.2"
+description = "Statistical data visualization"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "seaborn-0.13.2-py3-none-any.whl", hash = "sha256:636f8336facf092165e27924f223d3c62ca560b1f2bb5dff7ab7fad265361987"},
+    {file = "seaborn-0.13.2.tar.gz", hash = "sha256:93e60a40988f4d65e9f4885df477e2fdaff6b73a9ded434c1ab356dd57eefff7"},
+]
+
+[package.dependencies]
+matplotlib = ">=3.4,<3.6.1 || >3.6.1"
+numpy = ">=1.20,<1.24.0 || >1.24.0"
+pandas = ">=1.2"
+
+[package.extras]
+dev = ["flake8", "flit", "mypy", "pandas-stubs", "pre-commit", "pytest", "pytest-cov", "pytest-xdist"]
+docs = ["ipykernel", "nbconvert", "numpydoc", "pydata_sphinx_theme (==0.10.0rc2)", "pyyaml", "sphinx (<6.0.0)", "sphinx-copybutton", "sphinx-design", "sphinx-issues"]
+stats = ["scipy (>=1.7)", "statsmodels (>=0.12)"]
 
 [[package]]
 name = "semver"
@@ -4353,4 +4376,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "7bb2aaa719df5ab247b542dfaeda991b7059f4a1812ac718c28a615fefe69703"
+content-hash = "f579dc8f93fb7fc524d52f9b5c33f840c0b1cd0a6e93754c0b7e0e006ae2cc0e"
