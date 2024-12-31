@@ -120,9 +120,7 @@ def unzip_and_compress_era5(
     check_zipfile(zip_path)
 
     uncompressed_path = final_out_path.with_stem(f"{final_out_path.stem}_raw")
-    if uncompressed_path.exists():
-        uncompressed_path.unlink()
-    touch(uncompressed_path)
+    touch(uncompressed_path, clobber=True)
 
     print("Unzipping...")
     with zipfile.ZipFile(zip_path) as zf:
@@ -134,9 +132,7 @@ def unzip_and_compress_era5(
             f.write(zf.read(zinfo[0]))
 
     print("Compressing")
-    if final_out_path.exists():
-        final_out_path.unlink()
-    touch(final_out_path)
+    touch(final_out_path, clobber=True)
     ds = xr.open_dataset(uncompressed_path)
     var_name = next(iter(ds))  # These are all single variable datasets
     og_encoding = ds[var_name].encoding

@@ -71,9 +71,7 @@ def extract_cmip6_main(
             cmip_data = load_cmip_data(zstore_path)
 
             print("Writing to", out_path)
-            if out_path.exists():
-                out_path.unlink()
-            shell_tools.touch(out_path)
+            shell_tools.touch(out_path, clobber=True)
 
             cmip_data.to_netcdf(
                 out_path,

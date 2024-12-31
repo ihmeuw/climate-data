@@ -105,7 +105,7 @@ class ClimateData:
 
     def save_ncei_climate_stations(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.ncei_climate_stations / f"{year}.parquet"
-        touch(path, exist_ok=True)
+        touch(path, clobber=True)
         df.to_parquet(path)
 
     def load_ncei_climate_stations(self, year: int | str) -> pd.DataFrame:
@@ -138,7 +138,8 @@ class ClimateData:
         lat_start: int,
         lon_start: int,
     ) -> None:
-        save_raster(predictor, self.predictors / f"{name}_{lat_start}_{lon_start}.tif")
+        path = self.predictors / f"{name}_{lat_start}_{lon_start}.tif"
+        save_raster(predictor, path)
 
     def load_predictor(self, name: str) -> rt.RasterArray:
         paths = list(self.predictors.glob(f"{name}_*.tif"))
@@ -150,9 +151,7 @@ class ClimateData:
 
     def save_training_data(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.training_data / f"{year}.parquet"
-        if path.exists():
-            path.unlink()
-        touch(path)
+        touch(path, clobber=True)
         df.to_parquet(path)
 
     def load_training_data(self, year: int | str) -> pd.DataFrame:
@@ -176,9 +175,7 @@ class ClimateData:
 
     def save_scenario_metadata(self, df: pd.DataFrame) -> None:
         path = self.results_metadata / "scenario_metadata.parquet"
-        if path.exists():
-            path.unlink()
-        touch(path)
+        touch(path, clobber=True)
         df.to_parquet(path)
 
     def load_scenario_metadata(self) -> pd.DataFrame:
@@ -190,9 +187,7 @@ class ClimateData:
         scripts_root = Path(__file__).parent.parent.parent / "scripts"
         for root_dir in [self.results_metadata, scripts_root]:
             path = root_dir / "scenario_inclusion_metadata.parquet"
-            if path.exists():
-                path.unlink()
-            touch(path)
+            touch(path, clobber=True)
             df.to_parquet(path)
 
     def load_scenario_inclusion_metadata(self) -> pd.DataFrame:
@@ -219,10 +214,8 @@ class ClimateData:
         encoding_kwargs: dict[str, Any],
     ) -> None:
         path = self.daily_results_path(scenario, variable, year, draw)
-        if path.exists():
-            path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, exist_ok=True)
+        touch(path, clobber=True)
 
         encoding = {
             "dtype": "int16",
@@ -264,10 +257,8 @@ class ClimateData:
         encoding_kwargs: dict[str, Any],
     ) -> None:
         path = self.annual_results_path(scenario, variable, year, draw)
-        if path.exists():
-            path.unlink()
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path)
+        touch(path, clobber=True)
 
         encoding = {
             "dtype": "int16",
@@ -306,7 +297,7 @@ def save_raster(
         "bigtiff": "yes",
         **kwargs,
     }
-    touch(output_path, exist_ok=True)
+    touch(output_path, clobber=True)
     raster.to_file(output_path, **save_params)
 
 
@@ -337,5 +328,4 @@ def save_raster_to_cog(
         "driver": "COG",
         "overview_resampling": resampling,
     }
-    touch(output_path, exist_ok=True)
     save_raster(raster, output_path, num_cores, **cog_save_params)
