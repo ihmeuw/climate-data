@@ -5,6 +5,7 @@ from pathlib import Path
 import mkdocs_gen_files
 import pandas as pd
 
+from climate_data import constants as cdc
 from climate_data.data import ClimateData
 
 nav = mkdocs_gen_files.Nav()  # type: ignore[attr-defined, no-untyped-call]
@@ -141,8 +142,8 @@ The following tables show the number of unique models available for each variabl
 
   - Storage Root: `{cdata.extracted_cmip6}`
   - Naming Convention: `{{CMIP6_VARIABLE}}_{{CMIP6_EXPERIMENT}}_{{CMIP6_SOURCE}}_{{VARIANT}}.nc`
-    * `{{CMIP6_VARIABLE}}`: The variable being extracted (variable names can be found in the [CMIP6 database](https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb)).
-    * `{{CMIP6_EXPERIMENT}}`: The scenario being extracted (one of `ssp126`, `ssp245`, or `ssp585`).
+    * `{{CMIP6_VARIABLE}}`: The variable being extracted (one of {', '.join([v.name for v in cdc.CMIP6_VARIABLES])}).
+    * `{{CMIP6_EXPERIMENT}}`: The scenario being extracted (one of {', '.join(cdc.CMIP6_EXPERIMENTS)}).
     * `{{CMIP6_SOURCE}}`: The source model for the data. A source model is a particular model from a particular institution, e.g. `BCC-CSM2-MR`.
     * `{{VARIANT}}`: The variant of the model, which is a particular run of the model with specific initial and boundary conditions and forcing scenarios.
 
@@ -186,11 +187,14 @@ prohibitively expensive.
 
     - Daily Storage Root: `{cdata.daily_results}`
     - Naming Convention: `{{SCENARIO}}/{{DAILY_VARIABLE}}/{{YEAR}}.nc` (historical data only)
-        - `{{SCENARIO}}`: Generally, only historical data is available at the daily level, so this will be `historical`.
+        - `{{SCENARIO}}`: For most variables, only 'historical' is available. For the 'mean_temperature' variable the additional cmip scenario ({', '.join(cdc.CMIP6_EXPERIMENTS)}) are also available.
         - `{{DAILY_VARIABLE}}`: The name of the variable being stored.
         - `{{YEAR}}`: The year of the data being stored.
     - Annual Storage Root: `{cdata.results}`
-    - Naming Convention: `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}.nc` or `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}_{{DRAW}}.nc`
+    - Naming Convention: `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{DRAW}}.nc`
+        - `{{SCENARIO}}`: The scenario being stored (one of {', '.join(cdc.CMIP6_EXPERIMENTS)}).
+        - `{{ANNUAL_VARIABLE}}`: The name of the variable being stored.
+        - `{{DRAW}}`: The draw number of the data being stored as a three digit string (e.g. `027`).
 
 ### Pipeline Stages
 

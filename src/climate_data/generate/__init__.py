@@ -1,3 +1,7 @@
+from climate_data.generate.draws import (
+    compile_gcm_task,
+    draws,
+)
 from climate_data.generate.historical_daily import (
     generate_historical_daily,
     generate_historical_daily_task,
@@ -24,6 +28,7 @@ RUNNERS = {
     "scenario_inclusion": generate_scenario_inclusion,
     "scenario_daily": generate_scenario_daily,
     "scenario_annual": generate_scenario_annual,
+    "draws": draws,
 }
 
 TASK_RUNNERS = {
@@ -32,4 +37,5 @@ TASK_RUNNERS = {
     "scenario_inclusion": generate_scenario_inclusion,
     "scenario_daily": generate_scenario_daily_task,
     "scenario_annual": generate_scenario_annual_task,
+    "compile_gcm": compile_gcm_task,
 }

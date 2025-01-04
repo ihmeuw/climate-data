@@ -3,7 +3,6 @@ from typing import Literal, NamedTuple
 
 import numpy as np
 import xarray as xr
-from pydantic import BaseModel
 
 ##############
 # File roots #
@@ -96,7 +95,7 @@ class _CMIP6Experiments(NamedTuple):
 CMIP6_EXPERIMENTS = _CMIP6Experiments()
 
 
-class CMIP6Variable(BaseModel):
+class CMIP6Variable(NamedTuple):
     name: str
     description: str
     encoding_offset: float

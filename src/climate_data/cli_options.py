@@ -10,6 +10,7 @@ It also provides global variables representing the full space of valid values fo
 from collections.abc import Collection
 from typing import ParamSpec, TypeVar
 
+import click
 from rra_tools.cli_tools import (
     RUN_ALL,
     ClickOption,
@@ -171,6 +172,15 @@ def with_scenario(
     )
 
 
+def with_gcm_member() -> ClickOption[_P, _T]:
+    return click.option(
+        "--gcm-member",
+        "-g",
+        type=click.STRING,
+        help="GCM member to process.",
+    )
+
+
 __all__ = [
     "RUN_ALL",
     "ClickOption",
@@ -181,6 +191,7 @@ __all__ = [
     "with_draw",
     "with_era5_dataset",
     "with_era5_variable",
+    "with_gcm_member",
     "with_input_directory",
     "with_month",
     "with_num_cores",

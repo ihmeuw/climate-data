@@ -14,7 +14,12 @@ from climate_data import (
 )
 from climate_data.data import ClimateData
 from climate_data.generate import utils
-from climate_data.generate.scenario_daily import generate_scenario_daily_main
+from climate_data.generate.scenario_daily import (
+    TRANSFORM_MAP as DAILY_TRANSFORM_MAP,
+)
+from climate_data.generate.scenario_daily import (
+    generate_scenario_daily_main,
+)
 
 TEMP_THRESHOLDS = [30]
 
@@ -84,7 +89,7 @@ def generate_scenario_annual_main(
     target_variable: str,
     scenario: str,
     year: str,
-    draw: str,
+    gcm_member: str,
     output_dir: str | Path,
     progress_bar: bool = False,
 ) -> None:
@@ -107,7 +112,7 @@ def generate_scenario_annual_main(
                 generate_scenario_daily_main(
                     output_dir=output_dir,
                     year=year,
-                    draw=draw,
+                    gcm_member=gcm_member,
                     target_variable=source_variable,
                     cmip6_experiment=scenario,
                     write_output=False,
@@ -122,62 +127,46 @@ def generate_scenario_annual_main(
         ds = ds.compute()
 
     print("Saving files")
-    cdata.save_annual_results(
+    cdata.save_raw_annual_results(
         ds,
         scenario=scenario,
         variable=target_variable,
         year=year,
-        draw=draw,
+        gcm_member=gcm_member,
         encoding_kwargs=transform.encoding_kwargs,
     )
-
-    if scenario == "historical":
-        # Symlink all the other draws to the same file
-        source = cdata.annual_results_path(scenario, target_variable, year, "0")
-        for d in cdc.DRAWS:
-            if d == "0":
-                continue
-            destination = cdata.annual_results_path(scenario, target_variable, year, d)
-            if destination.exists():
-                destination.unlink()
-            destination.symlink_to(source)
 
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_scenario()
 @clio.with_year(cdc.FULL_HISTORY_YEARS + cdc.FORECAST_YEARS)
-@clio.with_draw()
+@clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_scenario_annual_task(
     target_variable: str,
     scenario: str,
     year: str,
-    draw: str,
+    gcm_member: str,
     output_dir: str,
 ) -> None:
-    if year in cdc.HISTORY_YEARS and scenario != "historical":
-        msg = "Historical years must use the 'historical' experiment."
-        raise ValueError(msg)
-    if year in cdc.FORECAST_YEARS and scenario == "historical":
-        msg = (
-            f"Forecast years must use a future experiment: " f"{cdc.CMIP6_EXPERIMENTS}."
-        )
-        raise ValueError(msg)
-
-    if scenario == "historical" and draw != "0":
-        msg = "Historical years must use draw 0."
+    history_flags = [
+        year in cdc.FULL_HISTORY_YEARS,
+        scenario == "historical",
+        gcm_member == "era5",
+    ]
+    if any(history_flags) and not all(history_flags):
+        msg = f"Historical years must use the 'historical' experiment and era5 GCM member. {year} {scenario} {gcm_member}"
         raise ValueError(msg)
 
     generate_scenario_annual_main(
-        target_variable, scenario, year, draw, output_dir, progress_bar=False
+        target_variable, scenario, year, gcm_member, output_dir, progress_bar=False
     )
 
 
 def build_arg_list(
-    variables: list[str],
+    target_variables: list[str],
     scenarios: list[str],
-    draws: list[str],
     output_dir: str,
     overwrite: bool,
 ) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str]]]:
@@ -190,20 +179,29 @@ def build_arg_list(
         print_template.format(v="VARIABLE", e="EXPERIMENT", tra="TO_RUN", ca="COMPLETE")
     )
 
-    for v, s in itertools.product(variables, scenarios):
+    for v, s in itertools.product(target_variables, scenarios):
         if s == "historical":
             years = cdc.FULL_HISTORY_YEARS
-            run_draws = ["0"]
+            gcm_members = ["era5"]
         else:
             years = cdc.FORECAST_YEARS
-            run_draws = draws
+            annual_source_variables = TRANSFORM_MAP[v].source_variables
+            daily_source_variables = itertools.chain(
+                *[
+                    DAILY_TRANSFORM_MAP[source_variable][0].source_variables
+                    for source_variable in annual_source_variables
+                ]
+            )
+            gcm_members = cdata.get_gcms(list(daily_source_variables))
 
-        for y, d in itertools.product(years, run_draws):
-            path = cdata.annual_results_path(scenario=s, variable=v, year=y, draw=d)
+        for y, g in itertools.product(years, gcm_members):
+            path = cdata.raw_annual_results_path(
+                scenario=s, variable=v, year=y, gcm_member=g
+            )
             if not path.exists():
-                to_run.append((v, s, y, d))
+                to_run.append((v, s, y, g))
             else:
-                complete.append((v, s, y, d))
+                complete.append((v, s, y, g))
 
         tra, ca = len(to_run) - trc, len(complete) - cc
         trc, cc = len(to_run), len(complete)
@@ -219,14 +217,12 @@ def build_arg_list(
 @click.command()  # type: ignore[arg-type]
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_scenario(allow_all=True)
-@clio.with_draw(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
 def generate_scenario_annual(
     target_variable: list[str],
     scenario: list[str],
-    draw: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
@@ -234,7 +230,6 @@ def generate_scenario_annual(
     to_run, complete = build_arg_list(
         target_variable,
         scenario,
-        draw,
         output_dir,
         overwrite,
     )
@@ -243,12 +238,11 @@ def generate_scenario_annual(
 
     if not to_run:
         return
-
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_annual",
         flat_node_args=(
-            ("target-variable", "scenario", "year", "draw"),
+            ("target-variable", "scenario", "year", "gcm-member"),
             to_run,
         ),
         task_args={
@@ -257,7 +251,7 @@ def generate_scenario_annual(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "100G",
+            "memory": "120G",
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },

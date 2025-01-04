@@ -24,10 +24,21 @@ def extract_metadata(data_path: Path) -> tuple[Any, ...]:
         ds = xr.open_dataset(data_path)
         year_start = ds["time.year"].min().item()
         year_end = ds["time.year"].max().item()
+        duplicates = []
+        for coord in ["lat", "lon", "time"]:
+            if coord in ds.coords:
+                duplicates.append(bool(pd.Index(ds[coord]).duplicated().any()))
+            else:
+                duplicates.append(False)
         can_load = True
-    except ValueError:
-        year_start, year_end, can_load = -1, -1, False
-    return *meta, year_start, year_end, can_load
+    except (ValueError, RuntimeError):
+        year_start, year_end, can_load, duplicates = (
+            -1,
+            -1,
+            False,
+            [False, False, False],
+        )
+    return *meta, year_start, year_end, can_load, *duplicates
 
 
 def generate_scenario_inclusion_main(
@@ -42,7 +53,6 @@ def generate_scenario_inclusion_main(
         num_cores=num_cores,
         progress_bar=progress_bar,
     )
-
     columns = [
         "variable",
         "scenario",
@@ -51,11 +61,19 @@ def generate_scenario_inclusion_main(
         "year_start",
         "year_end",
         "can_load",
+        "lat_duplicates",
+        "lon_duplicates",
+        "time_duplicates",
     ]
     idx_columns = ["variable", "source", "variant", "scenario"]
     meta_df = pd.DataFrame(meta_list, columns=columns).set_index(idx_columns)
     meta_df["all_years"] = (meta_df.year_start <= 2020) & (meta_df.year_end >= 2099)  # noqa: PLR2004
-    meta_df["valid"] = meta_df["all_years"] & meta_df["can_load"]
+    meta_df["no_duplicates"] = ~meta_df[
+        ["lat_duplicates", "lon_duplicates", "time_duplicates"]
+    ].any(axis=1)
+    meta_df["valid"] = (
+        meta_df["all_years"] & meta_df["can_load"] & meta_df["no_duplicates"]
+    )
     inclusion_df = (
         meta_df["valid"]
         .unstack()
