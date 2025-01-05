@@ -27,10 +27,13 @@ from climate_data import constants as cdc
 class ClimateData:
     """Class for managing the climate data used in the project."""
 
-    def __init__(self, root: str | Path = cdc.MODEL_ROOT) -> None:
+    def __init__(
+        self, root: str | Path = cdc.MODEL_ROOT, *, create_root: bool = True
+    ) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / "credentials"
-        self._create_model_root()
+        if create_root:
+            self._create_model_root()
 
     def _create_model_root(self) -> None:
         mkdir(self.root, exist_ok=True)

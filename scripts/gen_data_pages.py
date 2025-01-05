@@ -15,7 +15,7 @@ from climate_data.generate.scenario_daily import TRANSFORM_MAP as DAILY_TRANSFOR
 nav = mkdocs_gen_files.Nav()  # type: ignore[attr-defined, no-untyped-call]
 doc_root = Path()
 
-cdata = ClimateData()
+cdata = ClimateData(create_root=False)
 
 
 def list_to_str(lst: Collection[Any]) -> str:
