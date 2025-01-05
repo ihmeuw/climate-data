@@ -41,7 +41,7 @@ def extract_ncei_climate_stations_main(year: int | str, output_dir: str | Path) 
 
 
 @click.command()  # type: ignore[arg-type]
-@clio.with_year(years=cdc.FULL_HISTORY_YEARS)
+@clio.with_year(years=cdc.HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def extract_ncei_climate_stations_task(year: str, output_dir: str) -> None:
     extract_ncei_climate_stations_main(year, output_dir)
@@ -55,7 +55,7 @@ def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
         runner="cdtask",
         task_name="extract ncei",
         node_args={
-            "year": cdc.FULL_HISTORY_YEARS,
+            "year": cdc.HISTORY_YEARS,
         },
         task_args={
             "output-dir": output_dir,

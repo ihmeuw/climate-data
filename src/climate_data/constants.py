@@ -16,8 +16,7 @@ MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
 
 # Time
 
-FULL_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
-HISTORY_YEARS = [str(y) for y in range(1990, 2024)]
+HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
 REFERENCE_YEARS = HISTORY_YEARS[-5:]
 REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",

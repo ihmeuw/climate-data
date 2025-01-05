@@ -87,6 +87,7 @@ class ClimateData:
         self, *, return_full_criteria: bool = False
     ) -> pd.DataFrame:
         meta_path = self.extracted_cmip6 / "koppen_geiger_model_inclusion.parquet"
+
         if not meta_path.exists():
             df = pd.read_html(
                 "https://www.nature.com/articles/s41597-023-02549-6/tables/3"
@@ -101,8 +102,7 @@ class ClimateData:
                 "included_raw",
             ]
             df["included"] = df["included_raw"].apply({"Yes": True, "No": False}.get)
-            touch(meta_path)
-            df.to_parquet(meta_path)
+            save_parquet(df, meta_path)
 
         df = pd.read_parquet(meta_path)
         if return_full_criteria:
@@ -111,11 +111,12 @@ class ClimateData:
 
     def load_cmip6_metadata(self) -> pd.DataFrame:
         meta_path = self.extracted_cmip6 / "cmip6-metadata.parquet"
+
         if not meta_path.exists():
             external_path = "https://storage.googleapis.com/cmip6/cmip6-zarr-consolidated-stores.csv"
             meta = pd.read_csv(external_path)
-            touch(meta_path)
-            meta.to_parquet(meta_path)
+            save_parquet(meta, meta_path)
+
         return pd.read_parquet(meta_path)
 
     def extracted_cmip6_path(
@@ -142,8 +143,7 @@ class ClimateData:
 
     def save_ncei_climate_stations(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.ncei_climate_stations / f"{year}.parquet"
-        touch(path, clobber=True)
-        df.to_parquet(path)
+        save_parquet(df, path)
 
     def load_ncei_climate_stations(self, year: int | str) -> pd.DataFrame:
         return pd.read_parquet(self.ncei_climate_stations / f"{year}.parquet")
@@ -188,8 +188,7 @@ class ClimateData:
 
     def save_training_data(self, df: pd.DataFrame, year: int | str) -> None:
         path = self.training_data / f"{year}.parquet"
-        touch(path, clobber=True)
-        df.to_parquet(path)
+        save_parquet(df, path)
 
     def load_training_data(self, year: int | str) -> pd.DataFrame:
         return pd.read_parquet(self.training_data / f"{year}.parquet")
@@ -208,8 +207,7 @@ class ClimateData:
 
     def save_scenario_metadata(self, df: pd.DataFrame) -> None:
         path = self.results_metadata / "scenario_metadata.parquet"
-        touch(path, clobber=True)
-        df.to_parquet(path)
+        save_parquet(df, path)
 
     def load_scenario_metadata(self) -> pd.DataFrame:
         path = self.results_metadata / "scenario_metadata.parquet"
@@ -220,8 +218,7 @@ class ClimateData:
         scripts_root = Path(__file__).parent.parent.parent / "scripts"
         for root_dir in [self.results_metadata, scripts_root]:
             path = root_dir / "scenario_inclusion_metadata.parquet"
-            touch(path, clobber=True)
-            df.to_parquet(path)
+            save_parquet(df, path)
 
     def load_scenario_inclusion_metadata(self) -> pd.DataFrame:
         path = self.results_metadata / "scenario_inclusion_metadata.parquet"
@@ -230,28 +227,6 @@ class ClimateData:
     @property
     def daily_results(self) -> Path:
         return self.results / "daily"
-
-    def save_daily_results(
-        self,
-        results_ds: xr.Dataset,
-        scenario: str,
-        variable: str,
-        year: int | str,
-        draw: int | str | None,
-        encoding_kwargs: dict[str, Any],
-    ) -> None:
-        path = self.daily_results_path(scenario, variable, year, draw)
-        mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-
-        encoding = {
-            "dtype": "int16",
-            "_FillValue": -32767,
-            "zlib": True,
-            "complevel": 1,
-        }
-        encoding.update(encoding_kwargs)
-        results_ds.to_netcdf(path, encoding={"value": encoding})
 
     @property
     def raw_daily_results(self) -> Path:
@@ -277,36 +252,35 @@ class ClimateData:
     ) -> None:
         path = self.raw_daily_results_path(scenario, variable, year, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-
-        encoding = {
-            "dtype": "int16",
-            "_FillValue": -32767,
-            "zlib": True,
-            "complevel": 1,
-        }
-        encoding.update(encoding_kwargs)
-
-        results_ds.to_netcdf(path, encoding={"value": encoding})
+        save_xarray(results_ds, path, encoding_kwargs)
 
     def daily_results_path(
         self,
         scenario: str,
         variable: str,
         year: int | str,
-        draw: int | str | None = None,
     ) -> Path:
-        file_name = f"{year}.nc" if draw is None else f"{year}_{draw}.nc"
-        return self.daily_results / scenario / variable / file_name
+        return self.daily_results / scenario / variable / f"{year}.nc"
+
+    def save_daily_results(
+        self,
+        results_ds: xr.Dataset,
+        scenario: str,
+        variable: str,
+        year: int | str,
+        encoding_kwargs: dict[str, Any],
+    ) -> None:
+        path = self.daily_results_path(scenario, variable, year)
+        mkdir(path.parent, exist_ok=True, parents=True)
+        save_xarray(results_ds, path, encoding_kwargs)
 
     def load_daily_results(
         self,
         scenario: str,
         variable: str,
         year: int | str,
-        draw: int | str | None = None,
     ) -> xr.Dataset:
-        results_path = self.daily_results_path(scenario, variable, year, draw)
+        results_path = self.daily_results_path(scenario, variable, year)
         return xr.open_dataset(results_path)
 
     @property
@@ -337,16 +311,7 @@ class ClimateData:
     ) -> None:
         path = self.raw_annual_results_path(scenario, variable, year, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-
-        encoding = {
-            "dtype": "int16",
-            "_FillValue": -32767,
-            "zlib": True,
-            "complevel": 1,
-        }
-        encoding.update(encoding_kwargs)
-        results_ds.to_netcdf(path, encoding={"value": encoding})
+        save_xarray(results_ds, path, encoding_kwargs)
 
     @property
     def compiled_annual_results(self) -> Path:
@@ -393,6 +358,50 @@ class ClimateData:
         if dest_path.exists():
             dest_path.unlink()
         dest_path.symlink_to(source_path)
+
+
+def save_parquet(
+    df: pd.DataFrame,
+    output_path: str | Path,
+) -> None:
+    """Save a pandas DataFrame to a file with standard parameters.
+
+    Parameters
+    ----------
+    df
+        The DataFrame to save.
+    output_path
+        The path to save the DataFrame to.
+    """
+    touch(output_path, clobber=True)
+    df.to_parquet(output_path)
+
+
+def save_xarray(
+    ds: xr.Dataset,
+    output_path: str | Path,
+    encoding_kwargs: dict[str, Any],
+) -> None:
+    """Save an xarray dataset to a file with standard parameters.
+
+    Parameters
+    ----------
+    ds
+        The dataset to save.
+    output_path
+        The path to save the dataset to.
+    encoding_kwargs
+        The encoding parameters to use when saving the dataset.
+    """
+    touch(output_path, clobber=True)
+    encoding = {
+        "dtype": "int16",
+        "_FillValue": -32767,
+        "zlib": True,
+        "complevel": 1,
+    }
+    encoding.update(encoding_kwargs)
+    ds.to_netcdf(output_path, encoding={"value": encoding})
 
 
 def save_raster(

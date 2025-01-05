@@ -219,14 +219,13 @@ def generate_historical_daily_main(
         scenario="historical",
         variable=target_variable,
         year=year,
-        draw=None,
         encoding_kwargs=transform.encoding_kwargs,
     )
 
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_target_variable(TRANSFORM_MAP)
-@clio.with_year(cdc.FULL_HISTORY_YEARS)
+@clio.with_year(cdc.HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_historical_daily_task(
     target_variable: str,
@@ -238,7 +237,7 @@ def generate_historical_daily_task(
 
 @click.command()  # type: ignore[arg-type]
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
-@clio.with_year(cdc.FULL_HISTORY_YEARS, allow_all=True)
+@clio.with_year(cdc.HISTORY_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()

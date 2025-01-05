@@ -140,7 +140,7 @@ def generate_scenario_annual_main(
 @click.command()  # type: ignore[arg-type]
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_scenario()
-@clio.with_year(cdc.FULL_HISTORY_YEARS + cdc.FORECAST_YEARS)
+@clio.with_year(cdc.HISTORY_YEARS + cdc.FORECAST_YEARS)
 @clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_scenario_annual_task(
@@ -151,7 +151,7 @@ def generate_scenario_annual_task(
     output_dir: str,
 ) -> None:
     history_flags = [
-        year in cdc.FULL_HISTORY_YEARS,
+        year in cdc.HISTORY_YEARS,
         scenario == "historical",
         gcm_member == "era5",
     ]
@@ -181,7 +181,7 @@ def build_arg_list(
 
     for v, s in itertools.product(target_variables, scenarios):
         if s == "historical":
-            years = cdc.FULL_HISTORY_YEARS
+            years = cdc.HISTORY_YEARS
             gcm_members = ["era5"]
         else:
             years = cdc.FORECAST_YEARS

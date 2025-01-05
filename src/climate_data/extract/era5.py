@@ -157,7 +157,7 @@ def unzip_and_compress_era5(
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
 @clio.with_month()
-@clio.with_year(years=cdc.FULL_HISTORY_YEARS)
+@clio.with_year(years=cdc.HISTORY_YEARS)
 @click.option("--user", type=str)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def download_era5_task(
@@ -182,7 +182,7 @@ def download_era5_task(
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
 @clio.with_month()
-@clio.with_year(years=cdc.FULL_HISTORY_YEARS)
+@clio.with_year(years=cdc.HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def unzip_and_compress_era5_task(
     era5_dataset: str,
@@ -287,7 +287,7 @@ def build_task_lists(
 @clio.with_era5_dataset(allow_all=True)
 @clio.with_era5_variable(allow_all=True)
 @clio.with_month(allow_all=True)
-@clio.with_year(years=cdc.FULL_HISTORY_YEARS, allow_all=True)
+@clio.with_year(years=cdc.HISTORY_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def extract_era5(
