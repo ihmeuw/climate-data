@@ -55,11 +55,10 @@ def extract_cmip6_main(
     print(f"Extracting {len(meta_subset)} members...")
 
     for i, (member, zstore_path) in enumerate(meta_subset.items()):
-        item = f"{i}/{len(meta_subset)} {member}"
+        item = f"{i+1}/{len(meta_subset)} {member}"
         out_path = cdata.extracted_cmip6_path(
-            cmip6_variable,
             cmip6_experiment,
-            cmip6_source,
+            cmip6_variable,
             member,
         )
         if out_path.exists() and not overwrite:

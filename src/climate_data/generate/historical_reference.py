@@ -38,11 +38,6 @@ def generate_historical_reference_main(
         for k, v in xr.open_dataset(paths[0])["value"].encoding.items()
         if k in ["dtype", "_FillValue", "scale_factor", "add_offset"]
     }
-    encoding_kwargs = {
-        "zlib": True,
-        "complevel": 1,
-        **old_encoding,
-    }
 
     print("Averaging years by month")
     reference = sum(reference_data) / len(reference_data)
@@ -52,8 +47,7 @@ def generate_historical_reference_main(
         scenario="historical",
         variable=target_variable,
         year="reference",
-        draw=None,
-        encoding_kwargs=encoding_kwargs,
+        encoding_kwargs=old_encoding,
     )
 
 

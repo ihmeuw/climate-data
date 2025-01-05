@@ -1,6 +1,4 @@
 import itertools
-import random
-from collections import defaultdict
 from pathlib import Path
 
 import click
@@ -86,25 +84,6 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 }
 
 
-def get_source_paths(
-    cdata: ClimateData,
-    source_variables: list[str],
-    cmip6_experiment: str,
-) -> dict[str, list[list[Path]]]:
-    inclusion_meta = cdata.load_scenario_inclusion_metadata()[source_variables]
-    inclusion_meta = inclusion_meta[inclusion_meta.all(axis=1)]
-    source_paths = defaultdict(list)
-    for source, variant in inclusion_meta.index.tolist():
-        source_paths[source].append(
-            [
-                cdata.extracted_cmip6_path(v, cmip6_experiment, source, variant)
-                for v in source_variables
-            ]
-        )
-
-    return source_paths
-
-
 def load_and_shift_longitude(
     member_path: str | Path,
     time_slice: slice,
@@ -181,17 +160,17 @@ def generate_scenario_daily_main(
     target_variable: str,
     cmip6_experiment: str,
     year: str | int,
-    draw: str | int,
+    gcm_member: str,
     output_dir: str | Path,
     write_output: bool = True,
 ) -> xr.Dataset:
-    # make repeatable
-    random.seed(int(draw))
     cdata = ClimateData(output_dir)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
-
-    source_paths = get_source_paths(cdata, transform.source_variables, cmip6_experiment)
+    source_paths = [
+        cdata.extracted_cmip6_path(source_variable, cmip6_experiment, gcm_member)
+        for source_variable in transform.source_variables
+    ]
 
     print("loading historical reference")
     historical_reference = cdata.load_daily_results(
@@ -199,45 +178,37 @@ def generate_scenario_daily_main(
         variable=target_variable,
         year="reference",
     )
-    # randomly select source, variant, load reference and target,
     # compute anomaly, resample anomaly and compute scenario data
-    source_key = random.choice(list(source_paths.keys()))
-    variant_paths = random.choice(source_paths[source_key])
-    s_variant = f"{variant_paths[0].stem.split('_')[-1]}"
-    vid = f"{source_key}, Variant : {s_variant}"
     # load reference (monthly) and target (daily for a given year)
-    print(f"{vid}: Loading reference")
-    sref = transform(*[load_variable(vp, "reference") for vp in variant_paths])
+    print(f"{gcm_member}: Loading reference")
+    sref = transform(*[load_variable(vp, "reference") for vp in source_paths])
 
-    print(f"{vid}: Loading target")
-    target = transform(*[load_variable(vp, year) for vp in variant_paths])
+    print(f"{gcm_member}: Loading target")
+    target = transform(*[load_variable(vp, year) for vp in source_paths])
 
-    print(f"{vid}: computing anomaly")
+    print(f"{gcm_member}: computing anomaly")
     v_anomaly = compute_anomaly(sref, target, anomaly_type)
 
-    print(f"{vid}: resampling anomaly")
+    print(f"{gcm_member}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
 
-    print(f"{vid}: computing scenario data")
+    print(f"{gcm_member}: computing scenario data")
     if anomaly_type == "additive":
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
     else:
         scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
-    # write global attributes to track prevenance
-    scenario_data.attrs["source"] = source_key
-    scenario_data.attrs["variant"] = s_variant
     if write_output is True:
-        print(f"{vid}: Writing draw {draw} from {source_key}-{s_variant}")
-        cdata.save_daily_results(
+        print(f"{gcm_member}: Writing output")
+        cdata.save_raw_daily_results(
             scenario_data,
             scenario=cmip6_experiment,
             variable=target_variable,
             year=year,
-            draw=draw,
+            gcm_member=gcm_member,
             encoding_kwargs=transform.encoding_kwargs,
         )
     else:
-        print(f"{vid}: returning draw {draw} from {source_key}-{s_variant}")
+        print(f"{gcm_member}: Returning output")
 
     return scenario_data
 
@@ -246,17 +217,22 @@ def generate_scenario_daily_main(
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment()
 @clio.with_year(cdc.FORECAST_YEARS)
-@clio.with_draw()
+@clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_scenario_daily_task(
     target_variable: str,
     cmip6_experiment: str,
     year: str,
-    draw: str,
+    gcm_member: str,
     output_dir: str,
 ) -> None:
     generate_scenario_daily_main(
-        target_variable, cmip6_experiment, year, draw, output_dir, write_output=True
+        target_variable,
+        cmip6_experiment,
+        year,
+        gcm_member,
+        output_dir,
+        write_output=True,
     )
 
 
@@ -264,7 +240,6 @@ def generate_scenario_daily_task(
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
-@clio.with_draw(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
@@ -272,29 +247,35 @@ def generate_scenario_daily(
     target_variable: list[str],
     cmip6_experiment: list[str],
     year: list[str],
-    draw: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
 
-    veyd = []
+    veyg = []
     complete = []
-    for v, e, y, d in itertools.product(target_variable, cmip6_experiment, year, draw):
-        path = cdata.daily_results_path(scenario=e, variable=v, year=y, draw=d)
-        if not path.exists() or overwrite:
-            veyd.append((d, y, v, e))
-        else:
-            complete.append((d, y, v, e))
+    for v, e, y in itertools.product(target_variable, cmip6_experiment, year):
+        source_variables = TRANSFORM_MAP[v][0].source_variables
+        gcms = cdata.get_gcms(source_variables)
+        for g in gcms:
+            path = cdata.raw_daily_results_path(e, v, y, g)
+            if not path.exists() or overwrite:
+                veyg.append((g, y, v, e))
+            else:
+                complete.append((g, y, v, e))
 
-    print(f"{len(complete)} tasks already done. " f"Launching {len(veyd)} tasks")
+    if not veyg:
+        print("All tasks already done.")
+        return
+
+    print(f"{len(complete)} tasks already done. " f"Launching {len(veyg)} tasks")
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_daily",
         flat_node_args=(
-            ("target-variable", "cmip6-experiment", "year", "draw"),
-            veyd,
+            ("target-variable", "cmip6-experiment", "year", "gcm-member"),
+            veyg,
         ),
         task_args={
             "output-dir": output_dir,

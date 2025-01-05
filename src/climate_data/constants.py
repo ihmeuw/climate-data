@@ -3,7 +3,6 @@ from typing import Literal, NamedTuple
 
 import numpy as np
 import xarray as xr
-from pydantic import BaseModel
 
 ##############
 # File roots #
@@ -17,8 +16,7 @@ MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
 
 # Time
 
-FULL_HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
-HISTORY_YEARS = [str(y) for y in range(1990, 2024)]
+HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
 REFERENCE_YEARS = HISTORY_YEARS[-5:]
 REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",
@@ -96,7 +94,7 @@ class _CMIP6Experiments(NamedTuple):
 CMIP6_EXPERIMENTS = _CMIP6Experiments()
 
 
-class CMIP6Variable(BaseModel):
+class CMIP6Variable(NamedTuple):
     name: str
     description: str
     encoding_offset: float

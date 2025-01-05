@@ -1,16 +1,32 @@
 """Generates a comprehensive report of the data stored in the Climate Database."""
 
+from collections.abc import Collection
 from pathlib import Path
+from typing import Any
 
 import mkdocs_gen_files
 import pandas as pd
 
+from climate_data import constants as cdc
 from climate_data.data import ClimateData
+from climate_data.generate.scenario_annual import TRANSFORM_MAP as ANNUAL_TRANSFORM_MAP
+from climate_data.generate.scenario_daily import TRANSFORM_MAP as DAILY_TRANSFORM_MAP
 
 nav = mkdocs_gen_files.Nav()  # type: ignore[attr-defined, no-untyped-call]
 doc_root = Path()
 
-cdata = ClimateData()
+cdata = ClimateData(create_root=False)
+
+
+def list_to_str(lst: Collection[Any]) -> str:
+    items = []
+    for item in lst:
+        if isinstance(item, str):
+            items.append(f"`{item}`")
+        else:
+            items.append(f"`{item.name}`")
+    return ", ".join(items)
+
 
 # Extracted data
 
@@ -38,13 +54,32 @@ The file tree with subdirectories is as follows:
 │   └── _Other Data Sources_/
 └── {cdata.results.stem}/
     ├── {cdata.annual_results.stem}/
+    │   ├── archive/
+    │   │   ├── historical/
+    │   │   │   └── {{ANNUAL_VARIABLE}}/
+    │   │   │       └── {{YEAR}}.nc
+    │   │   └── {{SCENARIO}}/
+    │   │       └── {{ANNUAL_VARIABLE}}/
+    │   │           └── {{YEAR}}.nc
+    |   ├── {cdata.raw_annual_results.stem}/
+    │   │   ├── {cdata.compiled_annual_results.stem}/
+    │   │   │   └── {{SCENARIO}}/
+    │   │   │       └── {{ANNUAL_VARIABLE}}/
+    │   │   │           └── {{GCM_MEMBER}}.nc
+    │   │   ├── historical/
+    │   │   │   └── {{ANNUAL_VARIABLE}}/
+    │   │   │       └── {{YEAR}}_era5.nc
+    │   │   └── {{SCENARIO}}/
+    │   │       └── {{ANNUAL_VARIABLE}}/
+    │   │           └── {{YEAR}}_{{GCM_MEMBER}}.nc
     │   └── {{SCENARIO}}/
     │       └── {{ANNUAL_VARIABLE}}/
-    │           └── {{YEAR}}_{{DRAW}}.nc
+    │           └── {{DRAW}}.nc
     ├── {cdata.daily_results.stem}/
     │   └── {{SCENARIO}}/
     │       └── {{DAILY_VARIABLE}}/
-    │           └── {{YEAR}}.nc
+    │           ├── {{YEAR}}.nc
+    │           └── reference.nc
     └── {cdata.results_metadata.stem}/
 
 ```
@@ -79,13 +114,14 @@ by the Copernicus Climate Change Service (C3S) at ECMWF. There are three dataset
     it significantly smaller and faster to work with. This is the dataset we use to supplement the ERA5-Land data over regions where the land data is
     missing or incomplete. We also use this dataset for variables that are not available in the ERA5-Land dataset.
 
-#### Storage and Naming Conventions
+!!! note "Storage and naming conventions"
+    **File Pattern**: `{cdata.extracted_era5}/{{ERA5_DATASET}}_{{ERA5_VARIABLE}}_{{YEAR}}_{{MONTH}}.nc`
 
-  - Storage Root: `{cdata.extracted_era5}`
-  - Naming Convention: `{{ERA5_DATASET}}_{{ERA5_VARIABLE}}_{{YEAR}}_{{MONTH}}.nc`
-    * `{{ERA5_DATASET}}`: One of `reanalysis-era5-land`, or `reanalysis-era5-single-levels`.
-    * `{{ERA5_VARIABLE}}`: The variable being extracted (variable names can be found on the pages linked above).
-    * `{{YEAR}}` and `{{MONTH}}`: The year and month of the data being extracted.
+    **Naming Conventions**
+
+    - `{{ERA5_DATASET}}`: One of `reanalysis-era5-land`, or `reanalysis-era5-single-levels`.
+    - `{{ERA5_VARIABLE}}`: The variable being extracted (one of {list_to_str(cdc.ERA5_VARIABLES)}).
+    - `{{YEAR}}` and `{{MONTH}}`: The year and month of the data being extracted. `{{YEAR}}` ranges from `{cdc.HISTORY_YEARS[0]}` to `{cdc.HISTORY_YEARS[-1]}`.
 
 """
 
@@ -108,6 +144,16 @@ cmip_page_content = f"""### CMIP6 Data
 The [Climate Model Intercomparison Project Phase 6 (CMIP6)](https://en.wikipedia.org/wiki/Coupled_Model_Intercomparison_Project)
 is a collaborative effort to compare climate models across the globe. The data is organized into
 different variables, scenarios, and sources.
+
+!!! note "Storage and Naming Conventions"
+    **File Pattern:** `{cdata.extracted_cmip6}/{{CMIP6_VARIABLE}}_{{CMIP6_EXPERIMENT}}_{{CMIP6_SOURCE}}_{{VARIANT}}.nc`
+
+    **Naming Conventions**
+
+    - `{{CMIP6_VARIABLE}}`: The variable being extracted (one of {list_to_str(cdc.CMIP6_VARIABLES)}).
+    - `{{CMIP6_EXPERIMENT}}`: The scenario being extracted (one of {list_to_str(cdc.CMIP6_EXPERIMENTS)}).
+    - `{{CMIP6_SOURCE}}`: The source model for the data. A source model is a particular model from a particular institution, e.g. `BCC-CSM2-MR`.
+    - `{{VARIANT}}`: The variant of the model, which is a particular run of the model with specific initial and boundary conditions and forcing scenarios.
 
 #### Model Inclusion
 
@@ -137,14 +183,6 @@ The following tables show the number of unique models available for each variabl
 
     {"\n\t".join(source_table.to_markdown().split("\n"))}
 
-#### Storage and Naming Conventions
-
-  - Storage Root: `{cdata.extracted_cmip6}`
-  - Naming Convention: `{{CMIP6_VARIABLE}}_{{CMIP6_EXPERIMENT}}_{{CMIP6_SOURCE}}_{{VARIANT}}.nc`
-    * `{{CMIP6_VARIABLE}}`: The variable being extracted (variable names can be found in the [CMIP6 database](https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb)).
-    * `{{CMIP6_EXPERIMENT}}`: The scenario being extracted (one of `ssp126`, `ssp245`, or `ssp585`).
-    * `{{CMIP6_SOURCE}}`: The source model for the data. A source model is a particular model from a particular institution, e.g. `BCC-CSM2-MR`.
-    * `{{VARIANT}}`: The variant of the model, which is a particular run of the model with specific initial and boundary conditions and forcing scenarios.
 
 ??? example "Variant Labels"
 
@@ -178,25 +216,64 @@ extraction_content = (
 
 processed_data_content = f"""## Processed Data
 
-The processed data is stored in the `{cdata.results}` directory, organized by scenario, variable, and year.
-We generally only generate annual results, as storing daily results for all models and all variables would be
-prohibitively expensive.
+The processed data is stored in the `{cdata.results}` directory, organized by scenario and variable.
 
-### Storage and Naming Conventions
+There are two types of processed data: daily and annual. Daily data is stored for historical data only (and for the
+`mean_temperature` variable for CMIP6 data). We generally only generate annual results, as storing daily results
+for all models and all variables would be prohibitively expensive. Daily data is stored in the `{cdata.daily_results}` directory.
 
-    - Daily Storage Root: `{cdata.daily_results}`
-    - Naming Convention: `{{SCENARIO}}/{{DAILY_VARIABLE}}/{{YEAR}}.nc` (historical data only)
-        - `{{SCENARIO}}`: Generally, only historical data is available at the daily level, so this will be `historical`.
-        - `{{DAILY_VARIABLE}}`: The name of the variable being stored.
-        - `{{YEAR}}`: The year of the data being stored.
-    - Annual Storage Root: `{cdata.results}`
-    - Naming Convention: `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}.nc` or `{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}_{{DRAW}}.nc`
+!!! note "Daily Data Storage and Naming Conventions"
+    **File Patterns:**
+
+    - `{cdata.daily_results}/historical/{{DAILY_VARIABLE}}/{{YEAR}}.nc` - Daily data for historical variables.
+    - `{cdata.daily_results}/historical/{{DAILY_VARIABLE}}/reference.nc` - Reference climatology data for historical variables.
+    - `{cdata.daily_results}/{{SCENARIO}}/mean_temperature/{{YEAR}}.nc` - Daily data for the `mean_temperature` variable for CMIP6 scenarios.
+
+    **Naming Conventions**
+
+    - `{{SCENARIO}}`: The CMIP6 scenario being stored (one of {list_to_str(cdc.CMIP6_EXPERIMENTS)}).
+    - `{{DAILY_VARIABLE}}`: The name of the variable being stored (one of {list_to_str(DAILY_TRANSFORM_MAP)}).
+    - `{{YEAR}}`: The year of the data being stored. In `historical` subdirectories, this runs from `{cdc.HISTORY_YEARS[0]}` to `{cdc.HISTORY_YEARS[-1]}`.
+      In scenario subdirectories, this runs from `{cdc.FORECAST_YEARS[0]}` to `{cdc.FORECAST_YEARS[-1]}`.
+
+The annual data is stored in the `{cdata.annual_results}` directory. Annual data is stored by draw number, with each draw
+representing a random sample of a Global Climate Model (GCM) and variant from CMIP6. Each draw is a full annual time
+series from 1950 to 2100 and collates the historical ERA5 data with the CMIP6 scenario data.
+
+!!! note "Annual Data Storage and Naming Conventions"
+    **Archive File Patterns**
+
+    These store the prior results for the climate database to ease transition to the new draw-level outputs.
+    They use an older version of the CMIP6 ensemble and represent an ensemble mean.  They should be transitioned
+    to the new draw-level outputs as soon as possible.
+
+    - `{cdata.annual_results}/archive/historical/{{ANNUAL_VARIABLE}}/{{YEAR}}.nc` - Archived historical annual data using the ERA5 dataset.
+    - `{cdata.annual_results}/archive/{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}.nc` - Archived scenario annual data using the CMIP6 dataset and the original point estimate ensemble.
+
+    **Raw and Compiled File Patterns**
+
+    - `{cdata.raw_annual_results}/historical/{{ANNUAL_VARIABLE}}/{{YEAR}}_era5.nc` - Raw historical annual data using the ERA5 dataset.
+    - `{cdata.raw_annual_results}/{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{YEAR}}_{{GCM_MEMBER}}.nc` - Raw scenario annual data using the CMIP6 dataset. Each dataset is a bias-corrected and downscaled GCM-member.
+    - `{cdata.compiled_annual_results}/{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{GCM_MEMBER}}.nc` - Annual compilations of the raw scenario data for each GCM-member.
+
+    **Draw File Pattern:** {cdata.results}/{{SCENARIO}}/{{ANNUAL_VARIABLE}}/{{DRAW}}.nc
+
+    **Naming Conventions**
+
+    - `{{ANNUAL_VARIABLE}}`: The name of the variable being stored (one of {list_to_str(ANNUAL_TRANSFORM_MAP)}).
+    - `{{SCENARIO}}`: The scenario being stored (one of {list_to_str(cdc.CMIP6_EXPERIMENTS)}).
+    - `{{YEAR}}`: The year of the data being stored. In `historical` subdirectories, this runs from `{cdc.HISTORY_YEARS[0]}` to `{cdc.HISTORY_YEARS[-1]}`.
+      In scenario subdirectories, this runs from `{cdc.FORECAST_YEARS[0]}` to `{cdc.FORECAST_YEARS[-1]}`.
+    - `{{GCM_MEMBER}}`: The GCM member being stored. This is a unique identifier for each GCM member combining the source model and variant.
+    - `{{DRAW}}`: The draw number of the data being stored as a three digit string (e.g. `027`).
+
+
 
 ### Pipeline Stages
 
 The processing pipelines turn the extracted [ERA5](#era5-data) and [CMIP6](#cmip6-data) data into a coherent set of
 climate variables with a consistent resolution, time scale, and data storage format. The pipeline is run
-with the `cdrun` command (see [Installation](../installation.md) for installation instructions). The pipeline
+with the `cdrun` command (see [Installation](./installation.md) for installation instructions). The pipeline
 has the following steps:
 
   1.  **Historical Daily** (`cdrun generate historical_daily`): This processes the hourly ERA5-Land and ERA5-Single-Level
@@ -210,7 +287,7 @@ has the following steps:
       the scenario data by serving as a seasonally-aware reference point we can intercept shift to.
   3.  **Scenario Inclusion** (`cdrun generate scenario_inclusion`): This produces a set of metadata that determines
       which CMIP sources and variants are used to generate scenario draws. This is the second stage scenario determination.
-      When we [extract CMIP6 data](####model-inclusion), we cannot determine the year range of the data until it is extracted.
+      When we [extract CMIP6 data](#model-inclusion), we cannot determine the year range of the data until it is extracted.
       This stage determines which models are included based on the year range of the data and writes this information to a file
       in {cdata.results_metadata}.
   4.  **Scenario Daily** (`cdrun generate scenario_daily`): This produces scenario projections from the CMIP6 data by dynamical
