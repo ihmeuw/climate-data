@@ -104,7 +104,10 @@ def load_variable(
         # There are some slight numerical differences in the lat/long for some of
         # the land datasets. They are gridded consistently, so just tweak the
         # coordinates so things align.
-        ds = ds.assign_coords(latitude=cdc.TARGET_LAT[::-1], longitude=cdc.TARGET_LON)
+        ds = ds.assign_coords(
+            latitude=cdc.ERA5_LAND_LATITUDE[::-1],
+            longitude=cdc.ERA5_LAND_LONGITUDE,
+        )
     else:
         ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]
@@ -137,9 +140,9 @@ def validate_output(ds: xr.Dataset, year: str) -> None:  # noqa: C901
     if ds.dims["date"] != num_days:
         error_msg_parts.append(f"Unexpected number of days: {ds.dims['date']}")
 
-    if not (ds.latitude == cdc.TARGET_LAT[::-1]).all().item():
+    if not (ds.latitude == cdc.TARGET_LATITUDE[::-1]).all().item():
         error_msg_parts.append("Unexpected latitude")
-    if not (ds.longitude == cdc.TARGET_LON).all().item():
+    if not (ds.longitude == cdc.TARGET_LONGITUDE).all().item():
         error_msg_parts.append("Unexpected longitude")
 
     if str(ds["value"].dtype) not in ["float32", "float64"]:
@@ -177,18 +180,22 @@ def generate_historical_daily_main(
             for sv in transform.source_variables
         ]
         print("collapsing")
-        ds = transform(
+        ds_single_level = transform(
             *single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels
         ).compute()
         # collapsing often screws the date dtype, so fix it
-        ds = ds.assign(date=pd.to_datetime(ds.date))
+        ds_single_level = ds_single_level.assign(
+            date=pd.to_datetime(ds_single_level.date)
+        )
 
         print("interpolating")
-        ds_land_res = utils.interpolate_to_target_latlon(ds)
+        ds_single_level = utils.interpolate_to_target_latlon(
+            ds_single_level, method="nearest"
+        )
 
         if target_variable == cdc.ERA5_VARIABLES.sea_surface_temperature:
             # sea surface temperature is only available in the single-level dataset
-            datasets.append(ds_land_res)
+            datasets.append(ds_single_level)
         else:
             print(f"loading land for {month_str}")
             land = [
@@ -204,8 +211,11 @@ def generate_historical_daily_main(
                 ).compute()
             ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
+            print("interpolating")
+            ds_land = utils.interpolate_to_target_latlon(ds_land, method="linear")
+
             print("combining")
-            combined = ds_land.combine_first(ds_land_res)
+            combined = ds_land.combine_first(ds_single_level)
             datasets.append(combined)
 
     ds_year = xr.concat(datasets, dim="date").sortby("date")

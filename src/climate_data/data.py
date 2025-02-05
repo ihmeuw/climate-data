@@ -301,7 +301,13 @@ class ClimateData:
         year: int | str,
         gcm_member: str,
     ) -> Path:
-        return self.raw_annual_results / scenario / variable / f"{year}_{gcm_member}.nc"
+        return (
+            self.raw_annual_results
+            / "v2"
+            / scenario
+            / variable
+            / f"{year}_{gcm_member}.nc"
+        )
 
     def save_raw_annual_results(
         self,

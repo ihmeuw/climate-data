@@ -7,6 +7,8 @@ import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 
+from climate_data import constants as cdc
+
 #############################
 # Standard unit conversions #
 #############################
@@ -237,8 +239,8 @@ def rename_val_column(ds: xr.Dataset) -> xr.Dataset:
 def interpolate_to_target_latlon(
     ds: xr.Dataset,
     method: str = "nearest",
-    target_lon: xr.DataArray | None = None,
-    target_lat: xr.DataArray | None = None,
+    target_lon: xr.DataArray = cdc.TARGET_LONGITUDE,
+    target_lat: xr.DataArray = cdc.TARGET_LATITUDE,
 ) -> xr.Dataset:
     """Interpolate a dataset to a target latitude and longitude grid.
 
@@ -258,21 +260,6 @@ def interpolate_to_target_latlon(
     xr.Dataset
         Interpolated dataset
     """
-    valid_lat_lon = (target_lat is not None and target_lon is not None) or (
-        target_lat is None and target_lon is None
-    )
-    if not valid_lat_lon:
-        msg = "Both target_lat and target_lon must be provided or neither"
-        raise ValueError(msg)
-    if target_lon is None:
-        # Avoid cyclic imports
-        from climate_data.constants import TARGET_LON, TARGET_LAT  # noqa: I001
-
-        target_lon = TARGET_LON
-        target_lat = TARGET_LAT
-
-        target_lon = np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1)
-
     return (
         ds.interp(longitude=target_lon, latitude=target_lat, method=method)  # type: ignore[arg-type]
         .interpolate_na(dim="longitude", method="nearest", fill_value="extrapolate")

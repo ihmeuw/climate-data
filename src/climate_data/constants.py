@@ -28,11 +28,19 @@ MONTHS = [f"{i:02d}" for i in range(1, 13)]
 
 # Space
 
-TARGET_LON = xr.DataArray(
+ERA5_LAND_LONGITUDE = xr.DataArray(
     np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
 )
-TARGET_LAT = xr.DataArray(
+ERA5_LAND_LATITUDE = xr.DataArray(
     np.round(np.arange(-90.0, 90.1, 0.1, dtype="float32"), 1), dims="latitude"
+)
+
+
+TARGET_LONGITUDE = xr.DataArray(
+    np.round(np.arange(-179.95, 180.0, 0.1, dtype="float32"), 2), dims="longitude"
+)
+TARGET_LATITUDE = xr.DataArray(
+    np.round(np.arange(-89.95, 90.0, 0.1, dtype="float32"), 2), dims="latitude"
 )
 
 # Extraction Constants
@@ -174,13 +182,6 @@ CMIP6_VARIABLES = _CMIP6Variables()
 
 
 # Processing Constants
-
-TARGET_LON = xr.DataArray(
-    np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
-)
-TARGET_LAT = xr.DataArray(
-    np.round(np.arange(-90.0, 90.1, 0.1, dtype="float32"), 1), dims="latitude"
-)
 
 DRAWS = [str(d) for d in range(100)]
 

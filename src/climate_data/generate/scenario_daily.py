@@ -191,7 +191,6 @@ def generate_scenario_daily_main(
 
     print(f"{gcm_member}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
-
     print(f"{gcm_member}: computing scenario data")
     if anomaly_type == "additive":
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
