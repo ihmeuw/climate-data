@@ -301,13 +301,7 @@ class ClimateData:
         year: int | str,
         gcm_member: str,
     ) -> Path:
-        return (
-            self.raw_annual_results
-            / "v2"
-            / scenario
-            / variable
-            / f"{year}_{gcm_member}.nc"
-        )
+        return self.raw_annual_results / scenario / variable / f"{year}_{gcm_member}.nc"
 
     def save_raw_annual_results(
         self,
@@ -324,7 +318,7 @@ class ClimateData:
 
     @property
     def compiled_annual_results(self) -> Path:
-        return self.raw_annual_results / "v2" / "compiled"
+        return self.raw_annual_results / "compiled"
 
     def compiled_annual_results_path(
         self,
@@ -352,7 +346,7 @@ class ClimateData:
         variable: str,
         draw: int | str,
     ) -> Path:
-        return self.annual_results / "v2" / scenario / variable / f"{draw:0>3}.nc"
+        return self.annual_results / scenario / variable / f"{draw:0>3}.nc"
 
     def link_annual_draw(
         self,
