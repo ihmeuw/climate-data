@@ -40,14 +40,14 @@ def extract_ncei_climate_stations_main(year: int | str, output_dir: str | Path) 
     shutil.rmtree(year_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_year(years=cdc.HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def extract_ncei_climate_stations_task(year: str, output_dir: str) -> None:
     extract_ncei_climate_stations_main(year, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:

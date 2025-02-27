@@ -31,7 +31,7 @@ def extract_rub_local_climate_zones_main(output_dir: str | Path) -> None:
         wget(url, out_root / file_name)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def extract_rub_local_climate_zones(output_dir: str) -> None:
     extract_rub_local_climate_zones_main(output_dir)

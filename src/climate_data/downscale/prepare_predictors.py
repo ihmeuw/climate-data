@@ -1,6 +1,5 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import ParamSpec, TypeVar
 
 import click
 import numpy as np
@@ -16,19 +15,16 @@ from climate_data import (
 from climate_data.data import ClimateData
 from climate_data.utils import make_raster_template
 
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-
 PAD = 1
 STRIDE = 30
 LATITUDES = [str(lat) for lat in range(-90, 90, STRIDE)]
 LONGITUDES = [str(lon) for lon in range(-180, 180, STRIDE)]
 
 
-def with_lat_start(
+def with_lat_start[**P, T](
     *,
     allow_all: bool = False,
-) -> clio.ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return clio.with_choice(
         "lat-start",
         allow_all=allow_all,
@@ -37,10 +33,10 @@ def with_lat_start(
     )
 
 
-def with_lon_start(
+def with_lon_start[**P, T](
     *,
     allow_all: bool = False,
-) -> clio.ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return clio.with_choice(
         "lon-start",
         allow_all=allow_all,
@@ -145,7 +141,7 @@ def prepare_predictors_main(
         cdata.save_predictor(predictor, name, lat_start, lon_start)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @with_lat_start(allow_all=False)
 @with_lon_start(allow_all=False)
 @clio.with_output_directory(cdc.MODEL_ROOT)
@@ -157,7 +153,7 @@ def prepare_predictors_task(
     prepare_predictors_main(lat_start, lon_start, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def prepare_predictors(output_dir: str, queue: str) -> None:

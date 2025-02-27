@@ -153,7 +153,7 @@ def unzip_and_compress_era5(
     uncompressed_path.unlink()
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
 @clio.with_month()
@@ -178,7 +178,7 @@ def download_era5_task(
     )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_era5_dataset()
 @clio.with_era5_variable()
 @clio.with_month()
@@ -283,7 +283,7 @@ def build_task_lists(
     return to_download, to_compress, complete
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_era5_dataset(allow_all=True)
 @clio.with_era5_variable(allow_all=True)
 @clio.with_month(allow_all=True)

@@ -212,7 +212,7 @@ def generate_scenario_daily_main(
     return scenario_data
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_cmip6_experiment()
 @clio.with_year(cdc.FORECAST_YEARS)
@@ -235,7 +235,7 @@ def generate_scenario_daily_task(
     )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
@@ -268,7 +268,7 @@ def generate_scenario_daily(
         print("All tasks already done.")
         return
 
-    print(f"{len(complete)} tasks already done. " f"Launching {len(veyg)} tasks")
+    print(f"{len(complete)} tasks already done. Launching {len(veyg)} tasks")
     jobmon.run_parallel(
         runner="cdtask",
         task_name="generate scenario_daily",

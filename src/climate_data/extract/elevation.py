@@ -61,7 +61,7 @@ def extract_elevation_main(
             fp.write(chunk)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @click.option(
     "--model-name",
     required=True,
@@ -96,7 +96,7 @@ def extract_elevation_task(
     extract_elevation_main(model_name, lat_start, lon_start, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @click.option(
     "--generate-name",
     required=True,

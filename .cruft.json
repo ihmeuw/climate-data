@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/collijk/python-package-cookiecutter",
-  "commit": "cd59edc69d51f9485bca69eb940e0706bc65e9ba",
+  "commit": "6a159105838fc80cba178d2fbcc6185fd3ef8df2",
   "checkout": null,
   "context": {
     "cookiecutter": {
@@ -12,7 +12,7 @@
       "package_name": "climate_data",
       "project_short_description": "Pipelines to extract, format, and downscale ERA5 and CMIP6 data.",
       "_template": "https://github.com/collijk/python-package-cookiecutter",
-      "_commit": "cd59edc69d51f9485bca69eb940e0706bc65e9ba"
+      "_commit": "6a159105838fc80cba178d2fbcc6185fd3ef8df2"
     }
   },
   "directory": null

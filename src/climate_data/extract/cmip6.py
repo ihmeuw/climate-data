@@ -55,7 +55,7 @@ def extract_cmip6_main(
     print(f"Extracting {len(meta_subset)} members...")
 
     for i, (member, zstore_path) in enumerate(meta_subset.items()):
-        item = f"{i+1}/{len(meta_subset)} {member}"
+        item = f"{i + 1}/{len(meta_subset)} {member}"
         out_path = cdata.extracted_cmip6_path(
             cmip6_experiment,
             cmip6_variable,
@@ -91,7 +91,7 @@ def extract_cmip6_main(
             raise e
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_cmip6_source()
 @clio.with_cmip6_experiment()
 @clio.with_cmip6_variable()
@@ -113,7 +113,7 @@ def extract_cmip6_task(
     )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_cmip6_source(allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_cmip6_variable(allow_all=True)

@@ -51,7 +51,7 @@ def generate_historical_reference_main(
     )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def generate_historical_reference_task(
@@ -61,7 +61,7 @@ def generate_historical_reference_task(
     generate_historical_reference_main(target_variable, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
