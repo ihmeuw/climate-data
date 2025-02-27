@@ -29,18 +29,18 @@ MONTHS = [f"{i:02d}" for i in range(1, 13)]
 # Space
 
 ERA5_LAND_LONGITUDE = xr.DataArray(
-    np.round(np.arange(-180.0, 180.0, 0.1, dtype="float32"), 1), dims="longitude"
+    np.round(np.arange(-180.0, 180.0, 0.1, dtype=np.float64), 1), dims="longitude"
 )
 ERA5_LAND_LATITUDE = xr.DataArray(
-    np.round(np.arange(-90.0, 90.1, 0.1, dtype="float32"), 1), dims="latitude"
+    np.round(np.arange(-90.0, 90.1, 0.1, dtype=np.float64), 1), dims="latitude"
 )
 
 
 TARGET_LONGITUDE = xr.DataArray(
-    np.round(np.arange(-179.95, 180.0, 0.1, dtype="float32"), 2), dims="longitude"
+    np.round(np.arange(-179.95, 180.0, 0.1, dtype=np.float64), 2), dims="longitude"
 )
 TARGET_LATITUDE = xr.DataArray(
-    np.round(np.arange(-89.95, 90.0, 0.1, dtype="float32"), 2), dims="latitude"
+    np.round(np.arange(-89.95, 90.0, 0.1, dtype=np.float64), 2), dims="latitude"
 )
 
 # Extraction Constants

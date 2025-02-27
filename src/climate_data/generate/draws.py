@@ -22,10 +22,10 @@ def compile_gcm_main(
     cdata = ClimateData(ouptut_dir)
     print("Compiling", target_variable, cmip6_experiment, gcm_member)
     historical_paths = list(
-        (cdata.raw_annual_results / "historical" / target_variable).glob("*.nc")
+        (cdata.raw_annual_results / "v2" / "historical" / target_variable).glob("*.nc")
     )
     scenario_paths = list(
-        (cdata.raw_annual_results / cmip6_experiment / target_variable).glob(
+        (cdata.raw_annual_results / "v2" / cmip6_experiment / target_variable).glob(
             f"*{gcm_member}.nc"
         )
     )
@@ -52,9 +52,9 @@ def draws_main(
 
     scenario_gcm_members = {}
     for scenario in cdc.CMIP6_EXPERIMENTS:
-        paths = (cdata.compiled_annual_results / scenario / target_variable).glob(
-            "*.nc"
-        )
+        paths = (
+            cdata.compiled_annual_results / "v2" / scenario / target_variable
+        ).glob("*.nc")
         scenario_gcm_members[scenario] = [p.stem for p in paths]
 
     # Ensure that all scenarios have the same members
@@ -77,7 +77,7 @@ def draws_main(
         source, member = gcm_member.split("_")
         source_member_map[source].append(member)
 
-    num_draws = 1000
+    num_draws = 100
     rs = np.random.RandomState(42)
     for draw in tqdm.trange(num_draws):
         gcm = rs.choice(list(source_member_map))
@@ -124,7 +124,7 @@ def draws(
     to_run = []
     complete = []
     for variable, scenario in itertools.product(target_variable, cmip6_experiment):
-        root = cdata.raw_annual_results / scenario / variable
+        root = cdata.raw_annual_results / "v2" / scenario / variable
         gcm_members = list({p.stem[5:] for p in root.glob("*.nc")})
         for gcm_member in gcm_members:
             out_path = cdata.compiled_annual_results_path(
