@@ -7,13 +7,11 @@ These options are used to specify the data to extract, such as the year, month, 
 It also provides global variables representing the full space of valid values for these options.
 """
 
-from collections.abc import Collection
-from typing import ParamSpec, TypeVar
+from collections.abc import Callable, Collection
 
 import click
 from rra_tools.cli_tools import (
     RUN_ALL,
-    ClickOption,
     with_choice,
     with_debugger,
     with_input_directory,
@@ -27,15 +25,12 @@ from rra_tools.cli_tools import (
 
 from climate_data import constants as cdc
 
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
 
-
-def with_year(
+def with_year[**P, T](
     years: Collection[str],
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Create a CLI option for selecting a year."""
     return with_choice(
         "year",
@@ -47,10 +42,10 @@ def with_year(
     )
 
 
-def with_month(
+def with_month[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "month",
         "m",
@@ -61,10 +56,10 @@ def with_month(
     )
 
 
-def with_era5_variable(
+def with_era5_variable[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "era5-variable",
         "x",
@@ -75,10 +70,10 @@ def with_era5_variable(
     )
 
 
-def with_era5_dataset(
+def with_era5_dataset[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "era5-dataset",
         "d",
@@ -89,10 +84,10 @@ def with_era5_dataset(
     )
 
 
-def with_cmip6_source(
+def with_cmip6_source[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "cmip6-source",
         "s",
@@ -103,10 +98,10 @@ def with_cmip6_source(
     )
 
 
-def with_cmip6_experiment(
+def with_cmip6_experiment[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "cmip6-experiment",
         "e",
@@ -117,10 +112,10 @@ def with_cmip6_experiment(
     )
 
 
-def with_cmip6_variable(
+def with_cmip6_variable[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "cmip6-variable",
         "x",
@@ -131,11 +126,11 @@ def with_cmip6_variable(
     )
 
 
-def with_target_variable(
+def with_target_variable[**P, T](
     variable_names: Collection[str],
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "target-variable",
         "t",
@@ -146,10 +141,10 @@ def with_target_variable(
     )
 
 
-def with_draw(
+def with_draw[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "draw",
         allow_all=allow_all,
@@ -159,10 +154,10 @@ def with_draw(
     )
 
 
-def with_scenario(
+def with_scenario[**P, T](
     *,
     allow_all: bool = False,
-) -> ClickOption[_P, _T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "scenario",
         allow_all=allow_all,
@@ -172,7 +167,7 @@ def with_scenario(
     )
 
 
-def with_gcm_member() -> ClickOption[_P, _T]:
+def with_gcm_member[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     return click.option(
         "--gcm-member",
         "-g",
@@ -183,7 +178,6 @@ def with_gcm_member() -> ClickOption[_P, _T]:
 
 __all__ = [
     "RUN_ALL",
-    "ClickOption",
     "with_choice",
     "with_cmip6_experiment",
     "with_cmip6_source",

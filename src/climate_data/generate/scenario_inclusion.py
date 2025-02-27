@@ -94,7 +94,7 @@ def generate_scenario_inclusion_main(
     cdata.save_scenario_inclusion_metadata(inclusion_df)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_num_cores(default=10)
 @clio.with_progress_bar()

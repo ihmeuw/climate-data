@@ -233,7 +233,7 @@ def generate_historical_daily_main(
     )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP)
 @clio.with_year(cdc.HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
@@ -245,7 +245,7 @@ def generate_historical_daily_task(
     generate_historical_daily_main(target_variable, year, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_year(cdc.HISTORY_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)

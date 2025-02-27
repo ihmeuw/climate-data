@@ -92,7 +92,7 @@ def draws_main(
             )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP)
 @clio.with_cmip6_experiment()
 @clio.with_gcm_member()
@@ -106,7 +106,7 @@ def compile_gcm_task(
     compile_gcm_main(target_variable, cmip6_experiment, gcm_member, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)

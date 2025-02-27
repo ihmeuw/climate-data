@@ -137,7 +137,7 @@ def generate_scenario_annual_main(
     )
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(list(TRANSFORM_MAP))
 @clio.with_scenario()
 @clio.with_year(cdc.HISTORY_YEARS + cdc.FORECAST_YEARS)
@@ -214,7 +214,7 @@ def build_arg_list(
     return to_run, complete
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_scenario(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)

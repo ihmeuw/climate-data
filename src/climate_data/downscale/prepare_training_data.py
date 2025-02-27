@@ -105,14 +105,14 @@ def prepare_training_data_main(year: int | str, output_dir: str | Path) -> None:
     cdata.save_training_data(data, year)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_year(years=cdc.HISTORY_YEARS)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 def prepare_training_data_task(year: str, output_dir: str) -> None:
     prepare_training_data_main(year, output_dir)
 
 
-@click.command()  # type: ignore[arg-type]
+@click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 def prepare_training_data(output_dir: str, queue: str) -> None:
