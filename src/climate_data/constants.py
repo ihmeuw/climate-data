@@ -8,7 +8,15 @@ import xarray as xr
 # File roots #
 ##############
 
+# RRA team root directory
+RRA_ROOT = Path("/mnt/team/rapidresponse/pub/")
+# Contains gridded population estimates and projections
+POPULATION_MODEL_ROOT = RRA_ROOT / "population-model"
+# Downscaling working directory
 MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
+# Aggregation working directory
+AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
+
 
 ######################
 # Pipeline variables #
@@ -23,6 +31,7 @@ REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[-1]}-12-31",
 )
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
+ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
 
 MONTHS = [f"{i:02d}" for i in range(1, 13)]
 
@@ -183,7 +192,9 @@ CMIP6_VARIABLES = _CMIP6Variables()
 
 # Processing Constants
 
-DRAWS = [str(d) for d in range(100)]
+# Draws for uncertainty quantification
+# Each draw represents a different variant of a specific GCM in the CMIP6 ensemble
+DRAWS = [f"{d:>03}" for d in range(100)]  # 100 draws
 
 
 class _Scenarios(NamedTuple):
@@ -194,3 +205,52 @@ class _Scenarios(NamedTuple):
 
 
 SCENARIOS = _Scenarios()
+
+
+# Resolution settings for raster data
+RESOLUTION = "100"  # 100m resolution
+TARGET_RESOLUTION = f"world_cylindrical_{RESOLUTION}"
+
+AGGREGATION_SCENARIOS = [
+    SCENARIOS.ssp126,
+    SCENARIOS.ssp245,
+    SCENARIOS.ssp585,
+]
+
+# Climate measures to calculate
+AGGREGATION_MEASURES = [
+    # Temperature metrics
+    "mean_temperature",  # Average daily temperature
+    "mean_high_temperature",  # Average daily maximum temperature
+    "mean_low_temperature",  # Average daily minimum temperature
+    "days_over_30C",  # Number of days with temperature > 30°C
+    # Disease suitability metrics
+    "malaria_suitability",  # Climate suitability for malaria transmission
+    "dengue_suitability",  # Climate suitability for dengue transmission
+    # Other climate metrics
+    "wind_speed",  # Average wind speed
+    "relative_humidity",  # Average relative humidity
+    "total_precipitation",  # Total precipitation
+    "precipitation_days",  # Number of days with precipitation
+]
+
+# This is a mapping between full aggregation hierarchies and subset hierarchies.
+# The most-detailed units in the full aggregation hierarchies are the administrative units
+# that we aggregate pixel-level climate and population data to in the `aggregate` step
+# of the pipeline. In the `compile` step, we then aggregate the most-detailed units up to
+# to all locations in the full aggregation hierarchies. The subset hierarchies are then
+# used to provide different views of the full aggregation hierarchies as a full hierarchy
+# is a superset of any of the subset hierarchies.
+#
+# Key concepts:
+# - Full aggregation hierarchies: These are hierarchies of locations that contain all
+#   locations in the subset hierarchies.
+# - Subset hierarchies: These are hierarchies of locations that are a subset of the full
+#   aggregation hierarchies.
+HIERARCHY_MAP = {
+    "gbd_2021": [
+        "gbd_2021",
+        "fhs_2021",
+    ],  # GBD pixel hierarchy maps to GBD and FHS locations
+    "lsae_1209": ["lsae_1209"],  # LSAE pixel hierarchy maps to LSAE locations
+}

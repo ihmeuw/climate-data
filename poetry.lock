@@ -4298,6 +4298,21 @@ files = [
 urllib3 = ">=2"
 
 [[package]]
+name = "types-shapely"
+version = "2.0.0.20250202"
+description = "Typing stubs for shapely"
+optional = false
+python-versions = ">=3.9"
+groups = ["dev"]
+files = [
+    {file = "types_shapely-2.0.0.20250202-py3-none-any.whl", hash = "sha256:ae550eb03bfc9c4e431b30c494c7a4c3c84926d10887e641eff05bb0bde3dee6"},
+    {file = "types_shapely-2.0.0.20250202.tar.gz", hash = "sha256:97d547ca421cd01c59b20e73f501b92867d76cb40d626fa5851ac66d93720821"},
+]
+
+[package.dependencies]
+numpy = ">=1.20"
+
+[[package]]
 name = "types-tqdm"
 version = "4.67.0.20241221"
 description = "Typing stubs for tqdm"
@@ -4675,4 +4690,4 @@ test = ["botocore", "coverage", "fsspec (>=2023.10.0)", "hypothesis", "moto[s3,s
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12, <4.0"
-content-hash = "b0fd2b86aa86dffc24f6a9bdaef1f2ffe46fcdc09133ac97e806c1698bff14fc"
+content-hash = "97a44d4ad6286fb3298b9656b1780b30ef0da4009868c35e8b10625d2b788dc7"

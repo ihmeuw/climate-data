@@ -1,6 +1,6 @@
 import click
 
-from climate_data import downscale, extract, generate
+from climate_data import aggregate, downscale, extract, generate
 
 
 @click.group()
@@ -13,7 +13,7 @@ def cdtask() -> None:
     """Entry point for running climate downscale tasks."""
 
 
-for module in [extract, downscale, generate]:
+for module in [extract, downscale, generate, aggregate]:
     runners = getattr(module, "RUNNERS", {})
     task_runners = getattr(module, "TASK_RUNNERS", {})
 

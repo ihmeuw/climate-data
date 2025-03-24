@@ -12,6 +12,7 @@ from collections.abc import Callable, Collection
 import click
 from rra_tools.cli_tools import (
     RUN_ALL,
+    convert_choice,
     with_choice,
     with_debugger,
     with_input_directory,
@@ -155,13 +156,14 @@ def with_draw[**P, T](
 
 
 def with_scenario[**P, T](
+    choices: Collection[str] = cdc.SCENARIOS,
     *,
     allow_all: bool = False,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
     return with_choice(
         "scenario",
         allow_all=allow_all,
-        choices=cdc.SCENARIOS,
+        choices=choices,
         help="Scenario to process.",
         convert=allow_all,
     )
@@ -176,8 +178,75 @@ def with_gcm_member[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_agg_version[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add aggregation version option to a command."""
+    return click.option(
+        "--agg-version",
+        help="Aggregation version to process.",
+        required=True,
+    )
+
+
+def with_block_key[**P, T](
+    *,
+    allow_all: bool = False,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add block key option to a command."""
+    return with_choice(
+        "block-key",
+        allow_all=allow_all,
+        choices=None,  # Will be populated at runtime
+        help="Block key to process.",
+    )
+
+
+def with_hierarchy[**P, T](
+    *,
+    allow_all: bool = False,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add hierarchy option to a command."""
+    return with_choice(
+        "hierarchy",
+        allow_all=allow_all,
+        choices=cdc.HIERARCHY_MAP,
+        help="Hierarchy to process.",
+        convert=allow_all,
+    )
+
+
+def with_agg_measure[**P, T](
+    *,
+    allow_all: bool = False,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add aggregation measure option to a command."""
+    return with_choice(
+        "agg-measure",
+        allow_all=allow_all,
+        choices=cdc.AGGREGATION_MEASURES,
+        help="Climate measure to process.",
+    )
+
+
+def with_agg_scenario[**P, T](
+    *,
+    allow_all: bool = False,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add aggregation scenario option to a command."""
+    return with_choice(
+        "agg-scenario",
+        allow_all=allow_all,
+        choices=cdc.AGGREGATION_SCENARIOS,
+        help="Climate scenario to process.",
+    )
+
+
 __all__ = [
     "RUN_ALL",
+    "convert_choice",
+    "with_agg_measure",
+    "with_agg_scenario",
+    "with_agg_version",
+    "with_block_key",
     "with_choice",
     "with_cmip6_experiment",
     "with_cmip6_source",
@@ -186,6 +255,7 @@ __all__ = [
     "with_era5_dataset",
     "with_era5_variable",
     "with_gcm_member",
+    "with_hierarchy",
     "with_input_directory",
     "with_month",
     "with_num_cores",

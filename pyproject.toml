@@ -71,6 +71,7 @@ pandas-stubs = "*"
 types-pyyaml = "*"
 types-requests = "*"
 types-tqdm = "*"
+types-shapely = "^2.0.0.20250202"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
@@ -160,5 +161,7 @@ disallow_any_unimported = false
      "cdsapi.*",
      "affine.*",
      "gcsfs.*",
+     "geopandas.*",
+     "rasterio.*",
  ]
  ignore_missing_imports = true

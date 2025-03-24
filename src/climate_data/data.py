@@ -10,29 +10,223 @@ to update and maintain the path structure of the data as needed.
 
 This module generally does not load or process data itself, though some exceptions are made for metadata
 which is generally loaded and cached on disk.
+
+The main classes are:
+- PopulationModelData: Handles data from the gridded population modeling pipeline.
+    This includes population estimates and projections as well as the location hierarchies
+    for the population data. This class provides read-only access to the data.
+- ClimateData: Handles gridded climate data from the climate downscaling pipeline.
+    This includes climate data for different scenarios and measures. This class
+    provides read and write access to the data.
+- ClimateAggregateData: Handles the output data structure for climate aggregates.
+    This includes raw results at the block level, final results at the measure level,
+    and versioned results for different pipeline versions. This class provides both
+    read and write access to the data.
 """
 
 from collections.abc import Collection
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import geopandas as gpd
 import pandas as pd
 import rasterra as rt
 import xarray as xr
+import yaml
 from rra_tools.shell_tools import mkdir, touch
 
 from climate_data import constants as cdc
+
+
+class PopulationModelData:
+    """Handles population data and location hierarchies.
+
+    This class manages:
+    1. Population projections at different time points
+    2. Location hierarchies (GBD, LSAE, etc.)
+    3. Spatial data for aggregation
+
+    The population data is used as weights when aggregating climate data
+    to different location hierarchies.
+    """
+
+    def __init__(
+        self,
+        root: str | Path = cdc.POPULATION_MODEL_ROOT,
+    ) -> None:
+        """Initialize the population model data manager.
+
+        Parameters
+        ----------
+        root : str | Path
+            Path to the population model root directory
+        """
+        self._root = Path(root)
+
+    @property
+    def root(self) -> Path:
+        """Get the root directory for population model data."""
+        return self._root
+
+    @property
+    def results(self) -> Path:
+        """Get the directory containing current model results."""
+        return Path(self.root, "results") / "current"
+
+    @property
+    def model_spec_path(self) -> Path:
+        """Get the path to the model specification file."""
+        return self.results / "specification.yaml"
+
+    def load_model_spec(self) -> dict[str, Any]:
+        """Load the model specification file.
+
+        Returns
+        -------
+        dict
+            The model specification containing paths and parameters
+        """
+        return cast(dict[str, Any], yaml.safe_load(self.model_spec_path.read_text()))
+
+    def load_modeling_frame(self) -> gpd.GeoDataFrame:
+        """Load the modeling frame containing spatial information.
+
+        The modeling frame is a subdivision of the world into equal-area blocks.
+        Each block is assigned a unique key that is used to parallelize
+        pipeline steps in both population modeling and in this pipeline's
+        aggregation step.
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            The modeling frame with spatial information and block keys
+        """
+        model_spec = self.load_model_spec()
+        raw_root = Path(model_spec["output_root"])
+        model_frame_path = raw_root.parent.parent / "modeling_frame.parquet"
+        return gpd.read_parquet(model_frame_path)
+
+    def load_results(self, time_point: str, block_key: str) -> rt.RasterArray:
+        """Load population results for a specific time point and block.
+
+        Parameters
+        ----------
+        time_point
+            The time point to load (e.g. "2020q1")
+        block_key
+            The block key to load (e.g. "B-0021X-0003Y")
+
+        Returns
+        -------
+        rt.RasterArray
+            The population raster data
+        """
+        model_spec = self.load_model_spec()
+        raw_root = Path(model_spec["output_root"])
+        path = raw_root / "raked_predictions" / time_point / f"{block_key}.tif"
+        return rt.load_raster(path)
+
+    @property
+    def raking_data(self) -> Path:
+        """Get the directory containing data used to rake the population estimates.
+
+        Raking enforces admin-level consistency between gridded population data
+        and GBD/FHS population estimates. We'll use these same hierarchies to
+        aggregate the climate data.
+
+        """
+        return self.root / "admin-inputs" / "raking"
+
+    def load_raking_shapes(
+        self, full_aggregation_hierarchy: str, bounds: tuple[float, float, float, float]
+    ) -> gpd.GeoDataFrame:
+        """Load shapes for a full aggregation hierarchy within given bounds.
+
+        Parameters
+        ----------
+        full_aggregation_hierarchy
+            The full aggregation hierarchy to load (e.g. "gbd_2021")
+        bounds
+            The bounds to load (xmin, ymin, xmax, ymax)
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            The shapes for the given hierarchy and bounds
+        """
+        if full_aggregation_hierarchy == "gbd_2021":
+            shape_path = (
+                self.raking_data / f"shapes_{full_aggregation_hierarchy}.parquet"
+            )
+            gdf = gpd.read_parquet(shape_path, bbox=bounds)
+
+            # We're using population data here instead of a hierarchy because
+            # The populations include extra locations we've supplemented that aren't
+            # modeled in GBD (e.g. locations with zero population or places that
+            # GBD uses population scalars from WPP to model)
+            pop_path = (
+                self.raking_data / f"population_{full_aggregation_hierarchy}.parquet"
+            )
+            pop = pd.read_parquet(pop_path)
+
+            keep_cols = ["location_id", "location_name", "most_detailed", "parent_id"]
+            keep_mask = (
+                (pop.year_id == pop.year_id.max())  # Year doesn't matter
+                & (pop.most_detailed == 1)
+            )
+            out = gdf.merge(pop.loc[keep_mask, keep_cols], on="location_id", how="left")
+        elif full_aggregation_hierarchy in ["lsae_1209", "lsae_1285"]:
+            # This is only a2 geoms, so already most detailed
+            shape_path = (
+                self.raking_data
+                / "gbd-inputs"
+                / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
+            )
+            out = gpd.read_parquet(shape_path, bbox=bounds)
+        else:
+            msg = f"Unknown pixel hierarchy: {full_aggregation_hierarchy}"
+            raise ValueError(msg)
+        return out
+
+    def load_subset_hierarchy(self, subset_hierarchy: str) -> pd.DataFrame:
+        """Load a subset location hierarchy.
+
+        The subset hierarchy might be equal to the full aggregation hierarchy,
+        but it might also be a subset of the full aggregation hierarchy.
+        These hierarchies are used to provide different views of aggregated
+        climate data.
+
+        Parameters
+        ----------
+        subset_hierarchy
+            The administrative hierarchy to load (e.g. "gbd_2021")
+
+        Returns
+        -------
+        pd.DataFrame
+            The hierarchy data with parent-child relationships
+        """
+        allowed_hierarchies = ["gbd_2021", "fhs_2021", "lsae_1209", "lsae_1285"]
+        if subset_hierarchy not in allowed_hierarchies:
+            msg = f"Unknown admin hierarchy: {subset_hierarchy}"
+            raise ValueError(msg)
+        path = self.raking_data / "gbd-inputs" / f"hierarchy_{subset_hierarchy}.parquet"
+        return pd.read_parquet(path)
 
 
 class ClimateData:
     """Class for managing the climate data used in the project."""
 
     def __init__(
-        self, root: str | Path = cdc.MODEL_ROOT, *, create_root: bool = True
+        self,
+        root: str | Path = cdc.MODEL_ROOT,
+        *,
+        read_only: bool = False,
     ) -> None:
         self._root = Path(root)
         self._credentials_root = self._root / "credentials"
-        if create_root:
+        self._read_only = read_only
+        if not read_only:
             self._create_model_root()
 
     def _create_model_root(self) -> None:
@@ -145,6 +339,9 @@ class ClimateData:
         return self.extracted_data / "ncei_climate_stations"
 
     def save_ncei_climate_stations(self, df: pd.DataFrame, year: int | str) -> None:
+        if self._read_only:
+            msg = "Cannot save NCEI climate stations to read-only data"
+            raise ValueError(msg)
         path = self.ncei_climate_stations / f"{year}.parquet"
         save_parquet(df, path)
 
@@ -178,6 +375,9 @@ class ClimateData:
         lat_start: int,
         lon_start: int,
     ) -> None:
+        if self._read_only:
+            msg = "Cannot save predictors to read-only data"
+            raise ValueError(msg)
         path = self.predictors / f"{name}_{lat_start}_{lon_start}.tif"
         save_raster(predictor, path)
 
@@ -190,6 +390,9 @@ class ClimateData:
         return self.downscale_model / "training_data"
 
     def save_training_data(self, df: pd.DataFrame, year: int | str) -> None:
+        if self._read_only:
+            msg = "Cannot save training data to read-only data"
+            raise ValueError(msg)
         path = self.training_data / f"{year}.parquet"
         save_parquet(df, path)
 
@@ -209,6 +412,9 @@ class ClimateData:
         return self.results / "metadata"
 
     def save_scenario_metadata(self, df: pd.DataFrame) -> None:
+        if self._read_only:
+            msg = "Cannot save scenario metadata to read-only data"
+            raise ValueError(msg)
         path = self.results_metadata / "scenario_metadata.parquet"
         save_parquet(df, path)
 
@@ -217,6 +423,9 @@ class ClimateData:
         return pd.read_parquet(path)
 
     def save_scenario_inclusion_metadata(self, df: pd.DataFrame) -> None:
+        if self._read_only:
+            msg = "Cannot save scenario inclusion metadata to read-only data"
+            raise ValueError(msg)
         # Need to save to our scripts directory for doc building
         scripts_root = Path(__file__).parent.parent.parent / "scripts"
         for root_dir in [self.results_metadata, scripts_root]:
@@ -253,6 +462,9 @@ class ClimateData:
         gcm_member: str,
         encoding_kwargs: dict[str, Any],
     ) -> None:
+        if self._read_only:
+            msg = "Cannot save raw daily results to read-only data"
+            raise ValueError(msg)
         path = self.raw_daily_results_path(scenario, variable, year, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
         save_xarray(results_ds, path, encoding_kwargs)
@@ -273,6 +485,9 @@ class ClimateData:
         year: int | str,
         encoding_kwargs: dict[str, Any],
     ) -> None:
+        if self._read_only:
+            msg = "Cannot save daily results to read-only data"
+            raise ValueError(msg)
         path = self.daily_results_path(scenario, variable, year)
         mkdir(path.parent, exist_ok=True, parents=True)
         save_xarray(results_ds, path, encoding_kwargs)
@@ -312,6 +527,9 @@ class ClimateData:
         gcm_member: str,
         encoding_kwargs: dict[str, Any],
     ) -> None:
+        if self._read_only:
+            msg = "Cannot save raw annual results to read-only data"
+            raise ValueError(msg)
         path = self.raw_annual_results_path(scenario, variable, year, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
         save_xarray(results_ds, path, encoding_kwargs)
@@ -335,6 +553,9 @@ class ClimateData:
         variable: str,
         gcm_member: str,
     ) -> None:
+        if self._read_only:
+            msg = "Cannot save compiled annual results to read-only data"
+            raise ValueError(msg)
         path = self.compiled_annual_results_path(scenario, variable, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
         touch(path, clobber=True)
@@ -355,12 +576,56 @@ class ClimateData:
         variable: str,
         gcm_member: str,
     ) -> None:
+        if self._read_only:
+            msg = "Cannot link annual draw to read-only data"
+            raise ValueError(msg)
         source_path = self.compiled_annual_results_path(scenario, variable, gcm_member)
         dest_path = self.annual_results_path(scenario, variable, draw)
         mkdir(dest_path.parent, exist_ok=True, parents=True)
         if dest_path.exists():
             dest_path.unlink()
         dest_path.symlink_to(source_path)
+
+    def draw_results_path(self, scenario: str, measure: str, draw: str) -> Path:
+        """Get the path to annual results for a specific scenario, measure, and draw.
+
+        Parameters
+        ----------
+        scenario
+            The climate scenario (e.g. "ssp126")
+        measure
+            The climate measure (e.g. "mean_temperature")
+        draw
+            The draw of the climate data to load (e.g. "000")
+
+        Returns
+        -------
+        Path
+            The path to the results file
+        """
+        return self.annual_results / scenario / measure / f"{draw}.nc"
+
+    def load_draw_results(self, scenario: str, measure: str, draw: str) -> xr.Dataset:
+        """Load annual climate results for a specific scenario, measure, and draw.
+
+        Parameters
+        ----------
+        scenario
+            The climate scenario (e.g. "ssp126")
+        measure
+            The climate measure (e.g. "mean_temperature")
+        draw
+            The draw of the climate data to load (e.g. "000")
+
+        Returns
+        -------
+        xr.Dataset
+            The climate data in xarray format
+        """
+        path = self.annual_results_path(scenario, measure, draw)
+        ds = xr.open_dataset(path, decode_coords="all")
+        ds = ds.rio.write_crs("EPSG:4326")
+        return ds
 
 
 def save_parquet(
@@ -378,6 +643,343 @@ def save_parquet(
     """
     touch(output_path, clobber=True)
     df.to_parquet(output_path)
+
+
+class ClimateAggregateData:
+    """Manages the output data structure for climate aggregates.
+
+    This class manages the file organization and paths for:
+    1. Reading and writing raw results at block level
+    2. Reading and writing final results at measure and scenario level
+    3. Versioning of results
+    """
+
+    def __init__(
+        self,
+        root: str | Path = cdc.AGGREGATE_ROOT,
+    ) -> None:
+        """Initialize the climate aggregate data manager.
+
+        Parameters
+        ----------
+        root
+            Path to the model root directory
+        """
+        self._root = Path(root)
+        self._create_model_root()
+
+    def _create_model_root(self) -> None:
+        """Create the model root directory and logs directory."""
+        mkdir(self.root, exist_ok=True)
+        mkdir(self.logs, exist_ok=True)
+
+    @property
+    def root(self) -> Path:
+        """Get the root directory for model data."""
+        return self._root
+
+    @property
+    def logs(self) -> Path:
+        """Get the directory for log files."""
+        return self.root / "logs"
+
+    def log_dir(self, step_name: str) -> Path:
+        """Get the directory for logs from a specific pipeline step.
+
+        Parameters
+        ----------
+        step_name
+            The name of the pipeline step
+
+        Returns
+        -------
+        Path
+            The directory for step-specific logs
+        """
+        return self.logs / step_name
+
+    def version_root(self, version: str) -> Path:
+        """Get the root directory for a specific version.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+
+        Returns
+        -------
+        Path
+            The directory for version-specific data
+        """
+        return self.root / version
+
+    def raw_results_root(self, version: str) -> Path:
+        """Get the directory for raw results (block-level).
+
+        Parameters
+        ----------
+        version
+            The version identifier
+
+        Returns
+        -------
+        Path
+            The directory for raw results
+        """
+        return self.version_root(version) / "raw-results"
+
+    def raw_results_path(
+        self, version: str, hierarchy: str, block_key: str, draw: str
+    ) -> Path:
+        """Get the path to raw results for a specific hierarchy, block, and draw.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        block_key
+            The block key
+        draw
+            The draw of the climate data (e.g. "000")
+
+        Returns
+        -------
+        Path
+            The path to the raw results file
+        """
+        root = self.raw_results_root(version)
+        return root / hierarchy / block_key / f"{draw}.parquet"
+
+    def save_raw_results(
+        self,
+        df: pd.DataFrame,
+        version: str,
+        hierarchy: str,
+        block_key: str,
+        draw: str,
+    ) -> None:
+        """Save raw results for a specific hierarchy, block, and draw.
+
+        Parameters
+        ----------
+        df
+            The results to save
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        block_key
+            The block key
+        draw
+            The draw of the climate data to save (e.g. "000")
+        """
+        path = self.raw_results_path(version, hierarchy, block_key, draw)
+        mkdir(path.parent, exist_ok=True, parents=True)
+        touch(path, clobber=True)
+        df.to_parquet(path)
+
+    def load_raw_results(
+        self,
+        version: str,
+        hierarchy: str,
+        block_key: str,
+        draw: str,
+        measure: str | None = None,
+        scenario: str | None = None,
+    ) -> pd.DataFrame:
+        """Load raw results for a specific hierarchy, block, and draw.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        block_key
+            The block key
+        draw
+            The draw of the climate data to load (e.g. "000")
+        measure
+            If provided, filter results to only include this measure
+        scenario
+            If provided, filter results to only include this scenario
+
+        Returns
+        -------
+        pd.DataFrame
+            The raw results
+        """
+        path = self.raw_results_path(version, hierarchy, block_key, draw)
+
+        # Build filters for parquet's read_parquet function
+        filters = []
+        if measure is not None:
+            filters.append(("measure", "==", measure))
+        if scenario is not None:
+            filters.append(("scenario", "==", scenario))
+
+        return pd.read_parquet(path, filters=filters)
+
+    def results_root(self, version: str) -> Path:
+        """Get the directory for final results (measure-level).
+
+        Parameters
+        ----------
+        version
+            The version identifier
+
+        Returns
+        -------
+        Path
+            The directory for final results
+        """
+        return self.version_root(version) / "results"
+
+    def population_path(self, version: str, hierarchy: str) -> Path:
+        """Get the path to population data for a specific hierarchy.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+
+        Returns
+        -------
+        Path
+            The path to the population data file
+        """
+        return self.results_root(version) / hierarchy / "population.parquet"
+
+    def save_population(self, df: pd.DataFrame, version: str, hierarchy: str) -> None:
+        """Save population data for a specific hierarchy.
+
+        Parameters
+        ----------
+        df
+            The population data to save
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        """
+        path = self.population_path(version, hierarchy)
+        mkdir(path.parent, exist_ok=True, parents=True)
+        touch(path, clobber=True)
+        df.to_parquet(path)
+
+    def load_population(
+        self, version: str, hierarchy: str, location_id: int | None = None
+    ) -> pd.DataFrame:
+        """Load population data for a specific hierarchy and optionally location.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        location_id
+            If provided, load only data for this location
+
+        Returns
+        -------
+        pd.DataFrame
+            The population data
+        """
+        path = self.population_path(version, hierarchy)
+        if location_id is not None:
+            filters = [("location_id", "==", location_id)]
+            return pd.read_parquet(path, filters=filters)
+        return pd.read_parquet(path)
+
+    def results_path(
+        self, version: str, hierarchy: str, scenario: str, measure: str
+    ) -> Path:
+        """Get the path to final results for a specific scenario and measure.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        scenario
+            The climate scenario
+        measure
+            The climate measure
+
+        Returns
+        -------
+        Path
+            The path to the results file
+        """
+        return self.results_root(version) / hierarchy / f"{measure}_{scenario}.parquet"
+
+    def save_results(
+        self,
+        df: pd.DataFrame,
+        version: str,
+        hierarchy: str,
+        scenario: str,
+        measure: str,
+    ) -> None:
+        """Save final results for a specific scenario and measure.
+
+        Parameters
+        ----------
+        df
+            The results to save
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        scenario
+            The climate scenario
+        measure
+            The climate measure
+        """
+        path = self.results_path(version, hierarchy, scenario, measure)
+        mkdir(path.parent, exist_ok=True, parents=True)
+        touch(path, clobber=True)
+        df.to_parquet(path)
+
+    def load_results(
+        self,
+        version: str,
+        hierarchy: str,
+        scenario: str,
+        measure: str,
+        location_id: int | None = None,
+    ) -> pd.DataFrame:
+        """Load final results for a specific scenario and measure.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+        hierarchy
+            The location hierarchy
+        scenario
+            The climate scenario
+        measure
+            The climate measure
+        location_id
+            If provided, load only data for this location
+
+        Returns
+        -------
+        pd.DataFrame
+            The results
+        """
+        path = self.results_path(version, hierarchy, scenario, measure)
+        if location_id is not None:
+            filters = [("location_id", "==", location_id)]
+            return pd.read_parquet(path, filters=filters)
+        return pd.read_parquet(path)
 
 
 def save_xarray(
