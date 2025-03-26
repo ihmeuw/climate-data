@@ -96,9 +96,15 @@ def hierarchy_main(
             draw_results.append(draw_df)
 
             pbar.update()
+        draw_df = (
+            pd.concat(draw_results, ignore_index=True)
+            .groupby(["location_id", "year_id"])
+            .sum()
+            .reset_index()
+        )
 
         agg_df = utils.aggregate_climate_to_hierarchy(
-            pd.concat(draw_results, ignore_index=True),
+            draw_df,
             hierarchy_df,
         ).set_index(["location_id", "year_id"])
         all_results.append(agg_df["value"].rename(draw))
@@ -212,8 +218,8 @@ def hierarchy(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "16G",
-            "runtime": "30m",
+            "memory": "50G",
+            "runtime": "200m",
             "project": "proj_rapidresponse",
         },
         log_root=ca_data.log_dir("aggregate_hierarchy"),

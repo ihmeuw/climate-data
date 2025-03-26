@@ -13,6 +13,10 @@ from climate_data.data import (
     PopulationModelData,
 )
 
+MAX_BOUNDS = {
+    "ESRI:54034": (-20037508.34, 20037508.34, -6363885.33, 6363885.33),
+}
+
 
 def build_location_masks(
     hierarchy: str,
@@ -136,11 +140,32 @@ def get_bbox(raster: rt.RasterArray, crs: str | None = None) -> shapely.Polygon:
     shapely.Polybon
         The bounding box of the raster in the CRS specified by the crs parameter.
     """
+    if raster.crs not in MAX_BOUNDS:
+        msg = f"Unsupported CRS: {raster.crs}"
+        raise ValueError(msg)
+
+    xmin_clip, xmax_clip, ymin_clip, ymax_clip = MAX_BOUNDS[raster.crs]
     xmin, xmax, ymin, ymax = raster.bounds
+
+    xmin = np.clip(xmin, xmin_clip, xmax_clip)
+    xmax = np.clip(xmax, xmin_clip, xmax_clip)
+    ymin = np.clip(ymin, ymin_clip, ymax_clip)
+    ymax = np.clip(ymax, ymin_clip, ymax_clip)
+
     bbox = gpd.GeoSeries([shapely.box(xmin, ymin, xmax, ymax)], crs=raster.crs)
-    if crs is not None:
-        bbox = bbox.to_crs(crs)
-    return cast(shapely.Polygon, bbox.iloc[0])
+    out_bbox = bbox.to_crs(crs) if crs is not None else bbox.copy()
+
+    # Check that our transformation didn't do something weird
+    # (e.g. artificially clip the bounds or have the bounds extend over the
+    # antimeridian)
+    check_bbox = out_bbox.to_crs(raster.crs)
+    area_change = (np.abs(bbox.area - check_bbox.area) / bbox.area).iloc[0]
+    tolerance = 1e-6
+    if area_change > tolerance:
+        msg = f"Area change: {area_change}"
+        raise ValueError(msg)
+
+    return cast(shapely.Polygon, out_bbox.iloc[0])
 
 
 def aggregate_climate_to_hierarchy(
@@ -173,16 +198,11 @@ def aggregate_climate_to_hierarchy(
         subset["parent_id"] = parent_map
 
         parent_values = (
-            subset.groupby(["year_id", "scenario", "parent_id"])[
-                ["weighted_climate", "population"]
-            ]
+            subset.groupby(["year_id", "parent_id"])[["weighted_climate", "population"]]
             .sum()
             .reset_index()
             .rename(columns={"parent_id": "location_id"})
             .set_index("location_id")
-        )
-        parent_values["value"] = (
-            parent_values.weighted_climate / parent_values.population
         )
         results = pd.concat([results, parent_values])
     results = (
@@ -190,4 +210,5 @@ def aggregate_climate_to_hierarchy(
         .sort_values(["location_id", "year_id"])
         .reset_index(drop=True)
     )
+    parent_values["value"] = parent_values.weighted_climate / parent_values.population
     return results

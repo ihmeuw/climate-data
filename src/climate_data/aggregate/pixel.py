@@ -38,7 +38,7 @@ def pixel_main(
         hierarchy, block_key, pm_data
     )
 
-    years = cdc.ALL_YEARS
+    years = [int(y) for y in cdc.ALL_YEARS]
     measures = cdc.AGGREGATION_MEASURES
     scenarios = cdc.AGGREGATION_SCENARIOS
 
@@ -67,7 +67,12 @@ def pixel_main(
 
             # Pull out and rasterize the climate data for the current year
             clim_arr = (
-                to_raster(ds.sel(year=year)["value"], no_data_value=np.nan)  # noqa: SLF001
+                to_raster(  # noqa: SLF001
+                    ds.sel(year=year)["value"],
+                    no_data_value=np.nan,
+                    lat_col="latitude",
+                    lon_col="longitude",
+                )
                 .resample_to(pop_raster, "nearest")
                 .astype(np.float32)
                 ._ndarray
@@ -164,14 +169,15 @@ def pixel(
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
 
+    print("Checking for existing results")
     jobs = []
-    for h, b, d in itertools.product(hierarchy, block_keys, draw):
+    hbd = list(itertools.product(hierarchy, block_keys, draw))
+    for h, b, d in tqdm.tqdm(hbd):
         if not ca_data.raw_results_path(agg_version, h, b, d).exists():
             jobs.append((h, b, d))
     jobs = list(set(jobs))
 
     print(f"Running {len(jobs)} jobs")
-
     jobmon.run_parallel(
         runner="cdtask aggregate",
         task_name="pixel",
