@@ -1001,12 +1001,6 @@ class FloodingData:
         mkdir(self.root, exist_ok=True)
         mkdir(self.credentials_root, exist_ok=True)
 
-        mkdir(self.raw_data, exist_ok=True)
-        mkdir(self.processed_data, exist_ok=True)
-        mkdir(self.downscale_model, exist_ok=True)
-        mkdir(self.predictors, exist_ok=True)
-        mkdir(self.training_data, exist_ok=True)
-
         mkdir(self.results, exist_ok=True)
         mkdir(self.results_metadata, exist_ok=True)
         mkdir(self.daily_results, exist_ok=True)
@@ -1249,6 +1243,7 @@ class FloodingData:
         ds = xr.open_dataset(path, decode_coords="all")
         ds = ds.rio.write_crs("EPSG:4326")
         return ds
+
 
 def save_xarray(
     ds: xr.Dataset,
