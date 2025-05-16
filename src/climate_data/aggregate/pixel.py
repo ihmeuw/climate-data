@@ -34,7 +34,7 @@ def pixel_main(
     ca_data = ClimateAggregateData(output_dir)
 
     print("Building location masks")
-    climate_slice, bounds_map = utils.build_location_masks(
+    climate_slice, bounds_map, _ = utils.build_location_masks(
         hierarchy, block_key, pm_data
     )
 

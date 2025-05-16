@@ -251,7 +251,6 @@ def generate_scenario_daily(
     overwrite: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
-
     veyg = []
     complete = []
     for v, e, y in itertools.product(target_variable, cmip6_experiment, year):
@@ -260,10 +259,9 @@ def generate_scenario_daily(
         for g in gcms:
             path = cdata.raw_daily_results_path(e, v, y, g)
             if not path.exists() or overwrite:
-                veyg.append((g, y, v, e))
+                veyg.append((v, e, y, g))
             else:
-                complete.append((g, y, v, e))
-
+                complete.append((v, e, y, g))
     if not veyg:
         print("All tasks already done.")
         return
@@ -283,8 +281,8 @@ def generate_scenario_daily(
             "queue": queue,
             "cores": 1,
             "memory": "90G",
-            "runtime": "400m",
+            "runtime": "20m",
             "project": "proj_rapidresponse",
         },
-        max_attempts=1,
+        max_attempts=2,
     )

@@ -80,7 +80,7 @@ def build_location_masks(
         location_id: (rows, cols, location_mask[rows, cols] == location_id)
         for location_id, (rows, cols) in bounds_map.items()
     }
-    return climate_slice, final_bounds_map
+    return climate_slice, final_bounds_map, location_mask
 
 
 def build_bounds_map(

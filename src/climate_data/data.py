@@ -188,6 +188,32 @@ class PopulationModelData:
             raise ValueError(msg)
         return out
 
+    def load_raking_populations(self, hierarchy: str) -> pd.DataFrame:
+        path = self.raking_data / f"population_{hierarchy}.parquet"
+        return pd.read_parquet(path)
+
+    def load_lsae_mapping_shapes(self, admin_level: int) -> gpd.GeoDataFrame:
+        """Load the LSAE mapping shapes for a given admin level.
+
+        Parameters
+        ----------
+        admin_level
+            The admin level to load (0, 1, or 2)
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            The LSAE mapping shapes for the given admin level
+        """
+        assert admin_level in [0, 1, 2]
+        path = f"/home/j/WORK/11_geospatial/admin_shapefiles/current/lbd_standard_admin_{admin_level}_simplified.shp"
+        gdf = (
+            gpd.read_file(path)
+            .rename(columns={"loc_id": "location_id"})
+            .loc[:, ["location_id", "geometry"]]
+        )
+        return gdf
+
     def load_subset_hierarchy(self, subset_hierarchy: str) -> pd.DataFrame:
         """Load a subset location hierarchy.
 
@@ -442,7 +468,8 @@ class ClimateData:
 
     @property
     def raw_daily_results(self) -> Path:
-        return self.daily_results / "raw"
+        # return self.daily_results / "raw"
+        return cdc.AGGREGATE_ROOT / "erf-scratch"
 
     def raw_daily_results_path(
         self,
@@ -468,6 +495,16 @@ class ClimateData:
         path = self.raw_daily_results_path(scenario, variable, year, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
         save_xarray(results_ds, path, encoding_kwargs)
+
+    def load_raw_daily_results(
+        self,
+        scenario: str,
+        variable: str,
+        year: int | str,
+        gcm_member: str,
+    ) -> xr.Dataset:
+        path = self.raw_daily_results_path(scenario, variable, year, gcm_member)
+        return xr.open_dataset(path)
 
     def daily_results_path(
         self,
@@ -546,20 +583,37 @@ class ClimateData:
     ) -> Path:
         return self.compiled_annual_results / scenario / variable / f"{gcm_member}.nc"
 
+    def list_gcm_members(self, scenario: str, variable: str) -> list[str]:
+        return [
+            p.stem
+            for p in self.compiled_annual_results_path(
+                scenario, variable, ""
+            ).parent.glob("*.nc")
+        ]
+
     def save_compiled_annual_results(
         self,
         results_ds: xr.Dataset,
         scenario: str,
         variable: str,
         gcm_member: str,
+        encoding_kwargs: dict[str, Any],
     ) -> None:
         if self._read_only:
             msg = "Cannot save compiled annual results to read-only data"
             raise ValueError(msg)
         path = self.compiled_annual_results_path(scenario, variable, gcm_member)
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-        results_ds.to_netcdf(path)
+        save_xarray(results_ds, path, encoding_kwargs)
+
+    def load_compiled_annual_results(
+        self,
+        scenario: str,
+        variable: str,
+        gcm_member: str,
+    ) -> xr.Dataset:
+        path = self.compiled_annual_results_path(scenario, variable, gcm_member)
+        return xr.open_dataset(path)
 
     def annual_results_path(
         self,
@@ -626,23 +680,6 @@ class ClimateData:
         ds = xr.open_dataset(path, decode_coords="all")
         ds = ds.rio.write_crs("EPSG:4326")
         return ds
-
-
-def save_parquet(
-    df: pd.DataFrame,
-    output_path: str | Path,
-) -> None:
-    """Save a pandas DataFrame to a file with standard parameters.
-
-    Parameters
-    ----------
-    df
-        The DataFrame to save.
-    output_path
-        The path to save the DataFrame to.
-    """
-    touch(output_path, clobber=True)
-    df.to_parquet(output_path)
 
 
 class ClimateAggregateData:
@@ -777,8 +814,7 @@ class ClimateAggregateData:
         """
         path = self.raw_results_path(version, hierarchy, block_key, draw)
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-        df.to_parquet(path)
+        save_parquet(df, path)
 
     def load_raw_results(
         self,
@@ -868,8 +904,7 @@ class ClimateAggregateData:
         """
         path = self.population_path(version, hierarchy)
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-        df.to_parquet(path)
+        save_parquet(df, path)
 
     def load_population(
         self, version: str, hierarchy: str, location_id: int | None = None
@@ -944,8 +979,7 @@ class ClimateAggregateData:
         """
         path = self.results_path(version, hierarchy, scenario, measure)
         mkdir(path.parent, exist_ok=True, parents=True)
-        touch(path, clobber=True)
-        df.to_parquet(path)
+        save_parquet(df, path)
 
     def load_results(
         self,
@@ -980,6 +1014,53 @@ class ClimateAggregateData:
             filters = [("location_id", "==", location_id)]
             return pd.read_parquet(path, filters=filters)
         return pd.read_parquet(path)
+
+    def diagnostics_root(self, version: str, hierarchy: str) -> Path:
+        """Get the path to the diagnostics directory.
+
+        Parameters
+        ----------
+        version
+            The version identifier
+
+        Returns
+        -------
+        Path
+            The path to the diagnostics directory
+        """
+        return self.version_root(version) / "diagnostics" / hierarchy
+
+    def grid_plots_pages_root(self, version: str, hierarchy: str) -> Path:
+        return self.diagnostics_root(version, hierarchy) / "grid_plots_pages"
+
+    def grid_plots_page_path(
+        self, version: str, hierarchy: str, location_id: int
+    ) -> Path:
+        path = self.grid_plots_pages_root(version, hierarchy) / f"{location_id}.pdf"
+        mkdir(path.parent, exist_ok=True, parents=True)
+        return path
+
+    def grid_plots_path(self, version: str, hierarchy: str) -> Path:
+        path = self.diagnostics_root(version, hierarchy) / f"grid_plots_{hierarchy}.pdf"
+        mkdir(path.parent, exist_ok=True, parents=True)
+        return path
+
+
+def save_parquet(
+    df: pd.DataFrame,
+    output_path: str | Path,
+) -> None:
+    """Save a pandas DataFrame to a file with standard parameters.
+
+    Parameters
+    ----------
+    df
+        The DataFrame to save.
+    output_path
+        The path to save the DataFrame to.
+    """
+    touch(output_path, clobber=True)
+    df.to_parquet(output_path)
 
 
 def save_xarray(

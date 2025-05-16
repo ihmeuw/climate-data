@@ -7,7 +7,7 @@ These options are used to specify the data to extract, such as the year, month, 
 It also provides global variables representing the full space of valid values for these options.
 """
 
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 
 import click
 from rra_tools.cli_tools import (
@@ -201,6 +201,7 @@ def with_block_key[**P, T](
 
 
 def with_hierarchy[**P, T](
+    choices: Sequence[str] = cdc.HIERARCHY_MAP,
     *,
     allow_all: bool = False,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
@@ -208,7 +209,7 @@ def with_hierarchy[**P, T](
     return with_choice(
         "hierarchy",
         allow_all=allow_all,
-        choices=cdc.HIERARCHY_MAP,
+        choices=choices,
         help="Hierarchy to process.",
         convert=allow_all,
     )
@@ -237,6 +238,16 @@ def with_agg_scenario[**P, T](
         allow_all=allow_all,
         choices=cdc.AGGREGATION_SCENARIOS,
         help="Climate scenario to process.",
+    )
+
+
+def with_location_id[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add location ID option to a command."""
+    return click.option(
+        "--location-id",
+        "-l",
+        type=click.INT,
+        help="Location ID to process.",
     )
 
 
