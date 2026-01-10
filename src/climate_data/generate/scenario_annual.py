@@ -251,8 +251,8 @@ def generate_scenario_annual(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "120G",
-            "runtime": "60m",
+            "memory": "100G",
+            "runtime": "30m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,

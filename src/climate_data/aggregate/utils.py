@@ -210,5 +210,5 @@ def aggregate_climate_to_hierarchy(
         .sort_values(["location_id", "year_id"])
         .reset_index(drop=True)
     )
-    parent_values["value"] = parent_values.weighted_climate / parent_values.population
+    results["value"] = results["weighted_climate"] / results["population"]
     return results

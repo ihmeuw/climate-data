@@ -135,7 +135,7 @@ class PopulationModelData:
         aggregate the climate data.
 
         """
-        return self.root / "admin-inputs" / "raking"
+        return self.root / "admin-inputs" / "raking" / "gbd-inputs"
 
     def load_raking_shapes(
         self, full_aggregation_hierarchy: str, bounds: tuple[float, float, float, float]
@@ -178,9 +178,7 @@ class PopulationModelData:
         elif full_aggregation_hierarchy in ["lsae_1209", "lsae_1285"]:
             # This is only a2 geoms, so already most detailed
             shape_path = (
-                self.raking_data
-                / "gbd-inputs"
-                / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
+                self.raking_data / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
             )
             out = gpd.read_parquet(shape_path, bbox=bounds)
         else:
@@ -236,7 +234,7 @@ class PopulationModelData:
         if subset_hierarchy not in allowed_hierarchies:
             msg = f"Unknown admin hierarchy: {subset_hierarchy}"
             raise ValueError(msg)
-        path = self.raking_data / "gbd-inputs" / f"hierarchy_{subset_hierarchy}.parquet"
+        path = self.raking_data / f"hierarchy_{subset_hierarchy}.parquet"
         return pd.read_parquet(path)
 
 

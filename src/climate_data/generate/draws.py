@@ -35,12 +35,15 @@ def compile_gcm_main(
         .sortby("year")
         .compute()
     )
+
     print("Saving compiled dataset")
+    transform = TRANSFORM_MAP[target_variable]
     cdata.save_compiled_annual_results(
         ds,
         scenario=cmip6_experiment,
         variable=target_variable,
         gcm_member=gcm_member,
+        encoding_kwargs=transform.encoding_kwargs,
     )
 
 
