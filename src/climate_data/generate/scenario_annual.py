@@ -252,7 +252,7 @@ def generate_scenario_annual(
             "queue": queue,
             "cores": 1,
             "memory": "100G",
-            "runtime": "30m",
+            "runtime": "60m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,

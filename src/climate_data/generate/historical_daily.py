@@ -298,7 +298,7 @@ def generate_historical_daily(
             "queue": queue,
             "cores": 5,
             "memory": "150G",
-            "runtime": "120m",
+            "runtime": "240m",
             "project": "proj_rapidresponse",
         },
         max_attempts=2,
