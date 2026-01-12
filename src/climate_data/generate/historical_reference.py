@@ -82,8 +82,8 @@ def generate_historical_reference(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "100G",
-            "runtime": "240m",
+            "memory": "80G",
+            "runtime": "30m",
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
