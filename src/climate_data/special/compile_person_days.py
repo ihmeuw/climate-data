@@ -83,7 +83,7 @@ def compile_person_days_main(
         path = (
             ca_data.root
             / "erf-scratch"
-            / "compiled-person_days"
+            / "compiled-person-days"
             / subset_hierarchy
             / f"{cmip6_experiment}_{gcm_member}.parquet"
         )
@@ -155,6 +155,7 @@ def compile_person_days(
         max_attempts=3,
     )
 
+    # results_version = "2026_01_12"
     # draw_map = {}
     # for d in range(100):
     #     draw = f"{d:0>3}"
@@ -164,8 +165,8 @@ def compile_person_days(
     # for hierarchy in cdc.HIERARCHY_MAP[HIERARCHY]:
     #     for scenario in cmip6_experiment:
     #         for draw, gcm_variant in draw_map.items():
-    #             raw_path = ca_data.root / "erf-scratch" / "compiled-person_days" / hierarchy / f"{scenario}_{gcm_variant}.parquet"
-    #             out_root = ca_data.results_root("2025_03_20") / hierarchy / f"temperature_person_days_{scenario}"
+    #             raw_path = ca_data.root / "erf-scratch" / "compiled-person-days" / hierarchy / f"{scenario}_{gcm_variant}.parquet"
+    #             out_root = ca_data.results_root(results_version) / hierarchy / f"temperature_person_days_{scenario}"
     #             mkdir(out_root, parents=True, exist_ok=True)
     #             out_path = out_root / f"{draw}.parquet"
     #             out_path.symlink_to(raw_path)
