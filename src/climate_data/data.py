@@ -178,9 +178,7 @@ class PopulationModelData:
         elif full_aggregation_hierarchy in ["lsae_1209", "lsae_1285"]:
             # This is only a2 geoms, so already most detailed
             shape_path = (
-                self.raking_data
-                / "gbd-inputs"
-                / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
+                self.raking_data / "gbd-inputs" / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
             )
             out = gpd.read_parquet(shape_path, bbox=bounds)
         else:
@@ -237,7 +235,64 @@ class PopulationModelData:
             msg = f"Unknown admin hierarchy: {subset_hierarchy}"
             raise ValueError(msg)
         path = self.raking_data / "gbd-inputs" / f"hierarchy_{subset_hierarchy}.parquet"
-        return pd.read_parquet(path)
+        hierarchy_df = pd.read_parquet(path)
+        if subset_hierarchy == "gbd_2021":
+            to_drop_parents = [
+                ## FROM POPULATION MODEL RAKING DATA PREP
+                # Drop UK UTLAs from these regions
+                4618,
+                4919,
+                4620,
+                4621,
+                4622,
+                4623,
+                4624,
+                4625,
+                4626,
+                # Drop the India urban/rural splits from these states
+                4841,
+                4842,
+                4843,
+                4844,
+                4846,
+                4849,
+                4850,
+                4851,
+                4852,
+                4853,
+                4854,
+                4855,
+                4856,
+                4857,
+                4859,
+                4860,
+                4861,
+                4862,
+                4863,
+                4864,
+                4865,
+                4867,
+                4868,
+                4869,
+                4870,
+                4871,
+                4872,
+                4873,
+                4874,
+                4875,
+                44538,
+                # Drop the Maori/non-Maori split from New Zealand
+                72,
+            ]
+            hierarchy_df = hierarchy_df.loc[
+                ~hierarchy_df["parent_id"].isin(to_drop_parents)
+            ]
+            hierarchy_df.loc[
+                hierarchy_df["location_id"].isin(to_drop_parents),
+                "most_detailed"
+            ] = 1
+
+        return hierarchy_df
 
 
 class ClimateData:

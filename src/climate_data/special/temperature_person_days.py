@@ -164,7 +164,7 @@ def temperature_person_days(
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
 
-    gcm_members = cd_data.list_gcm_members()
+    gcm_members = cd_data.list_gcm_members("ssp126", "mean_temperature")
 
     jobs = []
     possible_jobs = list(itertools.product(block_keys, gcm_members, cmip6_experiment))

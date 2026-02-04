@@ -168,7 +168,8 @@ def generate_historical_daily_main(
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
-        print(f"loading single-levels for {month_str}")
+        print(f"month {month_str}")
+        print("    loading single-levels")
         single_level = [
             load_variable(
                 cdata,
@@ -179,7 +180,7 @@ def generate_historical_daily_main(
             )
             for sv in transform.source_variables
         ]
-        print("collapsing")
+        print("    collapsing")
         ds_single_level = transform(
             *single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels
         ).compute()
@@ -188,34 +189,43 @@ def generate_historical_daily_main(
             date=pd.to_datetime(ds_single_level.date)
         )
 
-        print("interpolating")
-        ds_single_level = utils.interpolate_to_target_latlon(
-            ds_single_level, method="nearest"
-        )
-
         if target_variable == cdc.ERA5_VARIABLES.sea_surface_temperature:
+            print("    interpolating")
+            ds_single_level = utils.interpolate_to_target_latlon(
+                ds_single_level, method="nearest"
+            )
+
             # sea surface temperature is only available in the single-level dataset
             datasets.append(ds_single_level)
         else:
-            print(f"loading land for {month_str}")
+            print("    loading land")
             land = [
                 load_variable(
                     cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land
                 )
                 for sv in transform.source_variables
             ]
-            print("collapsing")
+
+            print("    collapsing")
             with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
                 ds_land = transform(
                     *land, key=cdc.ERA5_DATASETS.reanalysis_era5_land
                 ).compute()
             ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
 
-            print("interpolating")
-            ds_land = utils.interpolate_to_target_latlon(ds_land, method="linear")
+            print("    interpolating single level")
+            ds_single_level = utils.interpolate_to_target_latlon(
+                ds_single_level, method="linear",
+                target_lon=ds_land.longitude,
+                target_lat=ds_land.latitude,
+            )
 
-            print("combining")
-            combined = ds_land.combine_first(ds_single_level)
+            print("    combining")
+            combined = ds_land.fillna(ds_single_level).combine_first(ds_single_level)
+
+            print("    interpolating combined")
+            combined = utils.interpolate_to_target_latlon(combined, method="linear")
+
             datasets.append(combined)
 
     ds_year = xr.concat(datasets, dim="date").sortby("date")
@@ -287,8 +297,8 @@ def generate_historical_daily(
         task_resources={
             "queue": queue,
             "cores": 5,
-            "memory": "200G",
-            "runtime": "480m",
+            "memory": "150G",
+            "runtime": "240m",
             "project": "proj_rapidresponse",
         },
         max_attempts=2,
