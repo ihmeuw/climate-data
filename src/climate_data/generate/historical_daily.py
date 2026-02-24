@@ -215,7 +215,8 @@ def generate_historical_daily_main(
 
             print("    interpolating single level")
             ds_single_level = utils.interpolate_to_target_latlon(
-                ds_single_level, method="linear",
+                ds_single_level,
+                method="linear",
                 target_lon=ds_land.longitude,
                 target_lat=ds_land.latitude,
             )
