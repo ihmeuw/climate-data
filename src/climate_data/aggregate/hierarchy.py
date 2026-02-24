@@ -58,6 +58,7 @@ def hierarchy_main(
     print(f"Compiling {measure} for {scenario} in {hierarchy}")
     ca_data = ClimateAggregateData(output_dir)
     pm_data = PopulationModelData(population_model_dir)
+    draws = cdc.DRAWS
 
     # Load hierarchy data for aggregation
     hierarchy_df = pm_data.load_subset_hierarchy(hierarchy)
@@ -69,7 +70,7 @@ def hierarchy_main(
     # Load and combine all block-level results
     desc_template = "{draw:5} {block_key:15}"
     pbar = tqdm.tqdm(
-        total=len(block_keys) * len(cdc.DRAWS),
+        total=len(block_keys) * len(draws),
         desc=desc_template.format(draw="DRAW", block_key="BLOCK KEY"),
         disable=not progress_bar,
     )
@@ -77,7 +78,7 @@ def hierarchy_main(
     all_results = []
     pop_df: pd.DataFrame | None = None
 
-    for draw in cdc.DRAWS:
+    for draw in draws:
         save_population = (
             measure == "mean_temperature" and scenario == "ssp245" and draw == "000"
         )
@@ -110,7 +111,7 @@ def hierarchy_main(
         all_results.append(agg_df["value"].rename(draw))
 
         if save_population:
-            pop_df = agg_df["population"].reset_index()
+            pop_df = agg_df["population"]
 
     pbar.close()
 
@@ -136,7 +137,7 @@ def hierarchy_main(
         )
 
         if pop_df is not None:
-            subset_pop = pop_df.loc[subset_location_ids]
+            subset_pop = pop_df.loc[subset_location_ids].reset_index()
             ca_data.save_population(subset_pop, agg_version, subset_hierarchy)
 
 
