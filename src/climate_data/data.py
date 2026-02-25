@@ -178,7 +178,9 @@ class PopulationModelData:
         elif full_aggregation_hierarchy in ["lsae_1209", "lsae_1285"]:
             # This is only a2 geoms, so already most detailed
             shape_path = (
-                self.raking_data / "gbd-inputs" / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
+                self.raking_data
+                / "gbd-inputs"
+                / f"shapes_{full_aggregation_hierarchy}_a2.parquet"
             )
             out = gpd.read_parquet(shape_path, bbox=bounds)
         else:
@@ -288,8 +290,7 @@ class PopulationModelData:
                 ~hierarchy_df["parent_id"].isin(to_drop_parents)
             ]
             hierarchy_df.loc[
-                hierarchy_df["location_id"].isin(to_drop_parents),
-                "most_detailed"
+                hierarchy_df["location_id"].isin(to_drop_parents), "most_detailed"
             ] = 1
 
         return hierarchy_df
