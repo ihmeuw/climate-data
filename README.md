@@ -30,7 +30,7 @@ Instructions using conda:
 2. Create a new conda environment.
 
     ```sh
-    conda create -n climate-data python=3.11
+    conda create -n climate-data python=3.12
     conda activate climate-data
     ```
 
@@ -40,6 +40,7 @@ Instructions using conda:
     pip install poetry
     cd climate-data
     poetry install
+    pip install jobmon_installer_ihme
     ```
 
 ### Pre-commit
