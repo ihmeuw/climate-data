@@ -10,6 +10,8 @@ on:
 
 jobs:
   build-and-deploy-docs:
+    permissions:
+      contents: write
     if: ${{ github.event.pull_request.merged }} or ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
@@ -19,3 +21,5 @@ jobs:
       - uses: ./.github/actions/python-poetry-env
       - name: Deploy docs
         run: poetry run mkdocs gh-deploy --force
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
