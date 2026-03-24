@@ -72,9 +72,11 @@ jobs:
 
       # behaviour if PR already exists: https://github.com/marketplace/actions/create-pull-request#action-behaviour
       - name: Create Pull Request
+        # I am going to try the default token here rather than James'.  We may need to create an 
+        # "org" secret or a fine-grained token, because of the PAT requirement in the comment below
         env:
           # a PAT is required to be able to update workflows
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ steps.changes.outputs.changed > 0 && env.GITHUB_TOKEN != 0 }}
         uses: peter-evans/create-pull-request@v5
         with:
