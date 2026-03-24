@@ -1,0 +1,2013 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.5">
+    
+    
+      
+        <title>Constructing a comprehensive climate database from ERA5 estimates and CMIP6 forecasts - climate-data</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.8608ea7d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#constructing-a-comprehensive-climate-database-from-era5-estimates-and-cmip6-forecasts" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="climate-data" class="md-header__button md-logo" aria-label="climate-data" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            climate-data
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Constructing a comprehensive climate database from ERA5 estimates and CMIP6 forecasts
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6m0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4M7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com//climate-data" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="climate-data" class="md-nav__button md-logo" aria-label="climate-data" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    climate-data
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com//climate-data" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Code Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Code Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    climate_data
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1" id="__nav_3_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            climate_data
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_1" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/aggregate/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    aggregate
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_1" id="__nav_3_1_1_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_1">
+            <span class="md-nav__icon md-icon"></span>
+            aggregate
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/aggregate/hierarchy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    hierarchy
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/aggregate/pixel/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pixel
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/aggregate/utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cli
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/cli_options/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cli_options
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/constants/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    constants
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    data
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/diagnostics/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    diagnostics
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_6" id="__nav_3_1_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_6">
+            <span class="md-nav__icon md-icon"></span>
+            diagnostics
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/diagnostics/grid_plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grid_plots
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/diagnostics/utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/downscale/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    downscale
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_7" id="__nav_3_1_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_7">
+            <span class="md-nav__icon md-icon"></span>
+            downscale
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/downscale/prepare_predictors/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prepare_predictors
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/downscale/prepare_training_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prepare_training_data
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_8" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/extract/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    extract
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_8" id="__nav_3_1_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_8">
+            <span class="md-nav__icon md-icon"></span>
+            extract
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/extract/cmip6/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cmip6
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/extract/elevation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    elevation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/extract/era5/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    era5
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/extract/ncei_climate_stations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ncei_climate_stations
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/extract/rub_local_climate_zones/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    rub_local_climate_zones
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_9" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/generate/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    generate
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_9" id="__nav_3_1_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_9">
+            <span class="md-nav__icon md-icon"></span>
+            generate
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/draws/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    draws
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/historical_daily/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    historical_daily
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/historical_reference/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    historical_reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/scenario_annual/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    scenario_annual
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/scenario_daily/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    scenario_daily
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/scenario_inclusion/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    scenario_inclusion
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/generate/utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/climate_data/special/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    special
+    
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3_1_10" id="__nav_3_1_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_3_1_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_1_10">
+            <span class="md-nav__icon md-icon"></span>
+            special
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/special/compile_person_days/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    compile_person_days
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/special/temperature_person_days/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temperature_person_days
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/special/temperature_zone/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    temperature_zone
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/special/utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/climate_data/utils/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#era5-data-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      ERA5 data sources
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cmip6-data-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      CMIP6 data sources
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-harmonization-forecast-bias-correction-and-downscaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model harmonization, forecast bias correction, and downscaling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Model harmonization, forecast bias correction, and downscaling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#historical-daily-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Historical daily variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reference-climatology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reference climatology
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forecast-daily-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Forecast daily variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annual-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Annual variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#model-ensembling-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Model ensembling strategy
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#population-weighted-climate-variable-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Population-weighted climate variable aggregation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Population-weighted climate variable aggregation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#population-dataset-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      Population dataset production
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregation-of-pixel-level-estimates-to-most-detailed-administrative-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Aggregation of pixel-level estimates to most-detailed administrative boundaries
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregation-of-most-detailed-administrative-levels-to-gbd" class="md-nav__link">
+    <span class="md-ellipsis">
+      Aggregation of most-detailed administrative levels to GBD
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="constructing-a-comprehensive-climate-database-from-era5-estimates-and-cmip6-forecasts">Constructing a comprehensive climate database from ERA5 estimates and CMIP6 forecasts</h1>
+<p>Understanding the health impacts of climate change requires high-resolution, temporally consistent climate data that spans both historical observations and future projections. This section describes the methodology used to construct a comprehensive climate database that combines historical reanalysis data from the European Centre for Medium-Range Weather Forecasts (ECMWF) ERA5 products with future climate projections from the Coupled Model Intercomparison Project Phase 6 (CMIP6). The resulting database provides daily and annual climate variables at a spatial resolution of 0.1° × 0.1° from 1950 to 2100, covering multiple climate scenarios that represent different socioeconomic and policy futures.</p>
+<p>Our approach integrates two primary data sources: ERA5 reanalysis products for historical climate data and CMIP6 model outputs for future projections. The ERA5 data provides high-quality, observationally constrained estimates of past climate conditions, while CMIP6 offers a range of plausible future climate trajectories under different emission scenarios. We employ a downscaling and bias correction methodology to ensure spatial and temporal consistency between these datasets, while preserving the fine-scale climate patterns captured by the higher-resolution ERA5 data.</p>
+<p>The database construction process involves several key steps: (1) harmonization of historical ERA5 data to create a consistent daily time series, (2) development of a reference climatology for bias correction, (3) downscaling and bias correction of CMIP6 projections, and (4) aggregation to annual time scales. The final database includes multiple climate variables relevant to health impacts, such as temperature, humidity, precipitation, and wind speed, all processed to ensure consistency across the entire temporal range.</p>
+<p>To enable epidemiological analyses at administrative levels, we further process the gridded climate data through population-weighted aggregation. This process combines the climate variables with high-resolution population estimates derived from internal historical population data and projections, enhanced with built environment information from the Global Human Settlement Layer. The resulting population-weighted aggregates are calculated for the most detailed administrative boundaries available, ensuring that climate exposure estimates reflect the actual population distribution within each administrative unit. These aggregated estimates can then be directly linked to health outcome data for epidemiological analyses.</p>
+<h2 id="era5-data-sources">ERA5 data sources</h2>
+<p>We utilized two ERA5 reanalysis products to construct our historical climate database: ERA5-Land and ERA5 on single levels. ERA5-Land provides hourly estimates at 0.1° × 0.1° resolution over land areas, while ERA5 on single levels offers global coverage at 0.25° × 0.25° resolution. This combination ensures both high spatial resolution over land and complete global coverage.</p>
+<p>From these datasets, we extracted six key variables relevant to health impacts:
+- 10-meter u-component of wind (eastward wind velocity)
+- 10-meter v-component of wind (northward wind velocity)
+- 2-meter dewpoint temperature
+- 2-meter temperature
+- Surface pressure
+- Total precipitation</p>
+<h2 id="cmip6-data-sources">CMIP6 data sources</h2>
+<p>For future climate projections, we analyzed output from CMIP6 models under three Shared Socioeconomic Pathway (SSP) scenarios: SSP1-2.6, SSP2-4.5, and SSP5-8.5. These scenarios represent a range of possible future emissions trajectories, from ambitious mitigation to high emissions.</p>
+<p>We selected 42 CMIP6 models based on their performance in reproducing historical air temperature trends, transient climate response, and equilibrium climate sensitivity [https://www.nature.com/articles/s41597-023-02549-6#Sec2]. From these, we included models that met the following criteria:
+- Daily temporal resolution
+- Coverage of all three SSP scenarios
+- Complete timespan from 2019-2099 (with 2099 values extended to 2100 where needed)</p>
+<p>The final analysis incorporated 21 models, with multiple ensemble members from some models. The included variables were:
+- uas (near-surface eastward wind)
+- vas (near-surface northward wind)
+- hurs (near-surface relative humidity)
+- tas (near-surface air temperature)
+- tasmin (daily minimum temperature)
+- tasmax (daily maximum temperature)
+- pr (total precipitation)</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">source</th>
+<th style="text-align: right;">hurs</th>
+<th style="text-align: right;">pr</th>
+<th style="text-align: right;">tas</th>
+<th style="text-align: right;">tasmax</th>
+<th style="text-align: right;">tasmin</th>
+<th style="text-align: right;">uas</th>
+<th style="text-align: right;">vas</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">ACCESS-CM2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">AWI-CM-1-1-MR</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">BCC-CSM2-MR</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">CAMS-CSM1-0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">CMCC-CM2-SR5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">CMCC-ESM2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">CNRM-CM6-1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">6</td>
+</tr>
+<tr>
+<td style="text-align: left;">CNRM-CM6-1-HR</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">CNRM-ESM2-1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td style="text-align: left;">FGOALS-g3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">GFDL-ESM4</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">GISS-E2-1-G</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td style="text-align: left;">IITM-ESM</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">INM-CM4-8</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">INM-CM5-0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">MIROC-ES2L</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">MIROC6</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td style="text-align: left;">MPI-ESM1-2-HR</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">MPI-ESM1-2-LR</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">10</td>
+</tr>
+<tr>
+<td style="text-align: left;">MRI-ESM2-0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td style="text-align: left;">NorESM2-MM</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+<h2 id="model-harmonization-forecast-bias-correction-and-downscaling">Model harmonization, forecast bias correction, and downscaling</h2>
+<p>To produce a consistent climate database spanning 1950-2100, we implemented a multi-stage process that harmonizes historical ERA5 data with future CMIP6 projections. The methodology ensures spatial and temporal consistency while preserving the fine-scale climate patterns captured by the higher-resolution ERA5 data.</p>
+<p>The process begins with the creation of a historical daily database from ERA5 data, which serves as the foundation for subsequent steps. We then develop a reference climatology using the most recent five years of historical data (2019-2023) from the ERA5 daily database. For each climate variable, we:</p>
+<ol>
+<li><strong>Load daily data</strong> for each year in the reference period</li>
+<li><strong>Compute monthly means</strong> by averaging all days within each month</li>
+<li><strong>Average across years</strong> to produce a single monthly climatology that represents typical conditions for each month of the year</li>
+</ol>
+<p>The resulting reference climatology captures the seasonal cycle of each variable while smoothing out interannual variability. This monthly climatology is particularly important for:</p>
+<ul>
+<li>Providing a consistent baseline for bias correction</li>
+<li>Preserving the seasonal patterns in the historical data</li>
+<li>Enabling seasonally-aware downscaling of CMIP6 projections</li>
+</ul>
+<p>The reference climatology is stored in the same format as the daily data, with appropriate encoding scales to optimize storage. This ensures consistency in the data processing pipeline and facilitates the subsequent downscaling and bias correction steps.</p>
+<p>The CMIP6 data is processed through a dynamical downscaling approach that preserves the relative changes in climate variables while adjusting for systematic biases. Finally, we aggregate the daily data to annual time scales, producing a comprehensive database that maintains consistency across the entire temporal range.</p>
+<p>This methodology addresses several key challenges in climate data processing:
+1. Spatial resolution differences between ERA5 and CMIP6 data
+2. Systematic biases in CMIP6 model outputs
+3. Temporal consistency between historical and future projections
+4. Preservation of fine-scale climate patterns important for health impact assessment</p>
+<p>The following sections detail each stage of this process, including the specific transformations, bias correction methods, and aggregation procedures employed.</p>
+<h3 id="historical-daily-variables">Historical daily variables</h3>
+<p>The historical daily database is constructed from ERA5 data through a series of transformations and harmonization steps. We process six key variables from both ERA5-Land and ERA5 single-level datasets:</p>
+<ol>
+<li><strong>Unit conversions and height adjustments</strong>:</li>
+<li>Wind components (u and v) are scaled to 10-meter height</li>
+<li>Temperature variables are converted from Kelvin to Celsius</li>
+<li>Precipitation is converted from meters to millimeters</li>
+<li>
+<p>Surface pressure remains in its original units</p>
+</li>
+<li>
+<p><strong>Daily aggregations</strong>:</p>
+</li>
+<li>Temperature variables are aggregated to daily mean, maximum, and minimum values</li>
+<li>Wind speed is calculated as the vector magnitude of u and v components</li>
+<li>Relative humidity is derived from temperature and dewpoint temperature</li>
+<li>
+<p>Precipitation is processed differently for land and single-level datasets:</p>
+<ul>
+<li>ERA5-Land: daily maximum (this is a cumulative variable in the land dataset)</li>
+<li>ERA5 single-level: daily sum</li>
+</ul>
+</li>
+<li>
+<p><strong>Spatial harmonization</strong>:</p>
+</li>
+<li>ERA5-Land data (0.1° × 0.1°) is left in its native resolution</li>
+<li>ERA5 single-level data (0.25° × 0.25°) is interpolated using nearest-neighbor interpolation</li>
+<li>
+<p>The two datasets are combined, with ERA5-Land data taking precedence over land areas</p>
+</li>
+<li>
+<p><strong>Temporal processing</strong>:</p>
+</li>
+<li>Data is processed year by year from 1950 to 2023</li>
+<li>Each year's data is validated to ensure completeness and consistency</li>
+<li>The final output is stored in NetCDF format with appropriate encoding scales to optimize storage</li>
+</ol>
+<p>The resulting daily database serves as the foundation for both the reference climatology and the bias correction of CMIP6 projections. The high spatial resolution (0.1° × 0.1°) and consistent temporal coverage make it particularly suitable for health impact assessments.</p>
+<h3 id="reference-climatology">Reference climatology</h3>
+<p>The reference climatology serves as the baseline for bias correction and downscaling of CMIP6 projections. It is constructed using the most recent five years of historical data (2019-2023) from the ERA5 daily database. For each climate variable, we:</p>
+<ol>
+<li><strong>Load daily data</strong> for each year in the reference period</li>
+<li><strong>Compute monthly means</strong> by averaging all days within each month</li>
+<li><strong>Average across years</strong> to produce a single monthly climatology that represents typical conditions for each month of the year</li>
+</ol>
+<p>The resulting reference climatology captures the seasonal cycle of each variable while smoothing out interannual variability. This monthly climatology is particularly important for:</p>
+<ul>
+<li>Providing a consistent baseline for bias correction</li>
+<li>Preserving the seasonal patterns in the historical data</li>
+<li>Enabling seasonally-aware downscaling of CMIP6 projections</li>
+</ul>
+<p>The reference climatology is stored in the same format as the daily data, with appropriate encoding scales to optimize storage. This ensures consistency in the data processing pipeline and facilitates the subsequent downscaling and bias correction steps.</p>
+<h3 id="forecast-daily-variables">Forecast daily variables</h3>
+<p>The forecast daily variables are produced through a dynamical downscaling approach that combines CMIP6 model outputs with the reference climatology. For each climate variable and CMIP6 model, we:</p>
+<ol>
+<li><strong>Compute anomalies</strong>:</li>
+<li>Calculate the difference between daily CMIP6 values and the model's monthly mean during the reference period (2019-2023)</li>
+<li>For additive variables (e.g., temperature), compute absolute differences</li>
+<li>
+<p>For multiplicative variables (e.g., precipitation), compute relative differences</p>
+</li>
+<li>
+<p><strong>Downscale anomalies</strong>:</p>
+</li>
+<li>Interpolate the anomalies to the ERA5 grid (0.1° × 0.1°) using linear interpolation</li>
+<li>
+<p>This preserves the large-scale climate change signal while enabling fine-scale detail</p>
+</li>
+<li>
+<p><strong>Apply bias correction</strong>:</p>
+</li>
+<li>Add (for additive variables) or multiply (for multiplicative variables) the downscaled anomalies to the reference climatology</li>
+<li>This step ensures that the forecast values maintain the same statistical properties as the historical data</li>
+</ol>
+<p>The resulting daily forecasts preserve both the climate change signal from the CMIP6 models and the fine-scale spatial patterns from the ERA5 data. This approach is particularly important for health impact assessment as it:</p>
+<ul>
+<li>Maintains the temporal consistency between historical and future projections</li>
+<li>Preserves the fine-scale climate patterns that influence local health outcomes</li>
+<li>Ensures that extreme events are properly represented in the downscaled projections</li>
+</ul>
+<h3 id="annual-variables">Annual variables</h3>
+<p>The annual variables are produced by aggregating the daily data to annual time scales, with different transformations applied depending on the variable type:</p>
+<ol>
+<li><strong>Basic climate metrics</strong>:</li>
+<li>Mean temperature: Annual average of daily mean temperatures</li>
+<li>Mean high temperature: Annual average of daily maximum temperatures</li>
+<li>Mean low temperature: Annual average of daily minimum temperatures</li>
+<li>Wind speed: Annual average of daily mean wind speeds</li>
+<li>Relative humidity: Annual average of daily mean relative humidity</li>
+<li>
+<p>Total precipitation: Annual sum of daily precipitation</p>
+</li>
+<li>
+<p><strong>Threshold-based metrics</strong>:</p>
+</li>
+<li>Days over 30°C: Annual count of days where mean temperature exceeds 30°C</li>
+<li>
+<p>Precipitation days: Annual count of days with precipitation exceeding 0.1mm</p>
+</li>
+<li>
+<p><strong>Disease suitability metrics</strong>:</p>
+</li>
+<li>Malaria suitability: Annual sum of daily temperature-based suitability scores</li>
+<li>Dengue suitability: Annual sum of daily temperature-based suitability scores</li>
+</ol>
+<p>Each variable is processed with appropriate encoding scales to optimize storage:
+- Temperature variables: 0.01°C precision
+- Precipitation: 10mm precision
+- Count-based metrics: Integer values</p>
+<p>These annual variables provide a comprehensive set of climate indicators relevant to health impact assessment, capturing both average conditions and extreme events that may influence health outcomes.</p>
+<h3 id="model-ensembling-strategy">Model ensembling strategy</h3>
+<p>To quantify uncertainty in future climate projections, we implement a random sampling approach that creates 100 equally-weighted model variants. For each draw:</p>
+<ol>
+<li>
+<p><strong>Model selection</strong>: A CMIP6 model is randomly selected from the pool of 21 models, with each model having an equal probability of selection regardless of the number of ensemble members it provides.</p>
+</li>
+<li>
+<p><strong>Variant selection</strong>: For the selected model, a specific variant (ensemble member) is randomly chosen from its available members. This ensures that models with multiple ensemble members are not overrepresented in the final ensemble.</p>
+</li>
+<li>
+<p><strong>Consistency across scenarios</strong>: The same model-variant combination is used for all three SSP scenarios (SSP1-2.6, SSP2-4.5, and SSP5-8.5) to maintain internal consistency in the climate change signal.</p>
+</li>
+</ol>
+<p>This approach provides several advantages:
+- Equal representation of each model's climate response, regardless of the number of ensemble members
+- Preservation of model-specific climate patterns and feedbacks
+- Quantification of structural uncertainty in climate projections
+- Consistent representation of climate change signals across scenarios</p>
+<p>The resulting 100 draws provide a robust sample of possible future climate trajectories, enabling uncertainty quantification in health impact assessments.</p>
+<h2 id="population-weighted-climate-variable-aggregation">Population-weighted climate variable aggregation</h2>
+<p>To enable epidemiological analyses at administrative levels, we implement a multi-stage process that combines high-resolution climate data with population estimates:</p>
+<h3 id="population-dataset-production">Population dataset production</h3>
+<p>The population dataset is constructed at 100-meter resolution using a combination of census data and built environment information:</p>
+<ol>
+<li>
+<p><strong>Base population data</strong>: We use 2020 census data from the United States and Mexico, disaggregated to the most detailed administrative level (admin 5) in these countries.</p>
+</li>
+<li>
+<p><strong>Built environment integration</strong>: The census population counts are divided by the built residential area from the Global Human Settlement Layer to calculate an occupancy rate.</p>
+</li>
+<li>
+<p><strong>Spatial modeling</strong>: The log occupancy rate is modeled as a linear function of:</p>
+</li>
+<li>Geospatial averages of built residential area</li>
+<li>
+<p>Log of nighttime lights</p>
+</li>
+<li>
+<p><strong>Administrative-level adjustment (raking)</strong>: The gridded population estimates are adjusted to match administrative-level totals:</p>
+</li>
+<li>For historical years (1975-2023): Adjusted to match Global Burden of Disease 2021 demographic estimates at the most detailed administrative level (admin 0, 1, or 2)</li>
+<li>For future years (2024-2100): Adjusted to match Future Health Scenarios estimates</li>
+<li>For years before 1975: The 1975 spatial pattern is held constant and adjusted to match administrative totals</li>
+<li>For years after 2023: The 2023 spatial pattern is held constant and adjusted to match administrative totals</li>
+</ol>
+<p>This approach produces a high-resolution population dataset that:
+- Captures fine-scale population distribution patterns
+- Maintains consistency with administrative-level census data
+- Preserves temporal consistency in population estimates
+- Enables accurate population-weighted climate exposure assessment</p>
+<h3 id="aggregation-of-pixel-level-estimates-to-most-detailed-administrative-boundaries">Aggregation of pixel-level estimates to most-detailed administrative boundaries</h3>
+<p>The climate variables are aggregated to administrative boundaries through a weighted averaging process:</p>
+<ol>
+<li>
+<p><strong>Spatial alignment</strong>: The 0.1° × 0.1° climate data is resampled to match the 100-meter population grid using nearest-neighbor interpolation.</p>
+</li>
+<li>
+<p><strong>Population weighting</strong>: For each administrative unit, we calculate:</p>
+</li>
+<li>Weighted climate value = Σ(population × climate value) / Σ(population)</li>
+<li>
+<p>Total population = Σ(population)</p>
+</li>
+<li>
+<p><strong>Administrative boundaries</strong>: We use the most detailed administrative boundaries available, ensuring that climate exposure estimates reflect the actual population distribution within each unit.</p>
+</li>
+</ol>
+<h3 id="aggregation-of-most-detailed-administrative-levels-to-gbd">Aggregation of most-detailed administrative levels to GBD</h3>
+<p>The most-detailed administrative units are further aggregated to Global Burden of Disease (GBD) locations:</p>
+<ol>
+<li>
+<p><strong>Hierarchical aggregation</strong>: We maintain a consistent hierarchy of locations, from most-detailed administrative units up to global level.</p>
+</li>
+<li>
+<p><strong>Population-weighted sums</strong>: For each higher-level location, we calculate:</p>
+</li>
+<li>Weighted climate value = Σ(population × weighted climate value) / Σ(population)</li>
+<li>
+<p>Total population = Σ(population)</p>
+</li>
+<li>
+<p><strong>Multiple hierarchies</strong>: We support different administrative hierarchies (e.g., GBD 2021, FHS 2021) to enable various analytical perspectives.</p>
+</li>
+</ol>
+<p>This multi-stage aggregation process ensures that climate exposure estimates are:
+- Representative of actual population distribution
+- Consistent across administrative levels
+- Compatible with health outcome data for epidemiological analyses</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.f8cc74c7.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.f1b6f286.min.js"></script>
+      
+        <script src="https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js"></script>
+      
+        <script src="../_javascript/tablesort.js"></script>
+      
+        <script src="../_javascript/mathjax.js"></script>
+      
+        <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
