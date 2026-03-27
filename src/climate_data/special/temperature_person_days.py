@@ -53,7 +53,9 @@ def temperature_person_days_main(
     print("Building historical temperature zone index")
     temperature_zone = cd_data.load_compiled_annual_results(
         scenario, "temperature_zone", gcm_member
-    ).sel(**climate_slice)
+    ).sel(**climate_slice) # type: ignore[arg-type]
+    # TODO(@billg): check climate_slice usage # noqa: FIX002
+    # https://jira.ihme.washington.edu/browse/CLIMATE-17
     historical_temperature_zone_idx = utils.to_idx(
         temperature_zone, temperature_zone_bins
     )
@@ -70,12 +72,12 @@ def temperature_person_days_main(
         if year < cdc.FORECAST_START_YEAR:
             temperature = cd_data.load_daily_results(
                 "historical", "mean_temperature", year
-            ).sel(**climate_slice)
+            ).sel(**climate_slice) # type: ignore[arg-type]
         else:
             temperature = cd_data.load_raw_daily_results(
                 scenario, "mean_temperature", year, gcm_member
-            ).sel(**climate_slice)
-        temperature_idx = utils.to_idx(temperature, temperature_bins)
+            ).sel(**climate_slice) # type: ignore[arg-type]
+            temperature_idx = utils.to_idx(temperature, temperature_bins)
 
         pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
         out_arr = out_template.copy()
