@@ -1,5 +1,8 @@
+from typing import Any
+
 import numba
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 from pyproj import Transformer
@@ -12,7 +15,7 @@ def build_location_index(
     hierarchy: str,
     block_key: str,
     pm_data: PopulationModelData,
-):
+) -> tuple[dict[str, slice], list[int], npt.NDArray[np.int64]]:
     climate_slice, bounds_map, location_mask = build_location_masks(
         hierarchy, block_key, pm_data
     )
@@ -23,7 +26,7 @@ def build_location_index(
     return climate_slice, list(bounds_map), location_idx
 
 
-def _to_idx(arr, bins):
+def _to_idx(arr: npt.NDArray[Any], bins: npt.NDArray[Any]) -> npt.NDArray[np.int64]:
     """Convert an array of values to an array of indices into a set of bins.T
 
     Parameters
@@ -44,7 +47,7 @@ def _to_idx(arr, bins):
     return np.clip(np.digitize(arr, bins), 1, len(bins)) - 1
 
 
-def to_idx(ds: xr.Dataset, bins: np.ndarray) -> np.ndarray:
+def to_idx(ds: xr.Dataset, bins: npt.NDArray[Any]) -> npt.NDArray[np.int64]:
     arr = ds["value"].to_numpy()
     idx = _to_idx(arr, bins)
     return idx.reshape(arr.shape[0], -1)
@@ -54,7 +57,7 @@ def get_temperature_coordinates(
     block_key: str,
     pm_data: PopulationModelData,
     temperature: xr.Dataset,
-):
+) -> npt.NDArray[np.int64]:
     pop = pm_data.load_results("2020q1", block_key)
     transformer = Transformer.from_crs(pop.crs, "EPSG:4326", always_xy=True)
     longitude = temperature["longitude"].to_numpy()
@@ -70,21 +73,32 @@ def get_temperature_coordinates(
     return temp_coords
 
 
-@numba.njit
+@numba.njit  # type: ignore[misc]
 def compute_person_days(
-    location_idx,
-    temp_idx,
-    tz_idx,
-    population,
-    temp_coords,
-    out,
-):
-    # location_idx is (high_res_pixel) with values of output index (dim 0)
-    # temp_idx is (days, low_res_pixel) with values of output index (dim 1)
-    # tz_idx is (low_res_pixel) with values of output index (dim 2)
-    # population is (high_res_pixel) with values of population count
-    # temp_coords is (high_res_pixel) with output_values (low_res_pixel)
-    # out is size (num_locations, num_temperature_bins, num_temperature_zones)
+    location_idx: npt.NDArray[np.int64],
+    temp_idx: npt.NDArray[np.int64],
+    tz_idx: npt.NDArray[np.int64],
+    population: npt.NDArray[np.float64],
+    temp_coords: npt.NDArray[np.int64],
+    out: npt.NDArray[np.float64],
+) -> None:
+    """Compute person-days by location, temperature bin, and temperature zone.
+
+    Parameters
+    ----------
+    location_idx
+        Array of shape (high_res_pixel,) with values of output index (dim 0).
+    temp_idx
+        Array of shape (days, low_res_pixel) with values of output index (dim 1).
+    tz_idx
+        Array of shape (low_res_pixel,) with values of output index (dim 2).
+    population
+        Array of shape (high_res_pixel,) with values of population count.
+    temp_coords
+        Array of shape (high_res_pixel,) with output values (low_res_pixel).
+    out
+        Array of shape (num_locations, num_temperature_bins, num_temperature_zones).
+    """
     for pix in range(location_idx.shape[0]):
         loc = location_idx[pix]
         if loc == -1:

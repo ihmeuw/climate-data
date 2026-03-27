@@ -164,8 +164,11 @@ disallow_any_unimported = false
  module = [
      "cdsapi.*",
      "affine.*",
+     "contextily.*",
      "gcsfs.*",
      "geopandas.*",
+     "numba.*",
      "rasterio.*",
+     "seaborn.*",
  ]
  ignore_missing_imports = true

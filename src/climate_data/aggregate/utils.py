@@ -22,7 +22,11 @@ def build_location_masks(
     hierarchy: str,
     block_key: str,
     pm_data: PopulationModelData,
-) -> tuple[dict[str, slice], dict[int, tuple[slice, slice, npt.NDArray[np.bool_]]]]:
+) -> tuple[
+    dict[str, slice],
+    dict[int, tuple[slice, slice, npt.NDArray[np.bool_]]],
+    npt.NDArray[np.uint32],
+]:
     """Build location masks for each location in the hierarchy.
 
     Parameters

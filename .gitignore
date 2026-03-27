@@ -81,3 +81,6 @@ venv.bak/
 
 # Jupyter scratch notebooks
 notebooks/
+
+# specstory
+.specstory/

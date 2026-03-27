@@ -53,7 +53,9 @@ def temperature_person_days_main(
     print("Building historical temperature zone index")
     temperature_zone = cd_data.load_compiled_annual_results(
         scenario, "temperature_zone", gcm_member
-    ).sel(**climate_slice)
+    ).sel(**climate_slice)  # type: ignore[arg-type]
+    # TODO(@billg): check climate_slice usage # noqa: FIX002
+    # https://jira.ihme.washington.edu/browse/CLIMATE-17
     historical_temperature_zone_idx = utils.to_idx(
         temperature_zone, temperature_zone_bins
     )
@@ -67,15 +69,15 @@ def temperature_person_days_main(
     years = list(range(1990, 2101))
     dfs = []
     for tz_idx, year in tqdm.tqdm(list(enumerate(years)), disable=not progress_bar):
-        if year < 2024:
+        if year < cdc.FORECAST_START_YEAR:
             temperature = cd_data.load_daily_results(
                 "historical", "mean_temperature", year
-            ).sel(**climate_slice)
+            ).sel(**climate_slice)  # type: ignore[arg-type]
         else:
             temperature = cd_data.load_raw_daily_results(
                 scenario, "mean_temperature", year, gcm_member
-            ).sel(**climate_slice)
-        temperature_idx = utils.to_idx(temperature, temperature_bins)
+            ).sel(**climate_slice)  # type: ignore[arg-type]
+            temperature_idx = utils.to_idx(temperature, temperature_bins)
 
         pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
         out_arr = out_template.copy()
@@ -168,15 +170,15 @@ def temperature_person_days(
 
     jobs = []
     possible_jobs = list(itertools.product(block_keys, gcm_members, cmip6_experiment))
-    for block_key, gcm_member, cmip6_experiment in possible_jobs:
+    for block, gcm_member, experiment in possible_jobs:
         path = (
             ca_data.root
             / "erf-scratch"
             / "person-days"
-            / f"{cmip6_experiment}_{gcm_member}_{block_key}.parquet"
+            / f"{experiment}_{gcm_member}_{block}.parquet"
         )
         if not path.exists():
-            jobs.append((block_key, gcm_member, cmip6_experiment))
+            jobs.append((block, gcm_member, experiment))
 
     print(f"Running {len(jobs)} jobs")
 

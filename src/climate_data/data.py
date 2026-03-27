@@ -524,7 +524,7 @@ class ClimateData:
 
     @property
     def raw_daily_results(self) -> Path:
-        # return self.daily_results / "raw"
+        # return self.daily_results / "raw" # noqa: ERA001
         return cdc.AGGREGATE_ROOT / "erf-scratch"
 
     def raw_daily_results_path(
