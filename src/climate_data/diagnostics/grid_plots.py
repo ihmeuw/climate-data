@@ -1,7 +1,12 @@
+from typing import cast
+
 import click
 import contextily as ctx
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from requests.exceptions import HTTPError
 from rra_tools import jobmon, plotting
 
@@ -19,7 +24,7 @@ TICK_FONT_SIZE = 12
 TILE_PROVIDER = ctx.providers.Esri.WorldStreetMap
 
 
-def safe_add_basemap(ax, provider=TILE_PROVIDER):
+def safe_add_basemap(ax: Axes, provider: object = TILE_PROVIDER) -> None:
     try:
         ctx.add_basemap(ax, source=provider)
     except HTTPError as e:
@@ -33,7 +38,7 @@ def grid_plots_main(  # noqa: PLR0915
     population_model_dir: str,
     output_dir: str,
     write: bool = True,
-) -> plt.Figure:
+) -> Figure:
     print(f"Running grid plots for {location_id} in {hierarchy_version}")
     pm_data = PopulationModelData(population_model_dir)
     ca_data = ClimateAggregateData(output_dir)
@@ -191,7 +196,7 @@ def grid_plots_main(  # noqa: PLR0915
             ["dodgerblue", "forestgreen", "firebrick"],
             strict=False,
         ):
-            data = climate_data.loc[(measure, scenario)]
+            data = cast(pd.DataFrame, climate_data.loc[(measure, scenario)])
             ax.fill_between(data.index, data.lower, data.upper, alpha=0.1, color=color)
             ax.plot(data.index, data["mean"], label=scenario, color=color)
         ax.set_ylabel(label, fontsize=LABEL_FONT_SIZE)
@@ -251,7 +256,7 @@ def grid_plots(
 ) -> None:
     pm_data = PopulationModelData(population_model_dir)
     ca_data = ClimateAggregateData(output_dir)
-    jobs = []
+    jobs: list[tuple[str, int]] = []
     for h in hierarchy:
         max_level = {
             "fhs_2021": 100,
