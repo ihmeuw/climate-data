@@ -26,9 +26,7 @@ def build_location_index(
     return climate_slice, list(bounds_map), location_idx
 
 
-def _to_idx(
-    arr: npt.NDArray[Any], bins: npt.NDArray[Any]
-) -> npt.NDArray[np.int64]:
+def _to_idx(arr: npt.NDArray[Any], bins: npt.NDArray[Any]) -> npt.NDArray[np.int64]:
     """Convert an array of values to an array of indices into a set of bins.T
 
     Parameters
