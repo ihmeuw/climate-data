@@ -113,7 +113,7 @@ def grid_plots_main(  # noqa: PLR0915
         loc = a1[a1.location_id == location_id].to_crs("EPSG:3857")
         parent_id = hierarchy.loc[
             hierarchy.location_id == location_id, "parent_id"
-        ].values[0]
+        ].to_numpy()[0]
         parent = a0[a0.location_id == parent_id].to_crs("EPSG:3857")
         other_a1s = a1[
             a1.location_id.isin(
@@ -205,7 +205,7 @@ def grid_plots_main(  # noqa: PLR0915
 
     location_name = hierarchy.loc[
         hierarchy.location_id == location_id, "location_name"
-    ].values[0]
+    ].to_numpy()[0]
     fig.suptitle(f"{location_name} ({location_id})", fontsize=TITLE_FONTSIZE)
 
     print("Writing figure")
