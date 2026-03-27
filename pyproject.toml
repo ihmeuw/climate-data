@@ -167,6 +167,7 @@ disallow_any_unimported = false
      "contextily.*",
      "gcsfs.*",
      "geopandas.*",
+     "numba.*",
      "rasterio.*",
      "seaborn.*",
  ]
