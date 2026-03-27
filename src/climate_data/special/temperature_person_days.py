@@ -67,7 +67,7 @@ def temperature_person_days_main(
     years = list(range(1990, 2101))
     dfs = []
     for tz_idx, year in tqdm.tqdm(list(enumerate(years)), disable=not progress_bar):
-        if year < 2024:
+        if year < cdc.FORECAST_START_YEAR:
             temperature = cd_data.load_daily_results(
                 "historical", "mean_temperature", year
             ).sel(**climate_slice)
@@ -168,15 +168,15 @@ def temperature_person_days(
 
     jobs = []
     possible_jobs = list(itertools.product(block_keys, gcm_members, cmip6_experiment))
-    for block_key, gcm_member, cmip6_experiment in possible_jobs:
+    for block, gcm_member, experiment in possible_jobs:
         path = (
             ca_data.root
             / "erf-scratch"
             / "person-days"
-            / f"{cmip6_experiment}_{gcm_member}_{block_key}.parquet"
+            / f"{experiment}_{gcm_member}_{block}.parquet"
         )
         if not path.exists():
-            jobs.append((block_key, gcm_member, cmip6_experiment))
+            jobs.append((block, gcm_member, experiment))
 
     print(f"Running {len(jobs)} jobs")
 

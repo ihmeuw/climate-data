@@ -155,18 +155,20 @@ def compile_person_days(
         max_attempts=3,
     )
 
-    # results_version = "2026_01_12"
-    # draw_map = {}
+    # Legacy post-processing step kept for reference: map draws to GCM variants,
+    # then publish draw-indexed symlinks into the results layout.
+    # results_version = "2026_01_12"  # noqa: ERA001
+    # draw_map = {}  # noqa: ERA001
     # for d in range(100):
-    #     draw = f"{d:0>3}"
-    #     p = cd_data.annual_results_path("ssp126", "mean_temperature", draw).resolve()
-    #     draw_map[draw] = p.stem
+    #     draw = f"{d:0>3}"  # noqa: ERA001
+    #     p = cd_data.annual_results_path("ssp126", "mean_temperature", draw).resolve()  # noqa: ERA001
+    #     draw_map[draw] = p.stem  # noqa: ERA001
 
     # for hierarchy in cdc.HIERARCHY_MAP[HIERARCHY]:
     #     for scenario in cmip6_experiment:
     #         for draw, gcm_variant in draw_map.items():
-    #             raw_path = ca_data.root / "erf-scratch" / "compiled-person-days" / hierarchy / f"{scenario}_{gcm_variant}.parquet"
-    #             out_root = ca_data.results_root(results_version) / hierarchy / f"temperature_person_days_{scenario}"
-    #             mkdir(out_root, parents=True, exist_ok=True)
-    #             out_path = out_root / f"{draw}.parquet"
-    #             out_path.symlink_to(raw_path)
+    #             raw_path = ca_data.root / "erf-scratch" / "compiled-person-days" / hierarchy / f"{scenario}_{gcm_variant}.parquet"  # noqa: ERA001
+    #             out_root = ca_data.results_root(results_version) / hierarchy / f"temperature_person_days_{scenario}"  # noqa: ERA001
+    #             mkdir(out_root, parents=True, exist_ok=True)  # noqa: ERA001
+    #             out_path = out_root / f"{draw}.parquet"  # noqa: ERA001
+    #             out_path.symlink_to(raw_path)  # noqa: ERA001

@@ -72,7 +72,7 @@ jobs:
 
       # behaviour if PR already exists: https://github.com/marketplace/actions/create-pull-request#action-behaviour
       - name: Create Pull Request
-        # I am going to try the default token here rather than James'.  We may need to create an 
+        # I am going to try the default token here rather than James'.  We may need to create an
         # "org" secret or a fine-grained token, because of the PAT requirement in the comment below
         env:
           # a PAT is required to be able to update workflows

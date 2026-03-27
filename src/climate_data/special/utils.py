@@ -79,12 +79,23 @@ def compute_person_days(
     temp_coords,
     out,
 ):
-    # location_idx is (high_res_pixel) with values of output index (dim 0)
-    # temp_idx is (days, low_res_pixel) with values of output index (dim 1)
-    # tz_idx is (low_res_pixel) with values of output index (dim 2)
-    # population is (high_res_pixel) with values of population count
-    # temp_coords is (high_res_pixel) with output_values (low_res_pixel)
-    # out is size (num_locations, num_temperature_bins, num_temperature_zones)
+    """Compute person-days by location, temperature bin, and temperature zone.
+
+    Parameters
+    ----------
+    location_idx
+        Array of shape (high_res_pixel,) with values of output index (dim 0).
+    temp_idx
+        Array of shape (days, low_res_pixel) with values of output index (dim 1).
+    tz_idx
+        Array of shape (low_res_pixel,) with values of output index (dim 2).
+    population
+        Array of shape (high_res_pixel,) with values of population count.
+    temp_coords
+        Array of shape (high_res_pixel,) with output values (low_res_pixel).
+    out
+        Array of shape (num_locations, num_temperature_bins, num_temperature_zones).
+    """
     for pix in range(location_idx.shape[0]):
         loc = location_idx[pix]
         if loc == -1:

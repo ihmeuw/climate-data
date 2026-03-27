@@ -24,13 +24,14 @@ AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
 
 # Time
 
-HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
+FORECAST_START_YEAR = 2024
+HISTORY_YEARS = [str(y) for y in range(1950, FORECAST_START_YEAR)]
 REFERENCE_YEARS = HISTORY_YEARS[-5:]
 REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",
     f"{REFERENCE_YEARS[-1]}-12-31",
 )
-FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
+FORECAST_YEARS = [str(y) for y in range(FORECAST_START_YEAR, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
 
 MONTHS = [f"{i:02d}" for i in range(1, 13)]

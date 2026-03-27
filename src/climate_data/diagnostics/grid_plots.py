@@ -26,7 +26,7 @@ def safe_add_basemap(ax, provider=TILE_PROVIDER):
         print(f"Error adding basemap: {e}")
 
 
-def grid_plots_main(
+def grid_plots_main(  # noqa: PLR0915
     location_id: int,
     version: str,
     hierarchy_version: str,
@@ -187,7 +187,9 @@ def grid_plots_main(
         col, row = divmod(i, 2)
         ax = fig.add_subplot(gs_bottom[row, col])
         for scenario, color in zip(
-            cdc.AGGREGATION_SCENARIOS, ["dodgerblue", "forestgreen", "firebrick"], strict=False
+            cdc.AGGREGATION_SCENARIOS,
+            ["dodgerblue", "forestgreen", "firebrick"],
+            strict=False,
         ):
             data = climate_data.loc[(measure, scenario)]
             ax.fill_between(data.index, data.lower, data.upper, alpha=0.1, color=color)
@@ -288,13 +290,17 @@ def grid_plots(
 
     for h in hierarchy:
         loc_meta = pm_data.load_subset_hierarchy(h)
-        plot_cache = ca_data.grid_plots_pages_root(version, h)
-        output_path = ca_data.grid_plots_path(version, h)
+        # TODO(@billg): confirm that version should be agg_version here # noqa: FIX002
+        # https://jira.ihme.washington.edu/browse/CLIMATE-15
+        plot_cache = ca_data.grid_plots_pages_root(agg_version, h)
+        # output_path = ca_data.grid_plots_path(version, h) # noqa: ERA001
+        # TODO(@billg): check if output_path should be used below instead of output_dir # noqa: FIX002
+        # https://jira.ihme.washington.edu/browse/CLIMATE-15
         for loc_id in loc_meta.location_id.unique():
             if plot_cache.exists(loc_id):
                 print(f"Skipping {loc_id} because it already exists")
                 continue
             print(f"Processing {loc_id}")
             grid_plots_main(
-                loc_id, version, h, population_model_dir, output_dir, write=False
+                loc_id, agg_version, h, population_model_dir, output_dir, write=False
             )
