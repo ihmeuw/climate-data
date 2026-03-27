@@ -201,7 +201,7 @@ def with_block_key[**P, T](
 
 
 def with_hierarchy[**P, T](
-    choices: Sequence[str] = cdc.HIERARCHY_MAP,
+    choices: Sequence[str] = tuple(cdc.HIERARCHY_MAP),
     *,
     allow_all: bool = False,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:

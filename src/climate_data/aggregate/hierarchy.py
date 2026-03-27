@@ -76,7 +76,7 @@ def hierarchy_main(
     )
 
     all_results = []
-    pop_df: pd.DataFrame | None = None
+    pop_df: pd.Series | None = None
 
     for draw in draws:
         save_population = (

@@ -302,7 +302,7 @@ def grid_plots(
         # TODO(@billg): check if output_path should be used below instead of output_dir # noqa: FIX002
         # https://jira.ihme.washington.edu/browse/CLIMATE-15
         for loc_id in loc_meta.location_id.unique():
-            if plot_cache.exists(loc_id):
+            if (plot_cache / f"{loc_id}.pdf").exists():
                 print(f"Skipping {loc_id} because it already exists")
                 continue
             print(f"Processing {loc_id}")
