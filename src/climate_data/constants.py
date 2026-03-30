@@ -16,7 +16,8 @@ POPULATION_MODEL_ROOT = RRA_ROOT / "population-model"
 MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
 # Aggregation working directory
 AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
-
+# Floodinf Directory
+FLOOD_ROOT = Path("/mnt/team/rapidresponse/pub/flooding")
 
 ######################
 # Pipeline variables #
