@@ -212,3 +212,29 @@ def aggregate_climate_to_hierarchy(
     )
     results["value"] = results["weighted_climate"] / results["population"]
     return results
+
+
+def blocks_with_shapefile_intersections(
+    hierarchy: str,
+    pm_data: PopulationModelData,
+) -> set[str]:
+    """Return the set of block_keys whose footprint intersects at least one
+    polygon in the hierarchy's raking shapefile. Blocks not in this set
+    produce empty raw-results (no shape contributes anything), so the
+    pipeline can skip them safely.
+
+    Hierarchy-agnostic: the shapefile lookup is delegated to
+    PopulationModelData.load_raking_shapes, which routes to the right
+    file for whichever hierarchy is in use.
+    """
+    modeling_frame = pm_data.load_modeling_frame()
+    blocks_gdf = (
+        modeling_frame[["block_key", "geometry"]]
+        .dissolve(by="block_key")
+        .reset_index()
+    )
+    shapes = pm_data.load_raking_shapes(hierarchy, bounds=None)
+    if shapes.crs != blocks_gdf.crs:
+        shapes = shapes.to_crs(blocks_gdf.crs)
+    joined = gpd.sjoin(blocks_gdf, shapes, how="inner", predicate="intersects")
+    return set(joined["block_key"].unique())
