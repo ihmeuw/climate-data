@@ -11,12 +11,12 @@ The compilation process:
 import click
 import pandas as pd
 import tqdm
-from rra_tools import jobmon
 
 from climate_data import cli_options as clio
 from climate_data import constants as cdc
 from climate_data.aggregate import utils
 from climate_data.data import ClimateAggregateData, PopulationModelData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 
 def hierarchy_main(
@@ -182,6 +182,7 @@ def hierarchy_task(
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def hierarchy(
     agg_version: str,
     hierarchy: list[str],
@@ -190,6 +191,7 @@ def hierarchy(
     population_model_dir: str,
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
     """Collate block-level datasets into measure-level datasets.
 
@@ -203,7 +205,7 @@ def hierarchy(
     n_jobs = len(hierarchy) * len(agg_measure) * len(agg_scenario)
     print(f"Running {n_jobs} jobs")
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask aggregate",
         task_name="hierarchy",
         node_args={
@@ -225,4 +227,5 @@ def hierarchy(
         },
         log_root=ca_data.log_dir("aggregate_hierarchy"),
         max_attempts=3,
+        dry_run=dry_run,
     )

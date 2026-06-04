@@ -4,7 +4,6 @@ from pathlib import Path
 import click
 import numpy as np
 import rasterra as rt
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -13,6 +12,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.utils import make_raster_template
 
 PAD = 1
@@ -156,8 +156,13 @@ def prepare_predictors_task(
 @click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
-def prepare_predictors(output_dir: str, queue: str) -> None:
-    jobmon.run_parallel(
+@clio.with_dry_run()
+def prepare_predictors(
+    output_dir: str,
+    queue: str,
+    dry_run: bool,
+) -> None:
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="downscale prepare_predictors",
         node_args={
@@ -174,4 +179,5 @@ def prepare_predictors(output_dir: str, queue: str) -> None:
             "runtime": "45m",
             "project": "proj_rapidresponse",
         },
+        dry_run=dry_run,
     )

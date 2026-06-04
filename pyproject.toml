@@ -24,11 +24,11 @@ dependencies = [
     "netcdf4>=1.7.2",
     "pyarrow>=16.0.0",
     "gcsfs>=2024.6.0",
-    "zarr>=2.18.2",
+    "zarr>=2.18.2,<3.0.0",             # Avoid the breaking V3 API
     "dask>=2024.5.2",
     "lxml>=5.3.0",
     "pydantic>=2.10.4",
-    "numba (>=0.61.0,<0.62.0)",
+    "numba (>=0.62.0)",
     "contextily (>=1.6.2,<2.0.0)",
     "pypdf (>=5.4.0,<6.0.0)",
 ]
@@ -50,6 +50,7 @@ requires-poetry = ">=2.0"
 
 [tool.poetry.dependencies]
 python = ">=3.12, <4.0"
+jobmon_installer_ihme = {version = "*", source = "ihme"}
 
 # We keep the dev dependencies here instead of in the project optional dependencies
 # so they're still installed by default with `poetry install`.
@@ -169,3 +170,8 @@ disallow_any_unimported = false
      "rasterio.*",
  ]
  ignore_missing_imports = true
+
+[[tool.poetry.source]]
+name = "ihme"
+url = "https://artifactory.ihme.uw.edu/artifactory/api/pypi/pypi-shared/simple"
+priority = "supplemental"

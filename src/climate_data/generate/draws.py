@@ -5,12 +5,12 @@ import click
 import numpy as np
 import tqdm
 import xarray as xr
-from rra_tools import jobmon
 
 from climate_data import cli_options as clio
 from climate_data import constants as cdc
 from climate_data.data import ClimateData
 from climate_data.generate.scenario_annual import TRANSFORM_MAP
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 
 def compile_gcm_main(
@@ -115,12 +115,14 @@ def compile_gcm_task(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_overwrite()
 @clio.with_queue()
+@clio.with_dry_run()
 def draws(
     target_variable: list[str],
     cmip6_experiment: list[str],
     output_dir: str,
     overwrite: bool,
     queue: str,
+    dry_run: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
 
@@ -140,7 +142,7 @@ def draws(
 
     print(f"{len(to_run)} GCM-members to compile.")
 
-    status = jobmon.run_parallel(
+    status = run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="generate compile_gcm",
         flat_node_args=(
@@ -158,6 +160,7 @@ def draws(
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
+        dry_run=dry_run,
     )
 
     if status != "D":

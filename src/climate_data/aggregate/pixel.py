@@ -4,7 +4,6 @@ import click
 import numpy as np
 import pandas as pd
 import tqdm
-from rra_tools import jobmon
 
 from climate_data import cli_options as clio
 from climate_data import constants as cdc
@@ -14,6 +13,7 @@ from climate_data.data import (
     ClimateData,
     PopulationModelData,
 )
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.utils import to_raster
 
 
@@ -153,6 +153,7 @@ def pixel_task(
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def pixel(
     agg_version: str,
     block_key: str,
@@ -162,6 +163,7 @@ def pixel(
     climate_data_dir: str,
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
     ca_data = ClimateAggregateData(output_dir)
     pm_data = PopulationModelData(population_model_dir)
@@ -178,7 +180,7 @@ def pixel(
     jobs = list(set(jobs))
 
     print(f"Running {len(jobs)} jobs")
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask aggregate",
         task_name="pixel",
         flat_node_args=(
@@ -200,4 +202,5 @@ def pixel(
         },
         log_root=ca_data.log_dir("aggregate_pixel"),
         max_attempts=3,
+        dry_run=dry_run,
     )

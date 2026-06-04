@@ -1,6 +1,5 @@
 import click
 import xarray as xr
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -12,6 +11,7 @@ from climate_data.data import ClimateData
 from climate_data.generate.historical_daily import (
     TRANSFORM_MAP,
 )
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 
 def generate_historical_reference_main(
@@ -65,12 +65,14 @@ def generate_historical_reference_task(
 @clio.with_target_variable(TRANSFORM_MAP, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def generate_historical_reference(
     target_variable: list[str],
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="generate historical_reference",
         node_args={
@@ -87,4 +89,5 @@ def generate_historical_reference(
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
+        dry_run=dry_run,
     )
