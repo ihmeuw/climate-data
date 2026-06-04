@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 import gcsfs
 import xarray as xr
-from rra_tools import jobmon, shell_tools
+from rra_tools import shell_tools
 
 from climate_data import (
     cli_options as clio,
@@ -17,6 +17,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 
 def load_cmip_data(zarr_path: str) -> xr.Dataset:
@@ -120,6 +121,7 @@ def extract_cmip6_task(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
+@clio.with_dry_run()
 def extract_cmip6(
     cmip6_source: list[str],
     cmip6_experiment: list[str],
@@ -127,6 +129,7 @@ def extract_cmip6(
     output_dir: str,
     queue: str,
     overwrite: bool,
+    dry_run: bool,
 ) -> None:
     """Extract CMIP6 data.
 
@@ -139,7 +142,7 @@ def extract_cmip6(
     """
     overwrite_arg = {"overwrite": None} if overwrite else {}
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="extract cmip6",
         node_args={
@@ -160,4 +163,5 @@ def extract_cmip6(
         },
         max_attempts=1,
         concurrency_limit=50,
+        dry_run=dry_run,
     )

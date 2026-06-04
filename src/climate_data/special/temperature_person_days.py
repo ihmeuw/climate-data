@@ -4,7 +4,6 @@ import click
 import numpy as np
 import pandas as pd
 import tqdm
-from rra_tools import jobmon
 from rra_tools.shell_tools import mkdir
 
 from climate_data import cli_options as clio
@@ -15,6 +14,7 @@ from climate_data.data import (
     PopulationModelData,
     save_parquet,
 )
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import utils
 
 HIERARCHY = "gbd_2023"
@@ -150,6 +150,7 @@ def temperature_person_days_task(
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def temperature_person_days(
     block_key: str,
     cmip6_experiment: list[str],
@@ -157,6 +158,7 @@ def temperature_person_days(
     climate_data_dir: str,
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
     ca_data = ClimateAggregateData(output_dir)
     cd_data = ClimateData(climate_data_dir, read_only=True)
@@ -188,7 +190,7 @@ def temperature_person_days(
 
     print(f"Running {len(jobs)} jobs")
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask special",
         task_name="temperature_person_days",
         flat_node_args=(
@@ -209,4 +211,5 @@ def temperature_person_days(
         },
         log_root=ca_data.log_dir("temperature_person_days"),
         max_attempts=3,
+        dry_run=dry_run,
     )
