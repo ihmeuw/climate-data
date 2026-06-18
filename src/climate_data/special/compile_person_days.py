@@ -42,7 +42,8 @@ def compile_person_days_main(
             ca_data.root
             / "erf-scratch"
             / "person-days"
-            / f"{cmip6_experiment}_{gcm_member}_{block_key}.parquet"
+            / block_key
+            / f"{cmip6_experiment}_{gcm_member}.parquet"
         )
         block_df = pd.read_parquet(path)
         block_data.append(block_df)
