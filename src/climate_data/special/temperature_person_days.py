@@ -16,7 +16,7 @@ from climate_data.data import (
 )
 from climate_data.special import utils
 
-HIERARCHY = "gbd_2021"
+HIERARCHY = "gbd_2023"
 
 
 def temperature_person_days_main(

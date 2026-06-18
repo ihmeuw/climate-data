@@ -154,7 +154,7 @@ class PopulationModelData:
         gpd.GeoDataFrame
             The shapes for the given hierarchy and bounds
         """
-        if full_aggregation_hierarchy == "gbd_2021":
+        if full_aggregation_hierarchy in ["gbd_2021", "gbd_2023"]:
             shape_path = (
                 self.raking_data / f"shapes_{full_aggregation_hierarchy}.parquet"
             )
@@ -232,13 +232,13 @@ class PopulationModelData:
         pd.DataFrame
             The hierarchy data with parent-child relationships
         """
-        allowed_hierarchies = ["gbd_2021", "fhs_2021", "lsae_1209", "lsae_1285"]
+        allowed_hierarchies = ["gbd_2021", "fhs_2021", "gbd_2023", "fhs_2023", "lsae_1209", "lsae_1285"]
         if subset_hierarchy not in allowed_hierarchies:
             msg = f"Unknown admin hierarchy: {subset_hierarchy}"
             raise ValueError(msg)
         path = self.raking_data / "gbd-inputs" / f"hierarchy_{subset_hierarchy}.parquet"
         hierarchy_df = pd.read_parquet(path)
-        if subset_hierarchy == "gbd_2021":
+        if subset_hierarchy in ["gbd_2021", "gbd_2023"]:
             to_drop_parents = [
                 ## FROM POPULATION MODEL RAKING DATA PREP
                 # Drop UK UTLAs from these regions
