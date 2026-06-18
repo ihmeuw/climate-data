@@ -79,5 +79,7 @@ venv.bak/
 .idea/
 .vscode/
 
+core
+
 # Jupyter scratch notebooks
 notebooks/

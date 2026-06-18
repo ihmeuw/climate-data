@@ -196,8 +196,8 @@ def pixel(
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "8G",
-            "runtime": "300m",
+            "memory": "6G",
+            "runtime": "480m",
             "project": "proj_rapidresponse",
         },
         log_root=ca_data.log_dir("aggregate_pixel"),

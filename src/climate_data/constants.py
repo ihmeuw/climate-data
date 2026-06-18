@@ -250,9 +250,9 @@ AGGREGATION_MEASURES = [
 # - Subset hierarchies: These are hierarchies of locations that are a subset of the full
 #   aggregation hierarchies.
 HIERARCHY_MAP = {
-    "gbd_2021": [
-        "gbd_2021",
-        "fhs_2021",
+    "gbd_2023": [
+        "gbd_2023",
+        "fhs_2023",
     ],  # GBD pixel hierarchy maps to GBD and FHS locations
     "lsae_1209": ["lsae_1209"],  # LSAE pixel hierarchy maps to LSAE locations
     "lsae_1285": ["lsae_1285"],  # LSAE pixel hierarchy maps to LSAE locations
