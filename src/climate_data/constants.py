@@ -15,7 +15,8 @@ POPULATION_MODEL_ROOT = RRA_ROOT / "population-model"
 # Downscaling working directory
 MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
 # Aggregation working directory
-AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
+AGGREGATE_ROOT = MODEL_ROOT / "aggregates"
+#AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
 
 
 ######################
@@ -248,10 +249,19 @@ AGGREGATION_MEASURES = [
 # - Subset hierarchies: These are hierarchies of locations that are a subset of the full
 #   aggregation hierarchies.
 HIERARCHY_MAP = {
+    "gbd_2021": [
+        "gbd_2021",
+        "fhs_2021",
+    ],  # GBD pixel hierarchy maps to GBD and FHS locations
     "gbd_2023": [
         "gbd_2023",
         "fhs_2023",
     ],  # GBD pixel hierarchy maps to GBD and FHS locations
+    "gbd_2025": [
+        "gbd_2025",
+    ],  # No fhs_2025 raking files yet; GBD-only view for now.
     "lsae_1209": ["lsae_1209"],  # LSAE pixel hierarchy maps to LSAE locations
     "lsae_1285": ["lsae_1285"],  # LSAE pixel hierarchy maps to LSAE locations
 }
+# GBD pixel hierarchies -- the version axis for the special stage.
+GBD_HIERARCHIES = ["gbd_2021", "gbd_2023", "gbd_2025"]
