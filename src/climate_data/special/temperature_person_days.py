@@ -1,4 +1,5 @@
 import itertools
+from pathlib import Path
 
 import click
 import numpy as np
@@ -17,13 +18,15 @@ from climate_data.data import (
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import utils
 
-HIERARCHY = "gbd_2023"
+# First forecast year: years before this use ERA5 historical daily temperature.
+FORECAST_START_YEAR = 2024
 
 
 def temperature_person_days_main(
     block_key: str,
     gcm_member: str,
     scenario: str,
+    hierarchy: str,
     population_model_root: str,
     climate_data_root: str,
     output_dir: str,
@@ -33,11 +36,11 @@ def temperature_person_days_main(
     print(f"Aggregating {gcm_member} for {block_key}")
     pm_data = PopulationModelData(population_model_root)
     cd_data = ClimateData(climate_data_root, read_only=True)
-    ca_data = ClimateAggregateData(output_dir)
+    ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
 
     print("Building location masks")
     climate_slice, location_ids, location_idx = utils.build_location_index(
-        HIERARCHY, block_key, pm_data
+        hierarchy, block_key, pm_data
     )
 
     print("Building data index")
@@ -65,10 +68,11 @@ def temperature_person_days_main(
     )
 
     print("Aggregating temperature person days")
-    years = list(range(1990, 2101))
+    last_year = 2025 if scenario == "historical" else 2100
+    years = list(range(1990, last_year + 1))
     dfs = []
     for tz_idx, year in tqdm.tqdm(list(enumerate(years)), disable=not progress_bar):
-        if year < 2024:
+        if scenario == "historical" or year < FORECAST_START_YEAR:
             temperature = cd_data.load_daily_results(
                 "historical", "mean_temperature", year
             ).sel(**climate_slice)
@@ -104,20 +108,16 @@ def temperature_person_days_main(
         dfs.append(df)
 
     df = pd.concat(dfs)
-    out_path = (
-        ca_data.root
-        / "erf-scratch"
-        / "person-days"
-        / block_key
-        / f"{scenario}_{gcm_member}.parquet"
-    )
+    out_path = ca_data.person_days_path(block_key, scenario, gcm_member)
+    mkdir(out_path.parent, parents=True, exist_ok=True)
     save_parquet(df, out_path)
 
 
 @click.command()
 @clio.with_block_key()
 @clio.with_gcm_member()
-@clio.with_cmip6_experiment()
+@clio.with_scenario()
+@clio.with_hierarchy(choices=cdc.GBD_HIERARCHIES, default="gbd_2023")
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
@@ -125,17 +125,22 @@ def temperature_person_days_main(
 def temperature_person_days_task(
     block_key: str,
     gcm_member: str,
-    cmip6_experiment: str,
+    scenario: str,
+    hierarchy: str,
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
     *,
     progress_bar: bool,
 ) -> None:
+    if scenario == "historical" and gcm_member != "era5":
+        msg = f"The 'historical' scenario must use the 'era5' gcm-member, got {gcm_member}"
+        raise ValueError(msg)
     temperature_person_days_main(
         block_key,
         gcm_member,
-        cmip6_experiment,
+        scenario,
+        hierarchy,
         population_model_dir,
         climate_data_dir,
         output_dir,
@@ -145,7 +150,8 @@ def temperature_person_days_task(
 
 @click.command()
 @clio.with_block_key(allow_all=True)
-@clio.with_cmip6_experiment(allow_all=True)
+@clio.with_scenario(allow_all=True)
+@clio.with_hierarchy(choices=cdc.GBD_HIERARCHIES, default="gbd_2023")
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
@@ -153,40 +159,32 @@ def temperature_person_days_task(
 @clio.with_dry_run()
 def temperature_person_days(
     block_key: str,
-    cmip6_experiment: list[str],
+    scenario: list[str],
+    hierarchy: str,
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
     queue: str,
     dry_run: bool,
 ) -> None:
-    ca_data = ClimateAggregateData(output_dir)
+    ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
     cd_data = ClimateData(climate_data_dir, read_only=True)
     pm_data = PopulationModelData(population_model_dir)
-    pd_root = (
-        ca_data.root
-        / "erf-scratch"
-        / "person-days"
-    )
 
     modeling_frame = pm_data.load_modeling_frame()
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
-    for block_key in block_keys:
-        mkdir(pd_root / block_key, exist_ok=True)
-
-    gcm_members = cd_data.list_gcm_members("ssp126", "mean_temperature")
 
     jobs = []
-    possible_jobs = list(itertools.product(block_keys, gcm_members, cmip6_experiment))
-    for block_key, gcm_member, cmip6_experiment in possible_jobs:
-        path = (
-            pd_root
-            / block_key
-            / f"{cmip6_experiment}_{gcm_member}.parquet"
+    for e in scenario:
+        gcm_members = (
+            ["era5"]
+            if e == "historical"
+            else cd_data.list_gcm_members("ssp126", "mean_temperature")
         )
-        if not path.exists():
-            jobs.append((block_key, gcm_member, cmip6_experiment))
+        for blk, g in itertools.product(block_keys, gcm_members):
+            if not ca_data.person_days_path(blk, e, g).exists():
+                jobs.append((blk, g, e))
 
     print(f"Running {len(jobs)} jobs")
 
@@ -194,10 +192,11 @@ def temperature_person_days(
         runner="cdtask special",
         task_name="temperature_person_days",
         flat_node_args=(
-            ("block-key", "gcm-member", "cmip6-experiment"),
+            ("block-key", "gcm-member", "scenario"),
             jobs,
         ),
         task_args={
+            "hierarchy": hierarchy,
             "population-model-dir": population_model_dir,
             "climate-data-dir": climate_data_dir,
             "output-dir": output_dir,
