@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import tqdm
 from rra_tools import jobmon
+from rra_tools.shell_tools import mkdir
 
 from climate_data import cli_options as clio
 from climate_data import constants as cdc
@@ -107,7 +108,8 @@ def temperature_person_days_main(
         ca_data.root
         / "erf-scratch"
         / "person-days"
-        / f"{scenario}_{gcm_member}_{block_key}.parquet"
+        / block_key
+        / f"{scenario}_{gcm_member}.parquet"
     )
     save_parquet(df, out_path)
 
@@ -159,10 +161,17 @@ def temperature_person_days(
     ca_data = ClimateAggregateData(output_dir)
     cd_data = ClimateData(climate_data_dir, read_only=True)
     pm_data = PopulationModelData(population_model_dir)
+    pd_root = (
+        ca_data.root
+        / "erf-scratch"
+        / "person-days"
+    )
 
     modeling_frame = pm_data.load_modeling_frame()
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
+    for block_key in block_keys:
+        mkdir(pd_root / block_key, exist_ok=True)
 
     gcm_members = cd_data.list_gcm_members("ssp126", "mean_temperature")
 
@@ -170,10 +179,9 @@ def temperature_person_days(
     possible_jobs = list(itertools.product(block_keys, gcm_members, cmip6_experiment))
     for block_key, gcm_member, cmip6_experiment in possible_jobs:
         path = (
-            ca_data.root
-            / "erf-scratch"
-            / "person-days"
-            / f"{cmip6_experiment}_{gcm_member}_{block_key}.parquet"
+            pd_root
+            / block_key
+            / f"{cmip6_experiment}_{gcm_member}.parquet"
         )
         if not path.exists():
             jobs.append((block_key, gcm_member, cmip6_experiment))
