@@ -220,7 +220,7 @@ def hierarchy(
             "queue": queue,
             "cores": 1,
             "memory": "50G",
-            "runtime": "200m",
+            "runtime": "240m",
             "project": "proj_rapidresponse",
         },
         log_root=ca_data.log_dir("aggregate_hierarchy"),
