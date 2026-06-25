@@ -251,6 +251,17 @@ def with_location_id[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add dry-run flag to a command."""
+    return click.option(
+        "--dry-run/--no-dry-run",
+        "-n",
+        default=False,
+        show_default=True,
+        help="Print sbatch-like previews instead of submitting jobs.",
+    )
+
+
 __all__ = [
     "RUN_ALL",
     "convert_choice",
@@ -278,4 +289,6 @@ __all__ = [
     "with_target_variable",
     "with_verbose",
     "with_year",
+    "with_location_id",
+    "with_dry_run",
 ]

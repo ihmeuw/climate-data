@@ -3,7 +3,6 @@ from pathlib import Path
 
 import click
 import pandas as pd
-from rra_tools import jobmon
 from rra_tools.shell_tools import mkdir, wget
 
 from climate_data import (
@@ -13,6 +12,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 URL_TEMPLATE = (
     "https://www.ncei.noaa.gov/data/global-summary-of-the-day/archive/{year}.tar.gz"
@@ -50,8 +50,13 @@ def extract_ncei_climate_stations_task(year: str, output_dir: str) -> None:
 @click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
-def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
-    jobmon.run_parallel(
+@clio.with_dry_run()
+def extract_ncei_climate_stations(
+    output_dir: str,
+    queue: str,
+    dry_run: bool,
+) -> None:
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="extract ncei",
         node_args={
@@ -67,4 +72,5 @@ def extract_ncei_climate_stations(output_dir: str, queue: str) -> None:
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
+        dry_run=dry_run,
     )

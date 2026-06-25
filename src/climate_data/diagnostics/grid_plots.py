@@ -3,12 +3,13 @@ import contextily as ctx
 import matplotlib.pyplot as plt
 import seaborn as sns
 from requests.exceptions import HTTPError
-from rra_tools import jobmon, plotting
+from rra_tools import plotting
 
 import climate_data.cli_options as clio
 import climate_data.constants as cdc
 from climate_data.data import ClimateAggregateData, PopulationModelData
 from climate_data.diagnostics.utils import load_climate_data, load_populations
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 FIG_SIZE = (35, 20)
 GRID_SPEC_MARGINS = {"top": 0.92, "bottom": 0.08}
@@ -240,12 +241,14 @@ def grid_plots_task(
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def grid_plots(
     agg_version: str,
     hierarchy: list[str],
     population_model_dir: str,
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
     pm_data = PopulationModelData(population_model_dir)
     ca_data = ClimateAggregateData(output_dir)
@@ -263,7 +266,7 @@ def grid_plots(
 
     print(f"Running {len(jobs)} jobs")
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask diagnostics",
         task_name="grid_plots",
         flat_node_args=(
@@ -284,17 +287,18 @@ def grid_plots(
         },
         log_root=ca_data.log_dir("diagnostics_grid_plots"),
         max_attempts=3,
+        dry_run=dry_run,
     )
 
     for h in hierarchy:
         loc_meta = pm_data.load_subset_hierarchy(h)
-        plot_cache = ca_data.grid_plots_pages_root(version, h)
-        output_path = ca_data.grid_plots_path(version, h)
+        plot_cache = ca_data.grid_plots_pages_root(agg_version, h)
+        output_path = ca_data.grid_plots_path(agg_version, h)
         for loc_id in loc_meta.location_id.unique():
             if plot_cache.exists(loc_id):
                 print(f"Skipping {loc_id} because it already exists")
                 continue
             print(f"Processing {loc_id}")
             grid_plots_main(
-                loc_id, version, h, population_model_dir, output_dir, write=False
+                loc_id, agg_version, h, population_model_dir, output_dir, write=False
             )

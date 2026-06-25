@@ -4,7 +4,6 @@ from pathlib import Path
 import click
 import xarray as xr
 from dask.diagnostics.progress import ProgressBar
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -20,6 +19,7 @@ from climate_data.generate.scenario_daily import (
 from climate_data.generate.scenario_daily import (
     generate_scenario_daily_main,
 )
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 TEMP_THRESHOLDS = [30]
 
@@ -220,12 +220,14 @@ def build_arg_list(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
+@clio.with_dry_run()
 def generate_scenario_annual(
     target_variable: list[str],
     scenario: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
+    dry_run: bool,
 ) -> None:
     to_run, complete = build_arg_list(
         target_variable,
@@ -238,7 +240,7 @@ def generate_scenario_annual(
 
     if not to_run:
         return
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="generate scenario_annual",
         flat_node_args=(
@@ -256,4 +258,5 @@ def generate_scenario_annual(
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
+        dry_run=dry_run,
     )

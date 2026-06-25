@@ -2,7 +2,6 @@ import itertools
 from pathlib import Path
 
 import click
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -11,6 +10,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 
 def generate_temperature_zone_main(
@@ -62,11 +62,13 @@ def generate_temperature_zone_task(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
+@clio.with_dry_run()
 def generate_temperature_zone(
     cmip6_experiment: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
+    dry_run: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
     gcm_members = cdata.list_gcm_members("ssp126", "mean_temperature")
@@ -82,7 +84,7 @@ def generate_temperature_zone(
 
     print(f"{len(complete)} tasks already done. Launching {len(to_run)} tasks")
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask special",
         task_name="temperature_zone",
         flat_node_args=(
@@ -100,4 +102,5 @@ def generate_temperature_zone(
             "project": "proj_rapidresponse",
         },
         max_attempts=2,
+        dry_run=dry_run,
     )

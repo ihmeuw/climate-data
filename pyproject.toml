@@ -122,6 +122,9 @@ ignore = [
 "scripts/**" = [
     "INP001",   # "Scripts are not part of a package."
 ]
+"src/climate_data/jobmon_utils.py" = [
+    "PERF401",  # billg hates list comprehensions
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

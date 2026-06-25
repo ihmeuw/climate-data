@@ -3,7 +3,6 @@ from pathlib import Path
 import click
 import requests
 import tqdm
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -12,6 +11,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 API_ENDPOINT = "https://portal.opentopography.org/API/globaldem"
 
@@ -105,10 +105,12 @@ def extract_elevation_task(
 )
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def extract_elevation(
     model_name: str,
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
     """Download elevation data from Open Topography."""
     invalid = True
@@ -119,7 +121,7 @@ def extract_elevation(
     lat_starts = list(range(-90, 90, FETCH_SIZE))
     lon_starts = list(range(-180, 180, FETCH_SIZE))
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="extract elevation",
         node_args={
@@ -137,4 +139,5 @@ def extract_elevation(
             "runtime": "240m",
             "project": "proj_rapidresponse",
         },
+        dry_run=dry_run,
     )

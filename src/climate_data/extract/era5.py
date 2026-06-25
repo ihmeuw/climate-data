@@ -12,7 +12,6 @@ import cdsapi
 import click
 import xarray as xr
 import yaml
-from rra_tools import jobmon
 from rra_tools.shell_tools import touch
 
 from climate_data import (
@@ -22,6 +21,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 _NETCDF_VALID_ENCODINGS = {
     "zlib",
@@ -290,6 +290,7 @@ def build_task_lists(
 @clio.with_year(years=cdc.HISTORY_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
+@clio.with_dry_run()
 def extract_era5(
     era5_dataset: list[str],
     era5_variable: list[str],
@@ -297,6 +298,7 @@ def extract_era5(
     month: list[str],
     output_dir: str,
     queue: str,
+    dry_run: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
     cred_path = cdata.credentials_root / "copernicus.yaml"
@@ -335,7 +337,7 @@ def extract_era5(
             "jobs",
         )
 
-        status = jobmon.run_parallel(
+        status = run_parallel_maybe_dry_run(
             runner="cdtask",
             task_name="extract era5_download",
             flat_node_args=(
@@ -353,6 +355,7 @@ def extract_era5(
                 "project": "proj_rapidresponse",
             },
             max_attempts=1,
+            dry_run=dry_run,
         )
         download_statuses.append(status)
 
@@ -360,7 +363,7 @@ def extract_era5(
         print("No datasets to compress.")
         return
 
-    compress_status = jobmon.run_parallel(
+    compress_status = run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="extract era5_compress",
         flat_node_args=(
@@ -378,6 +381,7 @@ def extract_era5(
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
+        dry_run=dry_run,
     )
 
     if any(s != "D" for s in download_statuses):

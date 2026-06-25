@@ -5,7 +5,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import xarray as xr
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -14,6 +13,7 @@ from climate_data import (
     constants as cdc,
 )
 from climate_data.data import ClimateData
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 
 def load_and_clean_climate_stations(
@@ -115,8 +115,13 @@ def prepare_training_data_task(year: str, output_dir: str) -> None:
 @click.command()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
-def prepare_training_data(output_dir: str, queue: str) -> None:
-    jobmon.run_parallel(
+@clio.with_dry_run()
+def prepare_training_data(
+    output_dir: str,
+    queue: str,
+    dry_run: bool,
+) -> None:
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="downscale prepare_training_data",
         node_args={
@@ -132,4 +137,5 @@ def prepare_training_data(output_dir: str, queue: str) -> None:
             "runtime": "30m",
             "project": "proj_rapidresponse",
         },
+        dry_run=dry_run,
     )

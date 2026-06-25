@@ -5,7 +5,6 @@ import click
 import dask
 import pandas as pd
 import xarray as xr
-from rra_tools import jobmon
 
 from climate_data import (
     cli_options as clio,
@@ -15,6 +14,7 @@ from climate_data import (
 )
 from climate_data.data import ClimateData
 from climate_data.generate import utils
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 # Map from source variable to a unit conversion function
 CONVERT_MAP = {
@@ -262,12 +262,14 @@ def generate_historical_daily_task(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_overwrite()
+@clio.with_dry_run()
 def generate_historical_daily(
     target_variable: list[str],
     year: list[str],
     output_dir: str,
     queue: str,
     overwrite: bool,
+    dry_run: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
 
@@ -285,7 +287,7 @@ def generate_historical_daily(
         f"Launching {len(years_and_variables)} tasks"
     )
 
-    jobmon.run_parallel(
+    run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="generate historical_daily",
         flat_node_args=(
@@ -303,4 +305,5 @@ def generate_historical_daily(
             "project": "proj_rapidresponse",
         },
         max_attempts=2,
+        dry_run=dry_run,
     )
