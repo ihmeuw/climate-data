@@ -13,7 +13,9 @@ RRA_ROOT = Path("/mnt/team/rapidresponse/pub/")
 # Contains gridded population estimates and projections
 POPULATION_MODEL_ROOT = RRA_ROOT / "population-model"
 # Downscaling working directory
-MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
+#MODEL_ROOT = Path("/mnt/team/lsae/pub/billg/climate-data/test/")
+MODEL_ROOT = Path("/mnt/share/geospatial/climate/")
+#MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
 # Aggregation working directory
 AGGREGATE_ROOT = MODEL_ROOT / "aggregates"
 #AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
@@ -25,7 +27,7 @@ AGGREGATE_ROOT = MODEL_ROOT / "aggregates"
 
 # Time
 
-HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
+HISTORY_YEARS = [str(y) for y in range(1950, 2026)]
 REFERENCE_YEARS = HISTORY_YEARS[-5:]
 REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",
