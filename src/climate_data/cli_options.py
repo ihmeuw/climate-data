@@ -204,8 +204,21 @@ def with_hierarchy[**P, T](
     choices: Sequence[str] = cdc.HIERARCHY_MAP,
     *,
     allow_all: bool = False,
+    default: str | None = None,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Add hierarchy option to a command."""
+    """Add hierarchy option to a command.
+
+    Pass ``default`` to give the (single-value) option a default; this builds
+    the option directly since ``with_choice`` always supplies its own default.
+    """
+    if default is not None:
+        return click.option(
+            "--hierarchy",
+            type=click.Choice(list(choices)),
+            default=default,
+            show_default=True,
+            help="Hierarchy to process.",
+        )
     return with_choice(
         "hierarchy",
         allow_all=allow_all,

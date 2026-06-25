@@ -24,11 +24,13 @@ def compile_gcm_main(
     historical_paths = list(
         (cdata.raw_annual_results / "historical" / target_variable).glob("*.nc")
     )
-    scenario_paths = list(
-        (cdata.raw_annual_results / cmip6_experiment / target_variable).glob(
+    scenario_paths = [
+        p
+        for p in (cdata.raw_annual_results / cmip6_experiment / target_variable).glob(
             f"*{gcm_member}.nc"
         )
-    )
+        if p.stem.split("_")[0] not in cdc.HISTORY_YEARS
+    ]
     print("Opening datasets")
     ds = (
         xr.open_mfdataset(historical_paths + scenario_paths, combine="by_coords")
