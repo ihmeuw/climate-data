@@ -132,7 +132,7 @@ def compile_person_days(
     ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
     cd_data = ClimateData(climate_data_dir, read_only=True)
 
-    jobs = []
+    jobs: list[tuple[str, str]] = []
     for e in scenario:
         gcm_members = (
             ["era5"]
