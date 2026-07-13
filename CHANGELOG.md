@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `GBD_HIERARCHIES`, and a `--hierarchy` option (default `gbd_2023`) on the
   person-days runners. (CLIMATE-22)
 - Historical run mode for `temperature_zone` and the person-days steps. (CLIMATE-22)
+- `special download_era5_uncertainty` step: downloads whole-year ERA5
+  `reanalysis` + `ensemble_spread` 2m-temperature files (2024/2025) from CDS,
+  matching Katrin Burkart's `era5_{product_type}_{variable}_{year}.nc` layout, to
+  fill the GBD temperature-uncertainty gap. (CLIMATE-22)
 ### Changed
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
