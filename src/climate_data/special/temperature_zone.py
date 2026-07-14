@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import click
-import xarray as xr
 
 from climate_data import (
     cli_options as clio,
@@ -36,10 +35,7 @@ def generate_temperature_zone_main(
     print(f"Generating temperature zone for {scenario} {gcm_member}")
     cdata = ClimateData(output_dir)
     if scenario == "historical":
-        paths = sorted(
-            (cdata.raw_annual_results / "historical" / "mean_temperature").glob("*.nc")
-        )
-        ds = xr.open_mfdataset(paths, combine="by_coords").sortby("year").compute()
+        ds = cdata.load_raw_annual_mfdataset("historical", "mean_temperature")
     else:
         ds = cdata.load_compiled_annual_results(
             scenario, "mean_temperature", gcm_member

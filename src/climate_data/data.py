@@ -621,6 +621,26 @@ class ClimateData:
     ) -> Path:
         return self.raw_annual_results / scenario / variable / f"{year}_{gcm_member}.nc"
 
+    @staticmethod
+    def combine_raw_annual(paths: list[Path]) -> xr.Dataset:
+        """Open and combine raw annual ``.nc`` files into one dataset, sorted by year."""
+        return xr.open_mfdataset(paths, combine="by_coords").sortby("year").compute()
+
+    def load_raw_annual_mfdataset(
+        self,
+        scenario: str,
+        variable: str,
+        gcm_member: str | None = None,
+    ) -> xr.Dataset:
+        """Glob and combine all raw annual results for a scenario/variable.
+
+        Pass ``gcm_member`` to restrict to a single member's files; otherwise every
+        ``.nc`` under the scenario/variable directory is combined.
+        """
+        pattern = f"*{gcm_member}.nc" if gcm_member is not None else "*.nc"
+        paths = sorted((self.raw_annual_results / scenario / variable).glob(pattern))
+        return self.combine_raw_annual(paths)
+
     def save_raw_annual_results(
         self,
         results_ds: xr.Dataset,
