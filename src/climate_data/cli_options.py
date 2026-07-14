@@ -7,7 +7,7 @@ These options are used to specify the data to extract, such as the year, month, 
 It also provides global variables representing the full space of valid values for these options.
 """
 
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection
 
 import click
 from rra_tools.cli_tools import (
@@ -201,7 +201,7 @@ def with_block_key[**P, T](
 
 
 def with_hierarchy[**P, T](
-    choices: Sequence[str] = cdc.HIERARCHY_MAP,
+    choices: Collection[str] = cdc.HIERARCHY_MAP,
     *,
     allow_all: bool = False,
     default: str | None = None,
