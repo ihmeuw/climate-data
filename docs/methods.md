@@ -20,6 +20,10 @@ From these datasets, we extracted six key variables relevant to health impacts:
 - Surface pressure
 - Total precipitation
 
+### ERA5 ensemble uncertainty
+
+Beyond the deterministic reanalysis used for the core database, ERA5 also characterizes the uncertainty of its own analysis through an ensemble of data assimilations. To support uncertainty quantification in the downstream temperature exposure products, we additionally retrieve both the high-resolution deterministic product (`reanalysis`, HRES) and the ensemble-of-data-assimilations spread (`ensemble_spread`, EDA) for 2-meter temperature. These ensemble fields are published only for ERA5 on single levels (0.25° for the deterministic product and roughly 0.5° for the ensemble); they are not available for ERA5-Land. Both products are retrieved at 3-hourly resolution — the native cadence of the ensemble spread, with the hourly deterministic product subsampled onto the same time axis — so that the two share a common temporal grid. The fields are written one file per whole year following the naming convention `era5_{product_type}_{variable}_{year}.nc`, extending an earlier 2022–2023 download to fill the 2024–2025 gap. This ensemble-spread field is prepared as an input for the temperature exposure work and is not yet consumed by the core downscaling and bias-correction pipeline, which uses only the deterministic mean temperature.
+
 ## CMIP6 data sources
 
 For future climate projections, we analyzed output from CMIP6 models under three Shared Socioeconomic Pathway (SSP) scenarios: SSP1-2.6, SSP2-4.5, and SSP5-8.5. These scenarios represent a range of possible future emissions trajectories, from ambitious mitigation to high emissions.
@@ -66,7 +70,7 @@ The final analysis incorporated 21 models, with multiple ensemble members from s
 
 To produce a consistent climate database spanning 1950-2100, we implemented a multi-stage process that harmonizes historical ERA5 data with future CMIP6 projections. The methodology ensures spatial and temporal consistency while preserving the fine-scale climate patterns captured by the higher-resolution ERA5 data.
 
-The process begins with the creation of a historical daily database from ERA5 data, which serves as the foundation for subsequent steps. We then develop a reference climatology using the most recent five years of historical data (2019-2023) from the ERA5 daily database. For each climate variable, we:
+The process begins with the creation of a historical daily database from ERA5 data, which serves as the foundation for subsequent steps. We then develop a reference climatology using the most recent five years of historical data (2019-2023 for FHS-2023, 2021-2025 for FHS-2025) from the ERA5 daily database. For each climate variable, we:
 
 1. **Load daily data** for each year in the reference period
 2. **Compute monthly means** by averaging all days within each month
@@ -114,15 +118,15 @@ The historical daily database is constructed from ERA5 data through a series of 
    - The two datasets are combined, with ERA5-Land data taking precedence over land areas
 
 4. **Temporal processing**:
-   - Data is processed year by year from 1950 to 2023
+   - Data is processed year by year from 1950 through the round's most recent complete year (2023 for the FHS-2023 forecast, 2025 for the GBD 2025 update)
    - Each year's data is validated to ensure completeness and consistency
    - The final output is stored in NetCDF format with appropriate encoding scales to optimize storage
 
-The resulting daily database serves as the foundation for both the reference climatology and the bias correction of CMIP6 projections. The high spatial resolution (0.1° × 0.1°) and consistent temporal coverage make it particularly suitable for health impact assessments.
+The resulting daily database serves as the foundation for both the reference climatology and the bias correction of CMIP6 projections. Extending the historical record beyond 2023 (through 2025) is currently done only to support the GBD update; the FHS-2023 forecast retains history through 2023 and a 2019-2023 reference climatology. The high spatial resolution (0.1° × 0.1°) and consistent temporal coverage make it particularly suitable for health impact assessments.
 
 ### Reference climatology
 
-The reference climatology serves as the baseline for bias correction and downscaling of CMIP6 projections. It is constructed using the most recent five years of historical data (2019-2023) from the ERA5 daily database. For each climate variable, we:
+The reference climatology serves as the baseline for bias correction and downscaling of CMIP6 projections. It is constructed using the most recent five years of historical data (2019-2023 for FHS-2023, 2021-2025 for FHS-2025) from the ERA5 daily database. For each climate variable, we:
 
 1. **Load daily data** for each year in the reference period
 2. **Compute monthly means** by averaging all days within each month
@@ -141,7 +145,7 @@ The reference climatology is stored in the same format as the daily data, with a
 The forecast daily variables are produced through a dynamical downscaling approach that combines CMIP6 model outputs with the reference climatology. For each climate variable and CMIP6 model, we:
 
 1. **Compute anomalies**:
-   - Calculate the difference between daily CMIP6 values and the model's monthly mean during the reference period (2019-2023)
+   - Calculate the difference between daily CMIP6 values and the model's monthly mean during the reference period (2019-2023 for FHS-2023, 2021-2025 for FHS-2025)
    - For additive variables (e.g., temperature), compute absolute differences
    - For multiplicative variables (e.g., precipitation), compute relative differences
 
@@ -260,3 +264,20 @@ This multi-stage aggregation process ensures that climate exposure estimates are
 - Representative of actual population distribution
 - Consistent across administrative levels
 - Compatible with health outcome data for epidemiological analyses
+
+## Temperature person-days exposure
+
+Building on the population-weighted aggregates, we derive a temperature **person-days** exposure product for temperature-attributable burden estimation. Rather than reducing each location-year to a single population-weighted temperature, this product distributes the population across a joint histogram of daily mean temperature and the location's long-run temperature zone, yielding the number of person-days of exposure in each temperature bin. It is produced by a dedicated chain of steps in the `special` pipeline stage:
+
+1. **Temperature zone** (`temperature_zone`) — a 10-year rolling mean of annual mean temperature that classifies each pixel by its prevailing climate. Stratifying by temperature zone lets a given absolute temperature be interpreted relative to local norms.
+2. **Person-days binning** (`temperature_person_days`) — for each population block, scenario, and model member, population is accumulated into a three-dimensional histogram over location, daily mean temperature (0.1 °C bins from −35 °C to 45 °C), and temperature zone (1 °C bins from −25 °C to 35 °C) for every year.
+3. **Compilation** (`compile_person_days`) — the block-level histograms are summed to the most-detailed locations and then rolled up the location hierarchy.
+4. **Draw assembly** — the model members are linked into the 100-draw ensemble layout (see [Model ensembling strategy](#model-ensembling-strategy)) so that the exposure carries the same uncertainty representation as the rest of the database.
+
+### Historical (ERA5-only) mode
+
+Two variants of the person-days product are produced, differing in their temperature inputs. The **forecast** product spans 1990–2100 and is built per CMIP6 model member: years before the first forecast year (2024) draw on the ERA5 historical daily database, while 2024 onward draws on the downscaled CMIP6 daily projections for the selected scenario. The **historical** product is a distinct Global Burden of Disease deliverable that provides observationally grounded exposure through the most recent complete years. It is selected with the `historical` scenario — which is constrained to the `era5` model member — and spans 1990–2025, drawn entirely from the ERA5 historical daily temperature, including the 2024 and 2025 years that the forecast product instead fills with CMIP6 output. The two products therefore agree before 2024 and intentionally diverge over 2024–2025 (observed ERA5 versus model projection); the two series should not be spliced across that boundary.
+
+### Hierarchy versioning
+
+The exposure is produced against a selectable Global Burden of Disease location hierarchy (`--hierarchy`, one of `gbd_2021`, `gbd_2023`, or `gbd_2025`, defaulting to `gbd_2023`), allowing the same pipeline to target successive GBD rounds. Each pixel hierarchy maps to one or more downstream location views: `gbd_2021` and `gbd_2023` each yield both a GBD and a Future Health Scenarios (FHS) roll-up (`fhs_2021` and `fhs_2023` respectively), while `gbd_2025` currently produces a GBD-only view, since FHS raking files for that round are not yet available.
