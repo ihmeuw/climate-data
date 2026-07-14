@@ -245,15 +245,17 @@ class PopulationModelData:
         path = self.raking_data / "gbd-inputs" / f"hierarchy_{subset_hierarchy}.parquet"
         hierarchy_df = pd.read_parquet(path)
         if subset_hierarchy in cdc.GBD_HIERARCHIES:
-            # NOTE: this parent-drop list was authored for gbd_2021/2023. Before
-            # relying on it for gbd_2025, confirm these location_ids still exist
-            # and are still needed (UK UTLAs, India urban/rural, etc.) -- some may
-            # be absent in the gbd_2025 hierarchy, or new quirks may need handling.
+            # NOTE: parent-drop list authored for gbd_2021/2023, verified against the
+            # gbd_2025 hierarchy (2026-07-14): 39/41 ids are still present, so it is
+            # applied to gbd_2025 as well. `4854` (J&K/Ladakh) was reorganized out of
+            # gbd_2025 and simply no-ops there; `4919` was a typo for `4619` ("North
+            # West England", present in all rounds, whose UTLA children were never
+            # being dropped) and is corrected below.
             to_drop_parents = [
                 ## FROM POPULATION MODEL RAKING DATA PREP
                 # Drop UK UTLAs from these regions
                 4618,
-                4919,
+                4619,
                 4620,
                 4621,
                 4622,
