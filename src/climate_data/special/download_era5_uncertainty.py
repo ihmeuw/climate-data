@@ -44,7 +44,9 @@ ERA5_UNCERTAINTY_DATASET = cdc.ERA5_DATASETS.reanalysis_era5_single_levels
 # Product types to pull for each year.
 ERA5_PRODUCT_TYPES = ["reanalysis", "ensemble_spread"]
 
-# The years this gap-fill targets (2022/2023 already exist from Katrin's pull).
+# The years this historical-extension gap-fill targets (2022/2023 already exist from
+# Katrin's pull). Kept explicit because the output path below is fixed under
+# ``/ihme/erf/ERA5`` and is independent of MODEL_ROOT / the ``--run-mode`` profile.
 ERA5_UNCERTAINTY_YEARS = ["2024", "2025"]
 
 # Default landing directory; override with ``--output-dir`` to a dated,
@@ -101,26 +103,41 @@ def download_era5_uncertainty_main(
         _finalize_download(download_path, out_path)
     except Exception:
         print(f"Failed to download {product_type} {variable} {year}")
-        if download_path.exists():
-            download_path.unlink()
+        # Remove any partial artifacts so a later run doesn't skip this as "already
+        # downloaded" (see the size>0 check above). out_path is only ever created by
+        # the atomic replace in _finalize_download, so removing it here is safe.
+        for tmp in (download_path, out_path):
+            if tmp.exists():
+                tmp.unlink()
         raise
 
 
 def _finalize_download(download_path: Path, out_path: Path) -> None:
-    """Move the downloaded payload into place, unwrapping a zip if present."""
-    if zipfile.is_zipfile(download_path):
-        print("Unzipping...")
+    """Move the downloaded payload into place, unwrapping a zip if present.
+
+    ``out_path`` is created only by a final atomic ``replace``, so a failure part-way
+    through (corrupt member, disk full, killed job) never leaves a truncated file that
+    a later run would mistake for a completed download.
+    """
+    if not zipfile.is_zipfile(download_path):
+        download_path.replace(out_path)
+        return
+
+    print("Unzipping...")
+    unzipped = download_path.with_suffix(".unzipped")
+    try:
         with zipfile.ZipFile(download_path) as zf:
             members = zf.infolist()
             if len(members) != 1:
                 msg = f"Expected a single file in {download_path}, got {len(members)}"
                 raise ValueError(msg)
-            touch(out_path, clobber=True)
-            with out_path.open("wb") as f:
+            with unzipped.open("wb") as f:
                 f.write(zf.read(members[0]))
-        download_path.unlink()
-    else:
-        download_path.replace(out_path)
+        unzipped.replace(out_path)
+    finally:
+        if unzipped.exists():
+            unzipped.unlink()
+    download_path.unlink()
 
 
 @click.command()
