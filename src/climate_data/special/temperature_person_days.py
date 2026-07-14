@@ -19,7 +19,7 @@ from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import utils
 
 # First forecast year: years before this use ERA5 historical daily temperature.
-FORECAST_START_YEAR = 2024
+FORECAST_START_YEAR = int(cdc.FORECAST_YEARS[0])
 
 
 def temperature_person_days_main(
@@ -33,6 +33,16 @@ def temperature_person_days_main(
     *,
     progress_bar: bool = False,
 ) -> None:
+    """Bin population into (temperature x temperature-zone) person-days per year.
+
+    The year span is derived from the ``temperature_zone`` actually on disk (not a
+    hardcoded range): for the ``historical`` scenario this is the ERA5-only product
+    spanning ``EXPOSURE_START_YEAR`` through the last year present (1990-2025 as
+    delivered); for a forecast scenario, daily temperature is ERA5 before
+    ``FORECAST_START_YEAR`` and the GCM scenario from then on, binned against that
+    scenario's own zone. A year whose daily/population input is missing is skipped
+    with a message rather than crashing.
+    """
     print(f"Aggregating {gcm_member} for {block_key}")
     pm_data = PopulationModelData(population_model_root)
     cd_data = ClimateData(climate_data_root, read_only=True)
@@ -68,26 +78,34 @@ def temperature_person_days_main(
     )
 
     print("Aggregating temperature person days")
-    last_year = 2025 if scenario == "historical" else 2100
-    years = list(range(1990, last_year + 1))
+    # Drive the loop from the zone actually on disk and index it by matching year, so
+    # the span follows the data (historical: 1990..last present) and a short zone or a
+    # missing daily/pop year degrades cleanly instead of raising IndexError/FileNotFound.
+    zone_years = [int(y) for y in temperature_zone["year"].to_numpy()]
+    zone_row_for_year = {y: i for i, y in enumerate(zone_years)}
+    years = [y for y in zone_years if y >= cdc.EXPOSURE_START_YEAR]
     dfs = []
-    for tz_idx, year in tqdm.tqdm(list(enumerate(years)), disable=not progress_bar):
-        if scenario == "historical" or year < FORECAST_START_YEAR:
-            temperature = cd_data.load_daily_results(
-                "historical", "mean_temperature", year
-            ).sel(**climate_slice)
-        else:
-            temperature = cd_data.load_raw_daily_results(
-                scenario, "mean_temperature", year, gcm_member
-            ).sel(**climate_slice)
+    for year in tqdm.tqdm(years, disable=not progress_bar):
+        try:
+            if scenario == "historical" or year < FORECAST_START_YEAR:
+                temperature = cd_data.load_daily_results(
+                    "historical", "mean_temperature", year
+                ).sel(**climate_slice)
+            else:
+                temperature = cd_data.load_raw_daily_results(
+                    scenario, "mean_temperature", year, gcm_member
+                ).sel(**climate_slice)
+            pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
+        except FileNotFoundError as exc:
+            print(f"Skipping {year} for {scenario} {gcm_member}: missing input ({exc})")
+            continue
         temperature_idx = utils.to_idx(temperature, temperature_bins)
 
-        pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
         out_arr = out_template.copy()
         utils.compute_person_days(
             location_idx,
             temperature_idx,
-            historical_temperature_zone_idx[tz_idx],
+            historical_temperature_zone_idx[zone_row_for_year[year]],
             pop_arr,
             temperature_coordinates,
             out_arr,
@@ -107,6 +125,12 @@ def temperature_person_days_main(
         df.columns.name = None
         dfs.append(df)
 
+    if not dfs:
+        msg = (
+            f"No person-days produced for {scenario} {gcm_member} {block_key}: no "
+            f"year in the temperature zone had daily/population inputs on disk."
+        )
+        raise ValueError(msg)
     df = pd.concat(dfs)
     out_path = ca_data.person_days_path(block_key, scenario, gcm_member)
     mkdir(out_path.parent, parents=True, exist_ok=True)
@@ -121,6 +145,7 @@ def temperature_person_days_main(
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
+@clio.with_run_mode()
 @clio.with_progress_bar()
 def temperature_person_days_task(
     block_key: str,
@@ -130,12 +155,19 @@ def temperature_person_days_task(
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
+    run_mode: str,
     *,
     progress_bar: bool,
 ) -> None:
     if scenario == "historical" and gcm_member != "era5":
         msg = f"The 'historical' scenario must use the 'era5' gcm-member, got {gcm_member}"
         raise ValueError(msg)
+    climate_data_dir = clio.resolve_run_mode_root(
+        "climate_data_dir", climate_data_dir, run_mode
+    )
+    output_dir = clio.resolve_run_mode_root(
+        "output_dir", output_dir, run_mode, aggregate=True
+    )
     temperature_person_days_main(
         block_key,
         gcm_member,
@@ -155,6 +187,7 @@ def temperature_person_days_task(
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
+@clio.with_run_mode()
 @clio.with_queue()
 @clio.with_dry_run()
 def temperature_person_days(
@@ -164,9 +197,16 @@ def temperature_person_days(
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
+    run_mode: str,
     queue: str,
     dry_run: bool,
 ) -> None:
+    climate_data_dir = clio.resolve_run_mode_root(
+        "climate_data_dir", climate_data_dir, run_mode
+    )
+    output_dir = clio.resolve_run_mode_root(
+        "output_dir", output_dir, run_mode, aggregate=True
+    )
     ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
     cd_data = ClimateData(climate_data_dir, read_only=True)
     pm_data = PopulationModelData(population_model_dir)

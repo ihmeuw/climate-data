@@ -289,6 +289,26 @@ def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def resolve_run_mode_root(
+    param_name: str, value: str, run_mode: str, *, aggregate: bool = False
+) -> str:
+    """Resolve a directory option to the run-mode root unless the user overrode it.
+
+    ``--run-mode`` selects the storage-root profile; an explicitly-passed
+    ``--<param>`` still wins (detected via click's parameter source).
+    """
+    ctx = click.get_current_context(silent=True)
+    overridden = (
+        ctx is not None
+        and ctx.get_parameter_source(param_name)
+        is not click.core.ParameterSource.DEFAULT
+    )
+    if overridden:
+        return value
+    root = cdc.aggregate_root(run_mode) if aggregate else cdc.model_root(run_mode)
+    return str(root)
+
+
 __all__ = [
     "RUN_ALL",
     "convert_choice",
@@ -319,4 +339,5 @@ __all__ = [
     "with_location_id",
     "with_dry_run",
     "with_run_mode",
+    "resolve_run_mode_root",
 ]

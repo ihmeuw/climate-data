@@ -27,10 +27,11 @@ def generate_temperature_zone_main(
     scenario
         The scenario to generate the temperature zone for.  Pass ``historical``
         (with ``gcm_member="era5"``) to build a pure-ERA5 zone from the raw
-        historical annual mean temperature (1950-2025) rather than the compiled
-        historical+forecast series; the output then spans 1990-2025.
+        historical annual mean temperature rather than the compiled
+        historical+forecast series; the output then spans ``EXPOSURE_START_YEAR``
+        through the last historical year present on disk.
     output_dir
-        The directory to save the temperature zone to.
+        The directory to save the temperature zone to (root for this run mode).
     """
     print(f"Generating temperature zone for {scenario} {gcm_member}")
     cdata = ClimateData(output_dir)
@@ -43,7 +44,11 @@ def generate_temperature_zone_main(
         ds = cdata.load_compiled_annual_results(
             scenario, "mean_temperature", gcm_member
         )
-    temperature_zone = ds.rolling(year=10).mean().sel(year=slice(1990, 2100))
+    temperature_zone = (
+        ds.rolling(year=10)
+        .mean()
+        .sel(year=slice(cdc.EXPOSURE_START_YEAR, int(cdc.FORECAST_YEARS[-1])))
+    )
     print(f"Saving temperature zone for {scenario} {gcm_member}")
     cdata.save_compiled_annual_results(
         temperature_zone,
@@ -58,30 +63,36 @@ def generate_temperature_zone_main(
 @clio.with_gcm_member()
 @clio.with_scenario()
 @clio.with_output_directory(cdc.MODEL_ROOT)
+@clio.with_run_mode()
 def generate_temperature_zone_task(
     gcm_member: str,
     scenario: str,
     output_dir: str,
+    run_mode: str,
 ) -> None:
     if scenario == "historical" and gcm_member != "era5":
         msg = f"The 'historical' scenario must use the 'era5' gcm-member, got {gcm_member}"
         raise ValueError(msg)
+    output_dir = clio.resolve_run_mode_root("output_dir", output_dir, run_mode)
     generate_temperature_zone_main(gcm_member, scenario, output_dir)
 
 
 @click.command()
 @clio.with_scenario(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
+@clio.with_run_mode()
 @clio.with_queue()
 @clio.with_overwrite()
 @clio.with_dry_run()
 def generate_temperature_zone(
     scenario: list[str],
     output_dir: str,
+    run_mode: str,
     queue: str,
     overwrite: bool,
     dry_run: bool,
 ) -> None:
+    output_dir = clio.resolve_run_mode_root("output_dir", output_dir, run_mode)
     cdata = ClimateData(output_dir)
 
     complete = []

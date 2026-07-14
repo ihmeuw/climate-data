@@ -89,6 +89,7 @@ def compile_person_days_main(
 @clio.with_hierarchy(choices=cdc.GBD_HIERARCHIES, default="gbd_2023")
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
+@clio.with_run_mode()
 @clio.with_progress_bar()
 def compile_person_days_task(
     gcm_member: str,
@@ -96,12 +97,16 @@ def compile_person_days_task(
     hierarchy: str,
     population_model_dir: str,
     output_dir: str,
+    run_mode: str,
     *,
     progress_bar: bool,
 ) -> None:
     if scenario == "historical" and gcm_member != "era5":
         msg = f"The 'historical' scenario must use the 'era5' gcm-member, got {gcm_member}"
         raise ValueError(msg)
+    output_dir = clio.resolve_run_mode_root(
+        "output_dir", output_dir, run_mode, aggregate=True
+    )
     compile_person_days_main(
         gcm_member,
         scenario,
@@ -118,6 +123,7 @@ def compile_person_days_task(
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
+@clio.with_run_mode()
 @clio.with_queue()
 @clio.with_dry_run()
 def compile_person_days(
@@ -126,9 +132,16 @@ def compile_person_days(
     climate_data_dir: str,
     population_model_dir: str,
     output_dir: str,
+    run_mode: str,
     queue: str,
     dry_run: bool,
 ) -> None:
+    climate_data_dir = clio.resolve_run_mode_root(
+        "climate_data_dir", climate_data_dir, run_mode
+    )
+    output_dir = clio.resolve_run_mode_root(
+        "output_dir", output_dir, run_mode, aggregate=True
+    )
     ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
     cd_data = ClimateData(climate_data_dir, read_only=True)
 
