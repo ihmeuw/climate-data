@@ -55,7 +55,7 @@ AGGREGATE_ROOT = aggregate_root("forecast")
 
 # Time
 
-HISTORY_YEARS = [str(y) for y in range(1950, 2026)]
+HISTORY_YEARS = [str(y) for y in range(1950, 2024)]
 REFERENCE_YEARS = HISTORY_YEARS[-5:]
 REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",
@@ -63,6 +63,9 @@ REFERENCE_PERIOD = slice(
 )
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
+# Start of the temperature-exposure / person-days analysis window (the historical
+# person-days product spans this through the last year present on disk).
+EXPOSURE_START_YEAR = 1990
 
 MONTHS = [f"{i:02d}" for i in range(1, 13)]
 
