@@ -140,6 +140,8 @@ The resulting reference climatology captures the seasonal cycle of each variable
 
 The reference climatology is stored in the same format as the daily data, with appropriate encoding scales to optimize storage. This ensures consistency in the data processing pipeline and facilitates the subsequent downscaling and bias correction steps.
 
+Because the reference window is the trailing five years of the historical record, changing the history end year shifts it (2019–2023 in the current production/FHS-2023 configuration; 2021–2025 for a future FHS-2025 round). When that window changes, the reference climatology **and** the CMIP6 bias correction must be regenerated together — otherwise forecasts are corrected against a mismatched baseline with no error raised.
+
 ### Forecast daily variables
 
 The forecast daily variables are produced through a dynamical downscaling approach that combines CMIP6 model outputs with the reference climatology. For each climate variable and CMIP6 model, we:
@@ -277,6 +279,8 @@ Building on the population-weighted aggregates, we derive a temperature **person
 ### Historical (ERA5-only) mode
 
 Two variants of the person-days product are produced, differing in their temperature inputs. The **forecast** product spans 1990–2100 and is built per CMIP6 model member: years before the first forecast year (2024) draw on the ERA5 historical daily database, while 2024 onward draws on the downscaled CMIP6 daily projections for the selected scenario. The **historical** product is a distinct Global Burden of Disease deliverable that provides observationally grounded exposure through the most recent complete years. It is selected with the `historical` scenario — which is constrained to the `era5` model member — and spans 1990–2025, drawn entirely from the ERA5 historical daily temperature, including the 2024 and 2025 years that the forecast product instead fills with CMIP6 output. The two products therefore agree before 2024 and intentionally diverge over 2024–2025 (observed ERA5 versus model projection); the two series should not be spliced across that boundary.
+
+Which storage roots a run reads and writes is selected with `--run-mode`: the default `forecast` uses the production roots, while `historical` routes to the geospatial working area for the GBD product. The historical product's year span is taken from the ERA5 data present on disk (1990 through the last historical year available — 1990–2025 as produced) rather than a hardcoded range, so a short or in-progress history degrades cleanly instead of failing.
 
 ### Hierarchy versioning
 
