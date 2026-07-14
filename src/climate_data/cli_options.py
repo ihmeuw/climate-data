@@ -275,6 +275,20 @@ def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the run-mode option selecting the storage-root profile."""
+    return click.option(
+        "--run-mode",
+        type=click.Choice(list(cdc.RUN_MODES)),
+        default="forecast",
+        show_default=True,
+        help=(
+            "Storage-root profile: 'forecast' (production roots) or 'historical' "
+            "(geospatial roots for the GBD historical exposure product)."
+        ),
+    )
+
+
 __all__ = [
     "RUN_ALL",
     "convert_choice",
@@ -304,4 +318,5 @@ __all__ = [
     "with_year",
     "with_location_id",
     "with_dry_run",
+    "with_run_mode",
 ]

@@ -12,13 +12,41 @@ import xarray as xr
 RRA_ROOT = Path("/mnt/team/rapidresponse/pub/")
 # Contains gridded population estimates and projections
 POPULATION_MODEL_ROOT = RRA_ROOT / "population-model"
-# Downscaling working directory
-#MODEL_ROOT = Path("/mnt/team/lsae/pub/billg/climate-data/test/")
-MODEL_ROOT = Path("/mnt/share/geospatial/climate/")
-#MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
-# Aggregation working directory
-AGGREGATE_ROOT = MODEL_ROOT / "aggregates"
-#AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
+
+# Run modes select the storage-root profile. ``forecast`` (the default) uses the
+# production roots; ``historical`` routes the GBD historical exposure product to
+# the geospatial working area. Selected per run via the ``--run-mode`` CLI option.
+RUN_MODES = ("forecast", "historical")
+RunMode = Literal["forecast", "historical"]
+
+_MODEL_ROOTS: dict[str, Path] = {
+    "forecast": Path("/mnt/share/erf/climate_downscale/"),
+    "historical": Path("/mnt/share/geospatial/climate/"),
+}
+
+
+def model_root(run_mode: str) -> Path:
+    """Downscaling working directory for the given run mode."""
+    try:
+        return _MODEL_ROOTS[run_mode]
+    except KeyError:
+        msg = f"Unknown run_mode {run_mode!r}; expected one of {list(RUN_MODES)}"
+        raise ValueError(msg) from None
+
+
+def aggregate_root(run_mode: str) -> Path:
+    """Aggregation working directory for the given run mode."""
+    if run_mode == "forecast":
+        return RRA_ROOT / "climate-aggregates"
+    if run_mode == "historical":
+        return model_root("historical") / "aggregates"
+    msg = f"Unknown run_mode {run_mode!r}; expected one of {list(RUN_MODES)}"
+    raise ValueError(msg)
+
+
+# Production defaults (used as the module-level roots and the CLI option defaults).
+MODEL_ROOT = model_root("forecast")
+AGGREGATE_ROOT = aggregate_root("forecast")
 
 
 ######################
