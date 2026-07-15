@@ -68,7 +68,7 @@ def temperature_person_days_main(
     print("Building historical temperature zone index")
     temperature_zone = cd_data.load_compiled_annual_results(
         scenario, "temperature_zone", gcm_member
-    ).sel(**climate_slice)
+    ).sel(**climate_slice)  # type: ignore[arg-type]
     historical_temperature_zone_idx = utils.to_idx(
         temperature_zone, temperature_zone_bins
     )
@@ -91,11 +91,11 @@ def temperature_person_days_main(
         if scenario == "historical" or year < FORECAST_START_YEAR:
             temperature = cd_data.load_daily_results(
                 "historical", "mean_temperature", year
-            ).sel(**climate_slice)
+            ).sel(**climate_slice)  # type: ignore[arg-type]
         else:
             temperature = cd_data.load_raw_daily_results(
                 scenario, "mean_temperature", year, gcm_member
-            ).sel(**climate_slice)
+            ).sel(**climate_slice)  # type: ignore[arg-type]
         # Population nodata is stored as NaN. The aggregate stage tolerates this via
         # np.nansum, but here we accumulate into `out_arr` with `+=`, so a NaN pixel
         # would poison every output cell it touches (silently read back as 0, which
