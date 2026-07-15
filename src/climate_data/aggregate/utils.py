@@ -22,7 +22,11 @@ def build_location_masks(
     hierarchy: str,
     block_key: str,
     pm_data: PopulationModelData,
-) -> tuple[dict[str, slice], dict[int, tuple[slice, slice, npt.NDArray[np.bool_]]]]:
+) -> tuple[
+    dict[str, slice],
+    dict[int, tuple[slice, slice, npt.NDArray[np.bool_]]],
+    npt.NDArray[np.uint32],
+]:
     """Build location masks for each location in the hierarchy.
 
     Parameters
@@ -35,13 +39,16 @@ def build_location_masks(
 
     Returns
     -------
-    tuple[dict[int, tuple[slice, slice]], npt.NDArray[np.uint32]]
-        The first element is a dictionary mapping location IDs to a tuple of
-        slices representing the bounds of the location in the mask. This is useful
-        for subseting the mask and data arrays before processing as downstream
-        operations scale with the number of pixels in the mask. The second element
-        is the mask itself, a 2D array of uint32 values where each location ID is
-        represented by a unique integer value.
+    tuple[dict[str, slice], dict[int, tuple[slice, slice, npt.NDArray[np.bool_]]], npt.NDArray[np.uint32]]
+        A three-tuple of:
+        - climate_slice: a dict mapping "longitude"/"latitude" to slices bounding
+          the location block, for subsetting climate rasters before processing
+          (downstream operations scale with the number of pixels in the mask).
+        - bounds_map: a dict mapping each location ID to
+          (row_slice, col_slice, mask), where mask is a boolean array selecting
+          that location's pixels within the sliced window.
+        - location_mask: a 2D uint32 array where each location ID is written as a
+          unique integer value.
     """
     template = pm_data.load_results("2020q1", block_key)
     template_bbox = get_bbox(template, "EPSG:4326")
