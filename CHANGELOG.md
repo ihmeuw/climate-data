@@ -25,3 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   so NaN pixels no longer poison output cells and zero out small/coastal locations
   (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
   change. (CLIMATE-22)
+- Cleared accumulated mypy/ruff/formatting debt so the `pre-commit` CI job passes
+  again. Also repaired a `Path.exists()` misuse in the `grid_plots` skip-cache loop
+  (it passed a positional arg and raised `TypeError`).
