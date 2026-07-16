@@ -211,5 +211,6 @@ def temperature_person_days(
         },
         log_root=ca_data.log_dir("temperature_person_days"),
         max_attempts=3,
+        concurrency_limit=2000,
         dry_run=dry_run,
     )

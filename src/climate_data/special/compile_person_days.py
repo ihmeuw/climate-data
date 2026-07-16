@@ -14,7 +14,7 @@ from climate_data.data import (
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import utils
 
-HIERARCHY = "gbd_2021"
+HIERARCHY = "gbd_2023"
 
 
 def compile_person_days_main(
