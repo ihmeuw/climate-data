@@ -536,7 +536,7 @@ class ClimateData:
 
     @property
     def raw_daily_results(self) -> Path:
-        # return self.daily_results / "raw"
+        # NOTE: temporarily points at erf-scratch instead of self.daily_results / "raw"
         return cdc.AGGREGATE_ROOT / "erf-scratch"
 
     def raw_daily_results_path(
@@ -823,9 +823,7 @@ class ClimateAggregateData:
         """
         return self.logs / step_name
 
-    def person_days_path(
-        self, block_key: str, scenario: str, gcm_member: str
-    ) -> Path:
+    def person_days_path(self, block_key: str, scenario: str, gcm_member: str) -> Path:
         """Path to a raw per-block person-days file.
 
         Different GBD vintages (gbd_2021/2023/2025, which have different location
