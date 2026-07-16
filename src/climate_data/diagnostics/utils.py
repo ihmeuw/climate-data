@@ -7,6 +7,8 @@ import climate_data.constants as cdc
 from climate_data.data import ClimateAggregateData, PopulationModelData
 
 
+# Returns (loc_pop, subnat_pop, raking_pop). Typed Any because precise pandas
+# return types leak pandas-stubs .loc/.unstack false positives into callers.
 def load_populations(
     version: str,
     hierarchy_version: str,
@@ -14,7 +16,7 @@ def load_populations(
     hierarchy: pd.DataFrame,
     ca_data: ClimateAggregateData,
     pm_data: PopulationModelData,
-) -> Any:  # (loc_pop, subnat_pop, raking_pop); precise pandas types not worth the stub churn
+) -> Any:
     all_pop = ca_data.load_population(version, hierarchy_version)
     loc_pop = (
         all_pop.loc[all_pop.location_id == location_id]
@@ -43,12 +45,13 @@ def load_populations(
     return loc_pop, subnat_pop, raking_pop
 
 
+# Returns a multi-indexed climate DataFrame; typed Any to avoid pandas-stubs churn.
 def load_climate_data(
     version: str,
     hierarchy_version: str,
     location_id: int,
     ca_data: ClimateAggregateData,
-) -> Any:  # returns a multi-indexed climate DataFrame; typed Any to avoid stub churn
+) -> Any:
     climate_dfs = []
     for measure, scenario in itertools.product(
         cdc.AGGREGATION_MEASURES, cdc.AGGREGATION_SCENARIOS
