@@ -40,8 +40,9 @@ def temperature_person_days_main(
     spanning ``EXPOSURE_START_YEAR`` through the last year present (1990-2025 as
     delivered); for a forecast scenario, daily temperature is ERA5 before
     ``FORECAST_START_YEAR`` and the GCM scenario from then on, binned against that
-    scenario's own zone. A year whose daily/population input is missing is skipped
-    with a message rather than crashing.
+    scenario's own zone. A year whose daily or population input is missing fails loudly
+    rather than being skipped, so a gap in a product that must be square cannot slip
+    through silently.
     """
     print(f"Aggregating {gcm_member} for {block_key}")
     pm_data = PopulationModelData(population_model_root)
@@ -78,27 +79,24 @@ def temperature_person_days_main(
     )
 
     print("Aggregating temperature person days")
-    # Drive the loop from the zone actually on disk and index it by matching year, so
-    # the span follows the data (historical: 1990..last present) and a short zone or a
-    # missing daily/pop year degrades cleanly instead of raising IndexError/FileNotFound.
+    # Drive the span from the zone actually on disk (historical: 1990..last present;
+    # forecast: the compiled historical+forecast series). A year whose daily or
+    # population input is missing now fails loudly rather than being skipped, so a gap
+    # in a product that must be square can't slip through silently.
     zone_years = [int(y) for y in temperature_zone["year"].to_numpy()]
     zone_row_for_year = {y: i for i, y in enumerate(zone_years)}
     years = [y for y in zone_years if y >= cdc.EXPOSURE_START_YEAR]
     dfs = []
     for year in tqdm.tqdm(years, disable=not progress_bar):
-        try:
-            if scenario == "historical" or year < FORECAST_START_YEAR:
-                temperature = cd_data.load_daily_results(
-                    "historical", "mean_temperature", year
-                ).sel(**climate_slice)
-            else:
-                temperature = cd_data.load_raw_daily_results(
-                    scenario, "mean_temperature", year, gcm_member
-                ).sel(**climate_slice)
-            pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
-        except FileNotFoundError as exc:
-            print(f"Skipping {year} for {scenario} {gcm_member}: missing input ({exc})")
-            continue
+        if scenario == "historical" or year < FORECAST_START_YEAR:
+            temperature = cd_data.load_daily_results(
+                "historical", "mean_temperature", year
+            ).sel(**climate_slice)
+        else:
+            temperature = cd_data.load_raw_daily_results(
+                scenario, "mean_temperature", year, gcm_member
+            ).sel(**climate_slice)
+        pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
         temperature_idx = utils.to_idx(temperature, temperature_bins)
 
         out_arr = out_template.copy()
@@ -127,8 +125,8 @@ def temperature_person_days_main(
 
     if not dfs:
         msg = (
-            f"No person-days produced for {scenario} {gcm_member} {block_key}: no "
-            f"year in the temperature zone had daily/population inputs on disk."
+            f"No person-days produced for {scenario} {gcm_member} {block_key}: the "
+            f"temperature zone has no year >= {cdc.EXPOSURE_START_YEAR}."
         )
         raise ValueError(msg)
     df = pd.concat(dfs)
