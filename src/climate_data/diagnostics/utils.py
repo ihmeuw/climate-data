@@ -1,4 +1,5 @@
 import itertools
+from typing import Any
 
 import pandas as pd
 
@@ -13,7 +14,7 @@ def load_populations(
     hierarchy: pd.DataFrame,
     ca_data: ClimateAggregateData,
     pm_data: PopulationModelData,
-):
+) -> Any:  # (loc_pop, subnat_pop, raking_pop); precise pandas types not worth the stub churn
     all_pop = ca_data.load_population(version, hierarchy_version)
     loc_pop = (
         all_pop.loc[all_pop.location_id == location_id]
@@ -47,7 +48,7 @@ def load_climate_data(
     hierarchy_version: str,
     location_id: int,
     ca_data: ClimateAggregateData,
-):
+) -> Any:  # returns a multi-indexed climate DataFrame; typed Any to avoid stub churn
     climate_dfs = []
     for measure, scenario in itertools.product(
         cdc.AGGREGATION_MEASURES, cdc.AGGREGATION_SCENARIOS
@@ -85,7 +86,7 @@ def get_locations_depth_first(hierarchy: pd.DataFrame) -> list[int]:
     Locations at the same level are sorted alphabetically by name.
     """
 
-    def _get_locations(location: pd.Series):
+    def _get_locations(location: Any) -> list[int]:
         locs = [location.location_id]
 
         children = hierarchy[
