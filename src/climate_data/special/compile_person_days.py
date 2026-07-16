@@ -39,9 +39,7 @@ def compile_person_days_main(
     print("Loading block data")
     block_data = []
     for block_key in tqdm.tqdm(block_keys, disable=not progress_bar):
-        path = ca_data.person_days_path(block_key, scenario, gcm_member)
-        block_df = pd.read_parquet(path)
-        block_data.append(block_df)
+        block_data.append(ca_data.load_person_days(block_key, scenario, gcm_member))
 
     print("Aggregating most-detailed locations")
     df = (
