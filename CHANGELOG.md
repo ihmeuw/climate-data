@@ -20,3 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
 - Moved the storage root (`MODEL_ROOT`) to `/mnt/share/geospatial/climate/`. (CLIMATE-22)
+### Fixed
+- person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
+  so NaN pixels no longer poison output cells and zero out small/coastal locations
+  (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
+  change. (CLIMATE-22)
