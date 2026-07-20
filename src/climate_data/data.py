@@ -154,7 +154,7 @@ class PopulationModelData:
         gpd.GeoDataFrame
             The shapes for the given hierarchy and bounds
         """
-        if full_aggregation_hierarchy in ["gbd_2021", "gbd_2023"]:
+        if full_aggregation_hierarchy in cdc.GBD_HIERARCHIES:
             shape_path = (
                 self.raking_data / f"shapes_{full_aggregation_hierarchy}.parquet"
             )
@@ -232,18 +232,30 @@ class PopulationModelData:
         pd.DataFrame
             The hierarchy data with parent-child relationships
         """
-        allowed_hierarchies = ["gbd_2021", "fhs_2021", "gbd_2023", "fhs_2023", "lsae_1209", "lsae_1285"]
+        allowed_hierarchies = [
+            *cdc.GBD_HIERARCHIES,
+            "fhs_2021",
+            "fhs_2023",
+            "lsae_1209",
+            "lsae_1285",
+        ]
         if subset_hierarchy not in allowed_hierarchies:
             msg = f"Unknown admin hierarchy: {subset_hierarchy}"
             raise ValueError(msg)
         path = self.raking_data / "gbd-inputs" / f"hierarchy_{subset_hierarchy}.parquet"
         hierarchy_df = pd.read_parquet(path)
-        if subset_hierarchy in ["gbd_2021", "gbd_2023"]:
+        if subset_hierarchy in cdc.GBD_HIERARCHIES:
+            # NOTE: parent-drop list authored for gbd_2021/2023, verified against the
+            # gbd_2025 hierarchy (2026-07-14): 39/41 ids are still present, so it is
+            # applied to gbd_2025 as well. `4854` (J&K/Ladakh) was reorganized out of
+            # gbd_2025 and simply no-ops there; `4919` was a typo for `4619` ("North
+            # West England", present in all rounds, whose UTLA children were never
+            # being dropped) and is corrected below.
             to_drop_parents = [
                 ## FROM POPULATION MODEL RAKING DATA PREP
                 # Drop UK UTLAs from these regions
                 4618,
-                4919,
+                4619,
                 4620,
                 4621,
                 4622,
@@ -611,6 +623,26 @@ class ClimateData:
     ) -> Path:
         return self.raw_annual_results / scenario / variable / f"{year}_{gcm_member}.nc"
 
+    @staticmethod
+    def combine_raw_annual(paths: list[Path]) -> xr.Dataset:
+        """Open and combine raw annual ``.nc`` files into one dataset, sorted by year."""
+        return xr.open_mfdataset(paths, combine="by_coords").sortby("year").compute()
+
+    def load_raw_annual_mfdataset(
+        self,
+        scenario: str,
+        variable: str,
+        gcm_member: str | None = None,
+    ) -> xr.Dataset:
+        """Glob and combine all raw annual results for a scenario/variable.
+
+        Pass ``gcm_member`` to restrict to a single member's files; otherwise every
+        ``.nc`` under the scenario/variable directory is combined.
+        """
+        pattern = f"*{gcm_member}.nc" if gcm_member is not None else "*.nc"
+        paths = sorted((self.raw_annual_results / scenario / variable).glob(pattern))
+        return self.combine_raw_annual(paths)
+
     def save_raw_annual_results(
         self,
         results_ds: xr.Dataset,
@@ -790,6 +822,45 @@ class ClimateAggregateData:
             The directory for step-specific logs
         """
         return self.logs / step_name
+
+    def person_days_path(
+        self, block_key: str, scenario: str, gcm_member: str
+    ) -> Path:
+        """Path to a raw per-block person-days file.
+
+        Different GBD vintages (gbd_2021/2023/2025, which have different location
+        sets) are kept apart by the versioned root (``<output_dir>/<hierarchy>``,
+        e.g. ``.../aggregates/gbd_2023``), mirroring the aggregate stage's
+        ``version_root`` convention -- not by a segment in this path. The special
+        runners build that root by appending ``hierarchy`` to ``output_dir``.
+        """
+        return (
+            self.root
+            / "erf-scratch"
+            / "person-days"
+            / block_key
+            / f"{scenario}_{gcm_member}.parquet"
+        )
+
+    def load_person_days(
+        self, block_key: str, scenario: str, gcm_member: str
+    ) -> pd.DataFrame:
+        """Load a raw per-block person-days file."""
+        return pd.read_parquet(
+            self.person_days_path(block_key, scenario, gcm_member)
+        )
+
+    def compiled_person_days_path(
+        self, subset_hierarchy: str, scenario: str, gcm_member: str
+    ) -> Path:
+        """Path to a compiled (hierarchy-aggregated) person-days file."""
+        return (
+            self.root
+            / "erf-scratch"
+            / "compiled-person-days"
+            / subset_hierarchy
+            / f"{scenario}_{gcm_member}.parquet"
+        )
 
     def version_root(self, version: str) -> Path:
         """Get the root directory for a specific version.

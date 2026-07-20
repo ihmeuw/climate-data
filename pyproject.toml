@@ -111,6 +111,7 @@ ignore = [
     "PD901",    # Generic df names are fine
     "S311",     # Not using random numbers for crypto purposes
     "S101",     # Use of `assert` detected
+    "PERF401",  # billg hates list comprehensions
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -121,9 +122,6 @@ ignore = [
 ]
 "scripts/**" = [
     "INP001",   # "Scripts are not part of a package."
-]
-"src/climate_data/jobmon_utils.py" = [
-    "PERF401",  # billg hates list comprehensions
 ]
 
 [tool.ruff.lint.mccabe]

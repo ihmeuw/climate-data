@@ -16,6 +16,7 @@ theme:
 nav:
   - Home: index.md
   - Installation: 'installation.md'
+  - Methodology: 'methods.md'
   # defer to gen-files + literate-nav
   - Code Reference: reference/
 

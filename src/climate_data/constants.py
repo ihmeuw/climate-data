@@ -12,10 +12,41 @@ import xarray as xr
 RRA_ROOT = Path("/mnt/team/rapidresponse/pub/")
 # Contains gridded population estimates and projections
 POPULATION_MODEL_ROOT = RRA_ROOT / "population-model"
-# Downscaling working directory
-MODEL_ROOT = Path("/mnt/share/erf/climate_downscale/")
-# Aggregation working directory
-AGGREGATE_ROOT = RRA_ROOT / "climate-aggregates"
+
+# Run modes select the storage-root profile. ``forecast`` (the default) uses the
+# production roots; ``historical`` routes the GBD historical exposure product to
+# the geospatial working area. Selected per run via the ``--run-mode`` CLI option.
+RUN_MODES = ("forecast", "historical")
+RunMode = Literal["forecast", "historical"]
+
+_MODEL_ROOTS: dict[str, Path] = {
+    "forecast": Path("/mnt/share/erf/climate_downscale/"),
+    "historical": Path("/mnt/share/geospatial/climate/"),
+}
+
+
+def model_root(run_mode: str) -> Path:
+    """Downscaling working directory for the given run mode."""
+    try:
+        return _MODEL_ROOTS[run_mode]
+    except KeyError:
+        msg = f"Unknown run_mode {run_mode!r}; expected one of {list(RUN_MODES)}"
+        raise ValueError(msg) from None
+
+
+def aggregate_root(run_mode: str) -> Path:
+    """Aggregation working directory for the given run mode."""
+    if run_mode == "forecast":
+        return RRA_ROOT / "climate-aggregates"
+    if run_mode == "historical":
+        return model_root("historical") / "aggregates"
+    msg = f"Unknown run_mode {run_mode!r}; expected one of {list(RUN_MODES)}"
+    raise ValueError(msg)
+
+
+# Production defaults (used as the module-level roots and the CLI option defaults).
+MODEL_ROOT = model_root("forecast")
+AGGREGATE_ROOT = aggregate_root("forecast")
 
 
 ######################
@@ -32,6 +63,9 @@ REFERENCE_PERIOD = slice(
 )
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
+# Start of the temperature-exposure / person-days analysis window (the historical
+# person-days product spans this through the last year present on disk).
+EXPOSURE_START_YEAR = 1990
 
 MONTHS = [f"{i:02d}" for i in range(1, 13)]
 
@@ -248,10 +282,19 @@ AGGREGATION_MEASURES = [
 # - Subset hierarchies: These are hierarchies of locations that are a subset of the full
 #   aggregation hierarchies.
 HIERARCHY_MAP = {
+    "gbd_2021": [
+        "gbd_2021",
+        "fhs_2021",
+    ],  # GBD pixel hierarchy maps to GBD and FHS locations
     "gbd_2023": [
         "gbd_2023",
         "fhs_2023",
     ],  # GBD pixel hierarchy maps to GBD and FHS locations
+    "gbd_2025": [
+        "gbd_2025",
+    ],  # No fhs_2025 raking files yet; GBD-only view for now.
     "lsae_1209": ["lsae_1209"],  # LSAE pixel hierarchy maps to LSAE locations
     "lsae_1285": ["lsae_1285"],  # LSAE pixel hierarchy maps to LSAE locations
 }
+# GBD pixel hierarchies -- the version axis for the special stage.
+GBD_HIERARCHIES = ["gbd_2021", "gbd_2023", "gbd_2025"]

@@ -7,7 +7,7 @@ These options are used to specify the data to extract, such as the year, month, 
 It also provides global variables representing the full space of valid values for these options.
 """
 
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection
 
 import click
 from rra_tools.cli_tools import (
@@ -201,11 +201,24 @@ def with_block_key[**P, T](
 
 
 def with_hierarchy[**P, T](
-    choices: Sequence[str] = cdc.HIERARCHY_MAP,
+    choices: Collection[str] = cdc.HIERARCHY_MAP,
     *,
     allow_all: bool = False,
+    default: str | None = None,
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Add hierarchy option to a command."""
+    """Add hierarchy option to a command.
+
+    Pass ``default`` to give the (single-value) option a default; this builds
+    the option directly since ``with_choice`` always supplies its own default.
+    """
+    if default is not None:
+        return click.option(
+            "--hierarchy",
+            type=click.Choice(list(choices)),
+            default=default,
+            show_default=True,
+            help="Hierarchy to process.",
+        )
     return with_choice(
         "hierarchy",
         allow_all=allow_all,
@@ -262,6 +275,40 @@ def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the run-mode option selecting the storage-root profile."""
+    return click.option(
+        "--run-mode",
+        type=click.Choice(list(cdc.RUN_MODES)),
+        default="forecast",
+        show_default=True,
+        help=(
+            "Storage-root profile: 'forecast' (production roots) or 'historical' "
+            "(geospatial roots for the GBD historical exposure product)."
+        ),
+    )
+
+
+def resolve_run_mode_root(
+    param_name: str, value: str, run_mode: str, *, aggregate: bool = False
+) -> str:
+    """Resolve a directory option to the run-mode root unless the user overrode it.
+
+    ``--run-mode`` selects the storage-root profile; an explicitly-passed
+    ``--<param>`` still wins (detected via click's parameter source).
+    """
+    ctx = click.get_current_context(silent=True)
+    overridden = (
+        ctx is not None
+        and ctx.get_parameter_source(param_name)
+        is not click.core.ParameterSource.DEFAULT
+    )
+    if overridden:
+        return value
+    root = cdc.aggregate_root(run_mode) if aggregate else cdc.model_root(run_mode)
+    return str(root)
+
+
 __all__ = [
     "RUN_ALL",
     "convert_choice",
@@ -291,4 +338,6 @@ __all__ = [
     "with_year",
     "with_location_id",
     "with_dry_run",
+    "with_run_mode",
+    "resolve_run_mode_root",
 ]
