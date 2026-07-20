@@ -78,7 +78,13 @@ def temperature_person_days_main(
             ).sel(**climate_slice)
         temperature_idx = utils.to_idx(temperature, temperature_bins)
 
+        # Population nodata is stored as NaN. The aggregate stage tolerates this via
+        # np.nansum, but here we accumulate into `out_arr` with `+=`, so a NaN pixel
+        # would poison every output cell it touches (silently read back as 0, which
+        # zeroed small locations like American Samoa). Zero-fill nodata first: no
+        # modeled population contributes no person-days.
         pop_arr = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
+        pop_arr = np.nan_to_num(pop_arr, nan=0.0)
         out_arr = out_template.copy()
         utils.compute_person_days(
             location_idx,
@@ -211,6 +217,6 @@ def temperature_person_days(
         },
         log_root=ca_data.log_dir("temperature_person_days"),
         max_attempts=3,
-        concurrency_limit=2000,
+        concurrency_limit=1500,
         dry_run=dry_run,
     )
