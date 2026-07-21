@@ -325,7 +325,7 @@ def extract_era5(
         for _ in range(jobs_per_user):
             for user in users:
                 if to_download:
-                    download_batch.append((*to_download.pop(), user))  # noqa: PERF401
+                    download_batch.append((*to_download.pop(), user))
         if len(download_batch) != min(len(users) * jobs_per_user, downloads_left):
             msg = "Download batch size is incorrect"
             raise ValueError(msg)

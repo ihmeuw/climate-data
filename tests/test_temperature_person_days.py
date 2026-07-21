@@ -1,11 +1,16 @@
+from typing import Any
+
 import numpy as np
+import numpy.typing as npt
 
 from climate_data.special.utils import compute_person_days
 
 GOOD_PIXEL_POP = 10.0
 
 
-def _minimal_kernel_inputs(population: np.ndarray):
+def _minimal_kernel_inputs(
+    population: npt.NDArray[Any],
+) -> tuple[npt.NDArray[Any], ...]:
     """Build the smallest valid ``compute_person_days`` call.
 
     Two high-res pixels, both belonging to location 0 and mapping to the single

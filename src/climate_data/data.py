@@ -844,9 +844,7 @@ class ClimateAggregateData:
         self, block_key: str, scenario: str, gcm_member: str
     ) -> pd.DataFrame:
         """Load a raw per-block person-days file."""
-        return pd.read_parquet(
-            self.person_days_path(block_key, scenario, gcm_member)
-        )
+        return pd.read_parquet(self.person_days_path(block_key, scenario, gcm_member))
 
     def compiled_person_days_path(
         self, subset_hierarchy: str, scenario: str, gcm_member: str
