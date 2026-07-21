@@ -295,15 +295,3 @@ def grid_plots(
         max_attempts=3,
         dry_run=dry_run,
     )
-
-    for h in hierarchy:
-        loc_meta = pm_data.load_subset_hierarchy(h)
-        plot_cache = ca_data.grid_plots_pages_root(agg_version, h)
-        for loc_id in loc_meta.location_id.unique():
-            if (plot_cache / f"{loc_id}.pdf").exists():
-                print(f"Skipping {loc_id} because it already exists")
-                continue
-            print(f"Processing {loc_id}")
-            grid_plots_main(
-                loc_id, agg_version, h, population_model_dir, output_dir, write=False
-            )
