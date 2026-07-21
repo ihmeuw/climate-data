@@ -74,9 +74,7 @@ def compile_person_days_main(
         subset_results = agg_df.loc[subset_location_ids]
 
         # Save results for the subset hierarchy
-        path = ca_data.compiled_person_days_path(
-            subset_hierarchy, scenario, gcm_member
-        )
+        path = ca_data.compiled_person_days_path(subset_hierarchy, scenario, gcm_member)
         mkdir(path.parent, parents=True, exist_ok=True)
         save_parquet(subset_results, path)
 
@@ -178,18 +176,22 @@ def compile_person_days(
         dry_run=dry_run,
     )
 
-    # results_version = "2026_01_12"
-    # draw_map = {}
+    # Step 4 (symlinking the compiled per-day parquet files into the results layout) is now
+    # handled by a standalone deploy script, ~/deploy/climate-data/link_person_days_draws.py,
+    # rather than inline here (written for a production run; not yet committed to this repo).
+    # The original inline implementation is kept below for reference.
+    # results_version = "2026_01_12"  # noqa: ERA001
+    # draw_map = {}  # noqa: ERA001
     # for d in range(100):
-    #     draw = f"{d:0>3}"
-    #     p = cd_data.annual_results_path("ssp126", "mean_temperature", draw).resolve()
-    #     draw_map[draw] = p.stem
+    #     draw = f"{d:0>3}"  # noqa: ERA001
+    #     p = cd_data.annual_results_path("ssp126", "mean_temperature", draw).resolve()  # noqa: ERA001
+    #     draw_map[draw] = p.stem  # noqa: ERA001
 
     # for hierarchy in cdc.HIERARCHY_MAP[HIERARCHY]:
     #     for scenario in cmip6_experiment:
     #         for draw, gcm_variant in draw_map.items():
-    #             raw_path = ca_data.root / "erf-scratch" / "compiled-person-days" / hierarchy / f"{scenario}_{gcm_variant}.parquet"
-    #             out_root = ca_data.results_root(results_version) / hierarchy / f"temperature_person_days_{scenario}"
-    #             mkdir(out_root, parents=True, exist_ok=True)
-    #             out_path = out_root / f"{draw}.parquet"
-    #             out_path.symlink_to(raw_path)
+    #             raw_path = ca_data.root / "erf-scratch" / "compiled-person-days" / hierarchy / f"{scenario}_{gcm_variant}.parquet"  # noqa: ERA001
+    #             out_root = ca_data.results_root(results_version) / hierarchy / f"temperature_person_days_{scenario}"  # noqa: ERA001
+    #             mkdir(out_root, parents=True, exist_ok=True)  # noqa: ERA001
+    #             out_path = out_root / f"{draw}.parquet"  # noqa: ERA001
+    #             out_path.symlink_to(raw_path)  # noqa: ERA001

@@ -1,7 +1,11 @@
+from typing import Any
+
 import click
 import contextily as ctx
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from requests.exceptions import HTTPError
 from rra_tools import plotting
 
@@ -20,21 +24,21 @@ TICK_FONT_SIZE = 12
 TILE_PROVIDER = ctx.providers.Esri.WorldStreetMap
 
 
-def safe_add_basemap(ax, provider=TILE_PROVIDER):
+def safe_add_basemap(ax: Axes, provider: Any = TILE_PROVIDER) -> None:
     try:
         ctx.add_basemap(ax, source=provider)
     except HTTPError as e:
         print(f"Error adding basemap: {e}")
 
 
-def grid_plots_main(
+def grid_plots_main(  # noqa: PLR0915
     location_id: int,
     version: str,
     hierarchy_version: str,
     population_model_dir: str,
     output_dir: str,
     write: bool = True,
-) -> plt.Figure:
+) -> Figure:
     print(f"Running grid plots for {location_id} in {hierarchy_version}")
     pm_data = PopulationModelData(population_model_dir)
     ca_data = ClimateAggregateData(output_dir)
@@ -188,7 +192,9 @@ def grid_plots_main(
         col, row = divmod(i, 2)
         ax = fig.add_subplot(gs_bottom[row, col])
         for scenario, color in zip(
-            cdc.AGGREGATION_SCENARIOS, ["dodgerblue", "forestgreen", "firebrick"], strict=False
+            cdc.AGGREGATION_SCENARIOS,
+            ["dodgerblue", "forestgreen", "firebrick"],
+            strict=False,
         ):
             data = climate_data.loc[(measure, scenario)]
             ax.fill_between(data.index, data.lower, data.upper, alpha=0.1, color=color)
@@ -252,7 +258,7 @@ def grid_plots(
 ) -> None:
     pm_data = PopulationModelData(population_model_dir)
     ca_data = ClimateAggregateData(output_dir)
-    jobs = []
+    jobs: list[tuple[str, Any]] = []
     for h in hierarchy:
         max_level = {
             "fhs_2021": 100,
@@ -289,16 +295,3 @@ def grid_plots(
         max_attempts=3,
         dry_run=dry_run,
     )
-
-    for h in hierarchy:
-        loc_meta = pm_data.load_subset_hierarchy(h)
-        plot_cache = ca_data.grid_plots_pages_root(agg_version, h)
-        output_path = ca_data.grid_plots_path(agg_version, h)
-        for loc_id in loc_meta.location_id.unique():
-            if plot_cache.exists(loc_id):
-                print(f"Skipping {loc_id} because it already exists")
-                continue
-            print(f"Processing {loc_id}")
-            grid_plots_main(
-                loc_id, agg_version, h, population_model_dir, output_dir, write=False
-            )
