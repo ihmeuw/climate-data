@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
 - Moved the storage root (`MODEL_ROOT`) to `/mnt/share/geospatial/climate/`. (CLIMATE-22)
+- Moved CI workflows off a departed maintainer's personal `GH_TOKEN` to the built-in
+  `GITHUB_TOKEN`. Auto dependency-bump PRs no longer trigger CI, and the cookiecutter
+  template-sync workflow is retired (daily schedule removed); reviving it needs a
+  non-personal token. (CLIMATE-24)
 ### Fixed
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations
@@ -30,3 +34,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `Path.exists()` misuse (positional arg → `TypeError`) had masked that it was a
   no-op: the parallel workers already write every page, and its one live branch
   regenerated figures with `write=False` and discarded them.
+- Docs deployment: `build_docs` now authenticates with the built-in `GITHUB_TOKEN`
+  (+ `contents: write`) instead of a dead personal token, so `mkdocs gh-deploy` can push
+  `gh-pages` again; also fixed a malformed job `if:` expression. (CLIMATE-24)

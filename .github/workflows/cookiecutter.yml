@@ -1,12 +1,25 @@
+# RETIRED 21Jul2026 (see CLIMATE-24). This workflow runs `cruft update` to sync the repo with
+# its cookiecutter template. It previously used a personal PAT (secrets.GH_TOKEN) owned by a
+# maintainer who has left IHME; when that token became invalid the workflow stopped working.
+# It now uses the built-in GITHUB_TOKEN (no PAT), which CANNOT create/update files under
+# .github/workflows/** and whose PRs do not trigger CI -- so template-sync no longer functions
+# and the daily `schedule:` trigger has been removed (workflow_dispatch only).
+#
+# TO REVIVE (CLIMATE-24): provision a NON-personal credential -- an org secret or a GitHub App
+# installation token, NOT a personal PAT (a personal PAT re-creates the "dies when the owner
+# leaves" failure) -- scoped contents:write, pull-requests:write, workflows:write. Store it as
+# e.g. secrets.CRUFT_TOKEN, point the env/token in the "Create Pull Request" step at it, and
+# re-add the `schedule:` trigger below.
 name: Autoupdate project structure
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"  # at the end of every day
 
 jobs:
   auto-update-project:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -73,8 +86,9 @@ jobs:
       # behaviour if PR already exists: https://github.com/marketplace/actions/create-pull-request#action-behaviour
       - name: Create Pull Request
         env:
-          # a PAT is required to be able to update workflows
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          # Built-in token (no PAT). NOTE: cannot create/update workflow files, so cruft
+          # updates that touch .github/workflows/** will fail here. See CLIMATE-24 to revive.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         if: ${{ steps.changes.outputs.changed > 0 && env.GITHUB_TOKEN != 0 }}
         uses: peter-evans/create-pull-request@v5
         with:
