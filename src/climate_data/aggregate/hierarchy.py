@@ -68,7 +68,9 @@ def hierarchy_main(
     # Get all block keys
     modeling_frame = pm_data.load_modeling_frame()
     block_keys = modeling_frame.block_key.unique()
-    intersecting = utils.blocks_with_shapefile_intersections(hierarchy, pm_data)
+    intersecting = utils.blocks_with_shapefile_intersections(
+        hierarchy, pm_data, modeling_frame
+    )
     block_keys = [b for b in block_keys if b in intersecting]
 
     # Load and combine all block-level results

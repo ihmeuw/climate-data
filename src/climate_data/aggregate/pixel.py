@@ -173,13 +173,20 @@ def pixel(
 
     print("Computing per-hierarchy block intersection sets")
     intersecting_by_hier = {
-        h: utils.blocks_with_shapefile_intersections(h, pm_data)
+        h: utils.blocks_with_shapefile_intersections(h, pm_data, modeling_frame)
         for h in hierarchy
     }
 
-    hbd = []
+    hbd: list[tuple[str, str, str]] = []
     for h in hierarchy:
         h_blocks = [b for b in block_keys if b in intersecting_by_hier[h]]
+        if block_key != clio.RUN_ALL:
+            dropped = sorted(set(block_keys) - intersecting_by_hier[h])
+            if dropped:
+                print(
+                    f"{h}: skipping {len(dropped)} explicitly-requested block(s) with "
+                    f"no shapefile intersection: {dropped}"
+                )
         hbd.extend(itertools.product([h], h_blocks, draw))
 
     print("Checking for existing results")
