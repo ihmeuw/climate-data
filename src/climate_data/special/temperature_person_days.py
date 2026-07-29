@@ -213,7 +213,8 @@ def temperature_person_days(
     output_dir = clio.resolve_run_mode_root(
         "output_dir", output_dir, run_mode, aggregate=True
     )
-    ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
+    # read_only under --dry-run: a preview must not create roots on shared storage
+    ca_data = ClimateAggregateData(Path(output_dir) / hierarchy, read_only=dry_run)
     cd_data = ClimateData(climate_data_dir, read_only=True)
     pm_data = PopulationModelData(population_model_dir)
 
