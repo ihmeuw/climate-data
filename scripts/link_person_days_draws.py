@@ -5,9 +5,10 @@ each subset hierarchy (gbd_2023, fhs_2023) and scenario:
 
     {AGGREGATE_ROOT}/{version}/results/{hierarchy}/temperature_person_days_{scenario}/{draw}.parquet
 
-as a symlink to the compiled source:
+as a symlink to the compiled source, which `compile_person_days` writes under the
+PIXEL hierarchy (note the extra path segment -- results versions do not have it):
 
-    {AGGREGATE_ROOT}/erf-scratch/compiled-person-days/{hierarchy}/{scenario}_{gcm_member}.parquet
+    {AGGREGATE_ROOT}/{pixel_hierarchy}/erf-scratch/compiled-person-days/{hierarchy}/{scenario}_{gcm_member}.parquet
 
 The draw -> gcm_member mapping is read PER SCENARIO from the annual-results draw
 symlinks (results/annual/{scenario}/mean_temperature/{draw}.nc), so the person-days
@@ -36,15 +37,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from rra_tools.shell_tools import mkdir
 
 from climate_data import constants as cdc
 from climate_data.data import ClimateAggregateData, ClimateData
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 DEFAULT_SCENARIOS = ["ssp126", "ssp245", "ssp585"]
 MAX_MISSING_EXAMPLES = 5
@@ -117,7 +115,7 @@ def _build_draw_map(
 
 def _link_draws(
     *,
-    ca_data: ClimateAggregateData,
+    src_data: ClimateAggregateData,
     out_root: Path,
     subset_hierarchy: str,
     scenario: str,
@@ -132,12 +130,8 @@ def _link_draws(
     """
     made_dir = False
     for draw, gcm_variant in draw_map.items():
-        raw_path = (
-            ca_data.root
-            / "erf-scratch"
-            / "compiled-person-days"
-            / subset_hierarchy
-            / f"{scenario}_{gcm_variant}.parquet"
+        raw_path = src_data.compiled_person_days_path(
+            subset_hierarchy, scenario, gcm_variant
         )
         out_path = out_root / f"{draw}.parquet"
 
@@ -177,15 +171,21 @@ def main() -> None:
 
     scenarios = args.scenarios or DEFAULT_SCENARIOS
     cd_data = ClimateData(args.climate_data_dir, read_only=True)
-    ca_data = ClimateAggregateData(args.output_dir)
+    # compile_person_days roots its manager at <output_dir>/<pixel_hierarchy>, so the
+    # source manager must match it. Results versions live at <output_dir> itself, so
+    # the two roots differ by exactly that segment and cannot share one manager.
+    src_data = ClimateAggregateData(
+        Path(args.output_dir) / args.pixel_hierarchy, read_only=True
+    )
+    out_data = ClimateAggregateData(args.output_dir, read_only=True)
     subset_hierarchies = cdc.HIERARCHY_MAP[args.pixel_hierarchy]
-    results_root = ca_data.results_root(args.results_version)
+    results_root = out_data.results_root(args.results_version)
 
     mode = "DRY-RUN" if args.dry_run else "LIVE"
     print(f"[{mode}] link person-days draws")
     print(f"  results_root      = {results_root}")
     print(
-        f"  compiled source   = {ca_data.root / 'erf-scratch' / 'compiled-person-days'}"
+        f"  compiled source   = {src_data.root / 'erf-scratch' / 'compiled-person-days'}"
     )
     print(f"  subset hierarchies= {subset_hierarchies}")
     print(f"  scenarios         = {scenarios}")
@@ -200,7 +200,7 @@ def main() -> None:
                 results_root / subset_hierarchy / f"temperature_person_days_{scenario}"
             )
             _link_draws(
-                ca_data=ca_data,
+                src_data=src_data,
                 out_root=out_root,
                 subset_hierarchy=subset_hierarchy,
                 scenario=scenario,
