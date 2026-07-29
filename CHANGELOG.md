@@ -16,6 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `reanalysis` + `ensemble_spread` 2m-temperature files (2024/2025) from CDS,
   matching Katrin Burkart's `era5_{product_type}_{variable}_{year}.nc` layout, to
   fill the GBD temperature-uncertainty gap. (CLIMATE-22)
+- `scripts/link_person_days_draws.py`: the person-days "step 4" draw symlinker, which
+  links the compiled per-draw parquets into the results layout. It previously lived only
+  in a personal `~/deploy` clone, so the forecast person-days product could not be
+  reproduced from a clean checkout. `--results-version` is now required (no stale
+  default) and `--dry-run` previews without writing. (CLIMATE-25)
+- `--concurrency-limit` option (`clio.with_concurrency_limit`) on the
+  `temperature_person_days` runner, capping how many tasks jobmon runs at once to keep
+  write latency on shared storage manageable. (CLIMATE-25)
 ### Changed
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
@@ -24,6 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `GITHUB_TOKEN`. Auto dependency-bump PRs no longer trigger CI, and the cookiecutter
   template-sync workflow is retired (daily schedule removed); reviving it needs a
   non-personal token. (CLIMATE-24)
+- `cdrun special temperature_person_days` now caps concurrency at 1500 by default
+  instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
+  production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations
