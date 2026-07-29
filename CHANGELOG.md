@@ -19,11 +19,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `scripts/link_person_days_draws.py`: the person-days "step 4" draw symlinker, which
   links the compiled per-draw parquets into the results layout. It previously lived only
   in a personal `~/deploy` clone, so the forecast person-days product could not be
-  reproduced from a clean checkout. `--results-version` is now required (no stale
-  default) and `--dry-run` previews without writing. (CLIMATE-25)
+  reproduced from a clean checkout. `--results-version` is required and must already
+  exist, `--dry-run` previews without writing, and every degenerate case (missing
+  compiled source, an existing output pointing at a different GCM, an unresolvable
+  annual draw, a draw map that disagrees between scenarios) aborts or exits non-zero
+  rather than reporting a healthy-looking run. (CLIMATE-25)
 - `--concurrency-limit` option (`clio.with_concurrency_limit`) on the
   `temperature_person_days` runner, capping how many tasks jobmon runs at once to keep
   write latency on shared storage manageable. (CLIMATE-25)
+- `ClimateAggregateData(..., read_only=True)`, mirroring `ClimateData`, so building a
+  manager purely to construct paths no longer creates directories. (CLIMATE-25)
 ### Changed
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
@@ -36,6 +41,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
   production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
+- `cdrun special temperature_person_days --dry-run` no longer creates
+  `<output-dir>/<hierarchy>/` and a `logs/` child on shared storage: the aggregate-data
+  manager was constructed before `dry_run` was consulted, so a preview wrote. (CLIMATE-25)
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations
   (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
