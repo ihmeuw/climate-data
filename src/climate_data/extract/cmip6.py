@@ -60,7 +60,7 @@ def extract_cmip6_main(
         out_path = cdata.extracted_cmip6_path(
             cmip6_experiment,
             cmip6_variable,
-            member,
+            str(member),
         )
         if out_path.exists() and not overwrite:
             print("Skipping", item)

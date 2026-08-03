@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import numba
 import numpy as np
@@ -44,7 +44,7 @@ def _to_idx(arr: npt.NDArray[Any], bins: npt.NDArray[Any]) -> npt.NDArray[np.int
     Returns:
         The array of indices into the bins.
     """
-    return np.clip(np.digitize(arr, bins), 1, len(bins)) - 1
+    return cast(npt.NDArray[np.intp], np.clip(np.digitize(arr, bins), 1, len(bins)) - 1)
 
 
 def to_idx(ds: xr.Dataset, bins: npt.NDArray[Any]) -> npt.NDArray[Any]:
@@ -73,7 +73,7 @@ def get_temperature_coordinates(
     return temp_coords
 
 
-@numba.njit  # type: ignore[misc]
+@numba.njit
 def compute_person_days(
     location_idx: npt.NDArray[Any],
     temp_idx: npt.NDArray[Any],
