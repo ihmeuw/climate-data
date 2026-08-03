@@ -1,5 +1,5 @@
 import itertools
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -26,14 +26,19 @@ def load_populations(
     )
     subnat_ids = hierarchy.loc[hierarchy.parent_id == location_id].location_id
     subnat_mask = all_pop.location_id.isin(list(set(subnat_ids) - {location_id}))
-    subnat_pop = (
+    # unstack is typed as DataFrame | Series; it is always a frame here.
+    subnat_pop = cast(
+        pd.DataFrame,
         all_pop.loc[subnat_mask]
         .rename(columns={"year": "year_id"})
         .set_index(["year_id", "location_id"])
         .sort_index()
-        .unstack("location_id")
+        .unstack("location_id"),
     )
-    subnat_pop.columns = subnat_pop.columns.droplevel().rename(None)
+    # unstack yields a MultiIndex; drop its leading value level to leave location_id.
+    # Level 0 was already droplevel's default, so this is only a typing change.
+    subnat_columns = cast(pd.MultiIndex, subnat_pop.columns)
+    subnat_pop.columns = subnat_columns.droplevel(0).rename(None)
 
     raking_pop = pm_data.load_raking_populations("fhs_2021")
     if location_id in raking_pop.location_id.unique():

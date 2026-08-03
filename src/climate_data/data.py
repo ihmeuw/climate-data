@@ -383,7 +383,7 @@ class ClimateData:
             df = pd.read_html(
                 "https://www.nature.com/articles/s41597-023-02549-6/tables/3"
             )[0]
-            df.columns = [  # type: ignore[assignment]
+            df.columns = [
                 "source_id",
                 "member_count",
                 "mean_trend",
@@ -766,8 +766,8 @@ class ClimateData:
         """
         path = self.annual_results_path(scenario, measure, draw)
         ds = xr.open_dataset(path, decode_coords="all")
-        ds = ds.rio.write_crs("EPSG:4326")
-        return ds
+        # The rioxarray accessor is untyped, so write_crs erases the Dataset type.
+        return cast(xr.Dataset, ds.rio.write_crs("EPSG:4326"))
 
 
 class ClimateAggregateData:

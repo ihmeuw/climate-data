@@ -29,6 +29,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   so NaN pixels no longer poison output cells and zero out small/coastal locations
   (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
   change. (CLIMATE-22)
+- Retyped for the newer `pandas-stubs`/`numpy`/`numba` pulled in by the monthly
+  dependency bump: dropped three `type: ignore`s the improved stubs made redundant,
+  cast the `rioxarray` `write_crs` result, the `unstack` result, and the unstacked
+  `MultiIndex` columns (passing `droplevel(0)` explicitly, 0 being its existing
+  default), and coerced the CMIP6 `member_id` key to `str`. No runtime behavior
+  change. The three dropped ignores are still required by the *previous* lock, so
+  these fixes only type-check alongside the updated `poetry.lock`.
 - Cleared accumulated mypy/ruff/formatting debt so the `pre-commit` CI job passes
   again. Also removed a dead post-submit serial loop in `grid_plots` whose
   `Path.exists()` misuse (positional arg → `TypeError`) had masked that it was a
