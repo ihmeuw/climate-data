@@ -78,7 +78,7 @@ def pixel_main(
                 ._ndarray
             )
 
-            weighted_clim_arr = pop_arr * clim_arr  # type: ignore[operator]
+            weighted_clim_arr = pop_arr * clim_arr
 
             for location_id, (rows, cols, loc_mask) in bounds_map.items():
                 # Subset and mask the weighted climate and population, then sum
