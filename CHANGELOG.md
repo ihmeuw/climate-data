@@ -25,6 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   template-sync workflow is retired (daily schedule removed); reviving it needs a
   non-personal token. (CLIMATE-24)
 ### Fixed
+- docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
+  upsampled with nearest-neighbor interpolation. It is bilinear
+  (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface
+  temperature (`:195`), which has no ERA5-Land counterpart. The stale wording appears
+  to come from `interpolate_to_target_latlon`'s default, which both call sites
+  override. Also documented that ocean pixels are therefore supplied entirely by the
+  upsampled 0.25° field, so the product's effective resolution is 0.1° only over land.
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations
   (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
