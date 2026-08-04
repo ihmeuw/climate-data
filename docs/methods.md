@@ -114,8 +114,9 @@ The historical daily database is constructed from ERA5 data through a series of 
 
 3. **Spatial harmonization**:
    - ERA5-Land data (0.1° × 0.1°) is left in its native resolution
-   - ERA5 single-level data (0.25° × 0.25°) is interpolated using nearest-neighbor interpolation
+   - ERA5 single-level data (0.25° × 0.25°) is interpolated onto the 0.1° grid using bilinear interpolation, except for sea-surface temperature, which uses nearest-neighbor because it has no ERA5-Land counterpart to blend with
    - The two datasets are combined, with ERA5-Land data taking precedence over land areas
+   - Because ERA5-Land is undefined over water, ocean pixels of the combined product are supplied entirely by the upsampled 0.25° field. The output grid is 0.1° everywhere, but the underlying resolution is 0.1° only over land: measured over a Pacific-Northwest coastal window, the shipped mean-temperature field carries roughly 7× less fine-scale structure over ocean than over land (0.027 °C vs 0.183 °C of high-pass variation at the 0.1° scale)
 
 4. **Temporal processing**:
    - Data is processed year by year from 1950 through the round's most recent complete year (2023 for the FHS-2023 forecast, 2025 for the GBD 2025 update)
