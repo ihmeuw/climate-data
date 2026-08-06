@@ -16,6 +16,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `reanalysis` + `ensemble_spread` 2m-temperature files (2024/2025) from CDS,
   matching Katrin Burkart's `era5_{product_type}_{variable}_{year}.nc` layout, to
   fill the GBD temperature-uncertainty gap. (CLIMATE-22)
+- docs: an `Output schema` section for the temperature person-days product, covering the
+  three output tiers and their path templates, the index levels and the `year` /
+  `year_id` difference between the block and compiled tiers, that the 800 columns are a
+  daily-temperature axis labelled by bin lower edge, that the first and last bin of both
+  the temperature and zone axes are **unbounded** catch-alls, the person-days units and
+  what can and cannot be inverted from them, that scenario/member/hierarchy/draw are
+  path-encoded only, that the compiled tier interleaves aggregate with most-detailed
+  locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
+  fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
