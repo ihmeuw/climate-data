@@ -114,8 +114,9 @@ The historical daily database is constructed from ERA5 data through a series of 
 
 3. **Spatial harmonization**:
    - ERA5-Land data (0.1° × 0.1°) is left in its native resolution
-   - ERA5 single-level data (0.25° × 0.25°) is interpolated using nearest-neighbor interpolation
+   - ERA5 single-level data (0.25° × 0.25°) is interpolated onto the 0.1° grid using bilinear interpolation, except for sea-surface temperature, which uses nearest-neighbor because it has no ERA5-Land counterpart to blend with
    - The two datasets are combined, with ERA5-Land data taking precedence over land areas
+   - Because ERA5-Land is undefined over water, ocean pixels of the combined product are supplied entirely by the upsampled 0.25° field. The output grid is 0.1° × 0.1° everywhere, but the underlying resolution is 0.1° only over land
 
 4. **Temporal processing**:
    - Data is processed year by year from 1950 through the round's most recent complete year (2023 for the FHS-2023 forecast, 2025 for the GBD 2025 update)
@@ -275,6 +276,28 @@ Building on the population-weighted aggregates, we derive a temperature **person
 2. **Person-days binning** (`temperature_person_days`) — for each population block, scenario, and model member, population is accumulated into a three-dimensional histogram over location, daily mean temperature (0.1 °C bins from −35 °C to 45 °C), and temperature zone (1 °C bins from −25 °C to 35 °C) for every year.
 3. **Compilation** (`compile_person_days`) — the block-level histograms are summed to the most-detailed locations and then rolled up the location hierarchy.
 4. **Draw assembly** — the model members are linked into the 100-draw ensemble layout (see [Model ensembling strategy](#model-ensembling-strategy)) so that the exposure carries the same uncertainty representation as the rest of the database.
+
+### Output schema
+
+The person-days product is best understood as a single histogram whose axes are stored in four different places: two in the row index, one as the column labels, and one — the model member or draw — only in the file path. Reading these files correctly depends on a handful of properties that are not discoverable from the files themselves, so they are set out here.
+
+**Three tiers are written, plus a results view.** Step 1 writes a gridded netCDF, `results/annual/raw/compiled/{scenario}/temperature_zone/{gcm_member}.nc`, holding the rolling-mean temperature zone as `int16` with a `scale_factor` of 0.01 on dimensions `(year, latitude, longitude)`. Step 2 writes one parquet file per population block, `{hierarchy_root}/erf-scratch/person-days/{block_key}/{scenario}_{gcm_member}.parquet`. Step 3 writes one parquet file per downstream location view, `{hierarchy_root}/erf-scratch/compiled-person-days/{subset_hierarchy}/{scenario}_{gcm_member}.parquet`. Step 4 adds a results view of symlinks at `{version}/results/{subset_hierarchy}/temperature_person_days_{scenario}/{draw}.parquet`, each pointing at a compiled file.
+
+**Index levels.** Both parquet tiers are indexed by location, year and temperature zone, and are dense over the full cartesian product of those three — every zone appears for every location-year whether or not anyone lives in it, so the great majority of rows and cells are zero. The year level is named `year` in the block tier and `year_id` in the compiled tier; the values are identical and only the name differs.
+
+**The columns are a temperature axis, not fields.** Each parquet file has 800 columns whose labels are daily mean temperatures in degrees Celsius, given as the *lower edge* of each 0.1 °C bin, running from −35.0 to 44.9. Likewise the temperature zone level is stored as an integer but denotes degrees Celsius, being the lower edge of a 1 °C bin, and is not a bin ordinal.
+
+**The first and last bin of each axis are unbounded.** This is the property most easily misread, because nothing in the file distinguishes these bins from their neighbours. Values beyond the ends of each axis are clipped into the end bins, so the temperature column labelled −35.0 contains every day at or below −34.9 °C, the column labelled 44.9 contains every day at or above 44.9 °C, the zone labelled −25 contains every pixel below −24 °C, and the zone labelled 34 contains every pixel at or above 34 °C. In cold locations the lowest temperature column carries a substantial share of the total and must not be read as a narrow 0.1 °C band.
+
+**Units.** Each cell is person-days: the population of the contributing pixels multiplied by a number of days. Population is taken from the first-quarter snapshot of the year in question and applied to every day of that year, so there is no separate day count stored anywhere. Dividing a complete location-year — summed across every zone and every temperature column — by the number of days in that year returns the population of that location. A single cell cannot be inverted this way.
+
+**Scenario, model member, hierarchy and draw are encoded only in the path**, never inside the file. Filenames combine scenario and model member as `{scenario}_{gcm_member}`, which cannot be split reliably on the underscore because member identifiers contain underscores of their own.
+
+**The compiled tier contains aggregate locations alongside most-detailed ones**, with no column distinguishing them, because the hierarchy roll-up appends parent rows to the same frame. Summing such a file without first restricting to most-detailed locations counts each person once per hierarchy level and overstates the total several-fold. Consumers should join the relevant location hierarchy and filter accordingly.
+
+**The draw axis carries fewer distinct values than it appears to.** The 100 draws of the results view are symlinks onto a smaller set of compiled files — one per model member actually sampled — so several draws may resolve to the same file. Between-draw spread therefore reflects an unevenly weighted ensemble of model members rather than 100 independent samples; see [Model ensembling strategy](#model-ensembling-strategy) for how members are drawn.
+
+A worked walk-through of these files, with verified figures and the scripts used to produce them, is published at [analysis/climate-17-special-person-days](https://docs.sae.ihme.washington.edu/billg/analysis/climate-17-special-person-days/).
 
 ### Historical (ERA5-only) mode
 
