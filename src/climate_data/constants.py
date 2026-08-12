@@ -207,7 +207,11 @@ class _CMIP6Variables(NamedTuple):
         name="pr",
         description="Precipitation",
         encoding_offset=0.0,
-        encoding_scale=1e-9,
+        # `pr` is a flux in kg m-2 s-1, so the scale must span daily rainfall expressed
+        # per second. At 1e-9 the int16 ceiling was 2.83 mm/day and anything wetter
+        # wrapped modulo 65536, decoding as garbage including negative precipitation.
+        # 1e-6 puts the ceiling at 2831 mm/day, above the wettest day ever observed.
+        encoding_scale=1e-6,
         table_id="day",
     )
 

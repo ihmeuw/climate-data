@@ -19,6 +19,38 @@ from climate_data import (
 from climate_data.data import ClimateData
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
+INT16_MAX = 32767
+
+
+def check_encoding_covers(
+    data_min: float,
+    data_max: float,
+    offset: float,
+    scale: float,
+    variable: str,
+) -> None:
+    """Refuse to write values the int16 encoding cannot represent.
+
+    Packing to int16 stores `(value - offset) / scale`, and anything beyond +/-32767
+    wraps modulo 65536. `to_netcdf` does this silently, so the corruption is invisible
+    until someone plots the result and finds negative rainfall. `pr` shipped with
+    `scale_factor=1e-9` for two years -- a 2.83 mm/day ceiling -- and produced 295 files
+    in which 26.4% of sampled cells were wrong and 12.4% were negative.
+
+    Raising here makes the next such mistake a failed extract rather than a corrupt
+    archive.
+    """
+    for label, value in (("minimum", data_min), ("maximum", data_max)):
+        stored = (value - offset) / scale
+        if abs(stored) > INT16_MAX:
+            msg = (
+                f"The {label} value of {variable} ({value:g}) cannot be represented by"
+                f" its int16 encoding (offset={offset:g}, scale={scale:g}): it would be"
+                f" stored as {stored:.0f}, outside +/-{INT16_MAX}, and would wrap modulo"
+                f" 65536. Widen scale_factor in constants.CMIP6_VARIABLES."
+            )
+            raise ValueError(msg)
+
 
 def load_cmip_data(zarr_path: str) -> xr.Dataset:
     """Loads a CMIP6 dataset from a zarr path."""
@@ -57,10 +89,14 @@ def extract_cmip6_main(
 
     for i, (member, zstore_path) in enumerate(meta_subset.items()):
         item = f"{i + 1}/{len(meta_subset)} {member}"
+        # Keywords, not positionals: this call previously passed
+        # (experiment, variable, member) into a (variable, experiment, gcm_member)
+        # signature, so it wrote `ssp126_pr_<member>.nc` while the generate stage looks
+        # up `pr_ssp126_<member>.nc`. Naming the arguments makes that unrepeatable.
         out_path = cdata.extracted_cmip6_path(
-            cmip6_experiment,
-            cmip6_variable,
-            str(member),
+            variable=cmip6_variable,
+            experiment=cmip6_experiment,
+            gcm_member=str(member),
         )
         if out_path.exists() and not overwrite:
             print("Skipping", item)
@@ -69,6 +105,17 @@ def extract_cmip6_main(
         try:
             print("Extracting", item)
             cmip_data = load_cmip_data(zstore_path)
+
+            # Costs one extra pass over the data, which `to_netcdf` would read anyway.
+            # Worth it: a silently wrapped extract is only detectable downstream, and
+            # only by someone who notices negative rainfall.
+            check_encoding_covers(
+                data_min=float(cmip_data[cmip6_variable].min()),
+                data_max=float(cmip_data[cmip6_variable].max()),
+                offset=offset,
+                scale=scale,
+                variable=cmip6_variable,
+            )
 
             print("Writing to", out_path)
             shell_tools.touch(out_path, clobber=True)

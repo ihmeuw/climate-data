@@ -47,6 +47,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `last` rather than `max` because the two agree only while the window rises
   monotonically, which int16 packing does not guarantee. Reported by Anna Rutherford
   (EOD/WASH). (CLIMATE-29)
+- CMIP6 `pr` was extracted as int16 with `scale_factor=1e-9`. `pr` is a flux in
+  kg m-2 s-1, so that put the representable ceiling at **2.83 mm/day**: anything wetter
+  wrapped modulo 65536 and decoded as garbage, including negative precipitation. Measured
+  on a sampled year, 26.4% of cells were wrong and 12.4% were negative, across all 295
+  `pr_*.nc` files. `scenario_daily` reads these files directly and precipitation is
+  multiplicative, so the anomaly was a ratio of two corrupted quantities. The scale is now
+  `1e-6` (ceiling 2831 mm/day) and the extract refuses to write values its encoding cannot
+  represent instead of wrapping them silently. **The existing extracted files are not
+  repaired by this change** — they stay corrupt until re-extracted. (CLIMATE-29)
+- `extract cmip6` wrote its output path with the experiment and variable transposed, so a
+  re-extract would have produced `ssp126_pr_<member>.nc` while the generate stage looks up
+  `pr_ssp126_<member>.nc` — new files invisible to the pipeline consuming them. Present
+  since the `source` parameter was dropped in `0de5beb0`. (CLIMATE-29)
 - Because an accumulation window is closed by the following hour, generating a month now
   also reads the first sample of the *next* month — for December, of the next year's
   January — and trims the out-of-month bins the collapse produces at each end. A missing
