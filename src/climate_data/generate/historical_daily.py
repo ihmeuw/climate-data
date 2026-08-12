@@ -128,6 +128,28 @@ def load_variable(
 LOOKAHEAD_VARIABLES = frozenset({"total_precipitation"})
 
 
+CORE_COORDS = frozenset({"time", "latitude", "longitude"})
+
+
+def drop_noncore_coords(ds: xr.Dataset) -> xr.Dataset:
+    """Drop coordinates the older and newer CDS extract formats disagree about.
+
+    Extracts pulled through the newer CDS API carry `number` (ensemble member) and
+    `expver` ('0001' final ERA5, '0005' preliminary ERA5T) alongside the grid coords;
+    older extracts carry neither, and are packed int16 rather than float32. `xr.concat`
+    refuses to join datasets whose coordinates differ, so a look-ahead that crosses from
+    an old extract into a new one has to be normalised first.
+
+    This is live at the 2023/2024 seam: the 1950-2023 extracts predate the format change
+    and the January 2024 look-ahead comes from the newer GBD-2025 pull.
+    """
+    extra = []
+    for coord in ds.coords:
+        if coord not in CORE_COORDS:
+            extra.append(coord)
+    return ds.drop_vars(extra)
+
+
 def _next_month(year: str, month: int) -> tuple[str, str]:
     """The (year, month) following the one given, rolling December into January."""
     if month == 12:  # noqa: PLR2004
@@ -164,9 +186,9 @@ def load_variable_with_lookahead(
         )
         raise FileNotFoundError(msg)
 
-    ds = load_variable(cdata, variable, year, month, dataset)
-    lookahead = load_variable(cdata, variable, next_year, next_month, dataset).isel(
-        time=[0]
+    ds = drop_noncore_coords(load_variable(cdata, variable, year, month, dataset))
+    lookahead = drop_noncore_coords(
+        load_variable(cdata, variable, next_year, next_month, dataset).isel(time=[0])
     )
     return xr.concat([ds, lookahead], dim="time")
 

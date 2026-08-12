@@ -20,6 +20,7 @@ DAYS_IN_MONTH = 29
 HOURS_PER_DAY = 24
 PREVIOUS_MONTH_TOTAL = 99.0
 PARTIAL_SHORTFALL = 0.5
+JOINED_SAMPLES = 2
 
 
 def _daily_total(day: int) -> float:
@@ -83,6 +84,37 @@ def test_trim_keeps_only_the_target_month_and_closes_its_last_day() -> None:
         expected.append(_daily_total(day))
     values = trimmed.value.isel(latitude=0, longitude=0).to_numpy()
     assert values == pytest.approx(expected)
+
+
+def test_drop_noncore_coords_allows_concat_across_extract_formats() -> None:
+    """A look-ahead crossing from an old extract into a new one must still concatenate.
+
+    Extracts pulled through the newer CDS API carry `number` and `expver` coordinates
+    that the 1950-2023 extracts lack, and `xr.concat` refuses to join datasets whose
+    coordinates differ. This is live at the 2023/2024 seam: closing 31 Dec 2023 reads the
+    January 2024 file from the newer GBD-2025 pull.
+    """
+    time = xr.date_range("2023-12-31T23:00", periods=1, freq="h", use_cftime=False)
+    old = xr.Dataset({"value": (("time",), np.zeros(1))}, coords={"time": time})
+    # `expver` varies along time in the real extracts (size 744), `number` is scalar.
+    new = xr.Dataset(
+        {"value": (("time",), np.zeros(1))},
+        coords={
+            "time": time + np.timedelta64(1, "h"),
+            "expver": (("time",), np.array(["0001"])),
+            "number": 0,
+        },
+    )
+
+    with pytest.raises(ValueError, match="expver"):
+        xr.concat([old, new], dim="time")
+
+    joined = xr.concat(
+        [hd.drop_noncore_coords(old), hd.drop_noncore_coords(new)], dim="time"
+    )
+
+    assert set(joined.coords) == {"time"}
+    assert joined.sizes["time"] == JOINED_SAMPLES
 
 
 def test_missing_lookahead_raises_and_december_looks_into_january(
