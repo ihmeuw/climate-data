@@ -47,6 +47,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `last` rather than `max` because the two agree only while the window rises
   monotonically, which int16 packing does not guarantee. Reported by Anna Rutherford
   (EOD/WASH). (CLIMATE-29)
+- Because an accumulation window is closed by the following hour, generating a month now
+  also reads the first sample of the *next* month — for December, of the next year's
+  January — and trims the out-of-month bins the collapse produces at each end. A missing
+  look-ahead extract raises rather than silently shortening the final day, so
+  regenerating **2023 requires an ERA5 January 2024 extract**, which does not currently
+  exist. (CLIMATE-29)
 - docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
   upsampled with nearest-neighbor interpolation. It is bilinear
   (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface

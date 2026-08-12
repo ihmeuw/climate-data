@@ -3,6 +3,7 @@ from pathlib import Path
 
 import click
 import dask
+import numpy as np
 import pandas as pd
 import xarray as xr
 
@@ -121,6 +122,67 @@ def load_variable(
     return ds
 
 
+# Target variables collapsed on hour-ending accumulation windows. Their final day is
+# closed by the next month's first sample, so these need a look-ahead load and a trim.
+# Everything else collapses instantaneous values on calendar days and needs neither.
+LOOKAHEAD_VARIABLES = frozenset({"total_precipitation"})
+
+
+def _next_month(year: str, month: int) -> tuple[str, str]:
+    """The (year, month) following the one given, rolling December into January."""
+    if month == 12:  # noqa: PLR2004
+        return str(int(year) + 1), "01"
+    return year, f"{month + 1:02d}"
+
+
+def load_variable_with_lookahead(
+    cdata: ClimateData,
+    variable: str,
+    year: str,
+    month: str,
+    dataset: str,
+) -> xr.Dataset:
+    """Load a month's hourly data plus the one sample that closes its final day.
+
+    Accumulation windows are stamped by their end, so the last day of a month is closed
+    by the next month's first sample -- for December, by the next *year's* January. That
+    single extra sample completes the final bin without opening a new one.
+
+    Raises if the look-ahead file is absent rather than degrading to the incomplete
+    23-hour window: ERA5 extracts stop at 2023, so regenerating 2023 needs a January
+    2024 file that does not exist, and that should stop the run rather than quietly
+    shorten one day. Checked before loading the target month so the run fails fast.
+    """
+    next_year, next_month = _next_month(year, int(month))
+    lookahead_path = cdata.extracted_era5_path(dataset, variable, next_year, next_month)
+    if not lookahead_path.exists():
+        msg = (
+            f"Cannot close {year}-{month} for {variable}: the accumulation window of its"
+            f" final day ends in the following month, whose extract is missing at"
+            f" {lookahead_path}. Extract {dataset} {variable} {next_year}_{next_month}"
+            f" before generating {year}."
+        )
+        raise FileNotFoundError(msg)
+
+    ds = load_variable(cdata, variable, year, month, dataset)
+    lookahead = load_variable(cdata, variable, next_year, next_month, dataset).isel(
+        time=[0]
+    )
+    return xr.concat([ds, lookahead], dim="time")
+
+
+def trim_to_month(ds: xr.Dataset, year: str, month: int) -> xr.Dataset:
+    """Drop collapsed bins that fall outside the target month.
+
+    The interval-aware collapse labels its first bin with the *previous* month's last
+    day, since that bin holds that day's closing sample. Left in place, every month
+    contributes a duplicate date at its seam.
+    """
+    dates = pd.to_datetime(ds.date.to_index())
+    keep = np.flatnonzero((dates.year == int(year)) & (dates.month == month))
+    return ds.isel(date=keep)
+
+
 def validate_output(ds: xr.Dataset, year: str) -> None:  # noqa: C901
     error_msg_parts = []
 
@@ -171,13 +233,18 @@ def generate_historical_daily_main(
     cdata = ClimateData(output_dir)
 
     transform = TRANSFORM_MAP[target_variable]
+    # Accumulated variables need the next month's first sample to close their final day,
+    # and the resulting out-of-month bins at each end trimmed off afterwards.
+    needs_lookahead = target_variable in LOOKAHEAD_VARIABLES
+    loader = load_variable_with_lookahead if needs_lookahead else load_variable
+
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
         print(f"month {month_str}")
         print("    loading single-levels")
         single_level = [
-            load_variable(
+            loader(
                 cdata,
                 sv,
                 year,
@@ -194,6 +261,8 @@ def generate_historical_daily_main(
         ds_single_level = ds_single_level.assign(
             date=pd.to_datetime(ds_single_level.date)
         )
+        if needs_lookahead:
+            ds_single_level = trim_to_month(ds_single_level, year, month)
 
         if target_variable == cdc.ERA5_VARIABLES.sea_surface_temperature:
             print("    interpolating")
@@ -206,7 +275,7 @@ def generate_historical_daily_main(
         else:
             print("    loading land")
             land = [
-                load_variable(
+                loader(
                     cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land
                 )
                 for sv in transform.source_variables
@@ -218,6 +287,8 @@ def generate_historical_daily_main(
                     *land, key=cdc.ERA5_DATASETS.reanalysis_era5_land
                 ).compute()
             ds_land = ds_land.assign(date=pd.to_datetime(ds_land.date))
+            if needs_lookahead:
+                ds_land = trim_to_month(ds_land, year, month)
 
             print("    interpolating single level")
             ds_single_level = utils.interpolate_to_target_latlon(
