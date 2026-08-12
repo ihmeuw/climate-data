@@ -263,8 +263,8 @@ def generate_historical_daily_main(
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
-        print(f"month {month_str}")
-        print("    loading single-levels")
+        print(f"month {month_str}", flush=True)
+        print("    loading single-levels", flush=True)
         single_level = [
             loader(
                 cdata,
@@ -275,7 +275,7 @@ def generate_historical_daily_main(
             )
             for sv in transform.source_variables
         ]
-        print("    collapsing")
+        print("    collapsing", flush=True)
         ds_single_level = transform(
             *single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels
         ).compute()
@@ -287,7 +287,7 @@ def generate_historical_daily_main(
             ds_single_level = trim_to_month(ds_single_level, year, month)
 
         if target_variable == cdc.ERA5_VARIABLES.sea_surface_temperature:
-            print("    interpolating")
+            print("    interpolating", flush=True)
             ds_single_level = utils.interpolate_to_target_latlon(
                 ds_single_level, method="nearest"
             )
@@ -295,7 +295,7 @@ def generate_historical_daily_main(
             # sea surface temperature is only available in the single-level dataset
             datasets.append(ds_single_level)
         else:
-            print("    loading land")
+            print("    loading land", flush=True)
             land = [
                 loader(
                     cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land
@@ -303,7 +303,7 @@ def generate_historical_daily_main(
                 for sv in transform.source_variables
             ]
 
-            print("    collapsing")
+            print("    collapsing", flush=True)
             with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
                 ds_land = transform(
                     *land, key=cdc.ERA5_DATASETS.reanalysis_era5_land
@@ -312,7 +312,7 @@ def generate_historical_daily_main(
             if needs_lookahead:
                 ds_land = trim_to_month(ds_land, year, month)
 
-            print("    interpolating single level")
+            print("    interpolating single level", flush=True)
             ds_single_level = utils.interpolate_to_target_latlon(
                 ds_single_level,
                 method="linear",
@@ -320,10 +320,10 @@ def generate_historical_daily_main(
                 target_lat=ds_land.latitude,
             )
 
-            print("    combining")
+            print("    combining", flush=True)
             combined = ds_land.fillna(ds_single_level).combine_first(ds_single_level)
 
-            print("    interpolating combined")
+            print("    interpolating combined", flush=True)
             combined = utils.interpolate_to_target_latlon(combined, method="linear")
 
             datasets.append(combined)
