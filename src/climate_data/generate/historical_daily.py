@@ -70,9 +70,15 @@ TRANSFORM_MAP = {
     ),
     "total_precipitation": utils.Transform(
         source_variables=[cdc.ERA5_VARIABLES.total_precipitation],
+        # Precipitation timestamps are hour-ending interval labels, so both branches
+        # collapse with the interval-aware resample rather than a calendar-day groupby.
         transform_funcs={
-            cdc.ERA5_DATASETS.reanalysis_era5_land: [utils.daily_max],
-            cdc.ERA5_DATASETS.reanalysis_era5_single_levels: [utils.daily_sum],
+            # Cumulative since 00Z: the day's total is the window's closing sample.
+            cdc.ERA5_DATASETS.reanalysis_era5_land: [utils.daily_accumulation_last],
+            # Per-hour increments: they sum.
+            cdc.ERA5_DATASETS.reanalysis_era5_single_levels: [
+                utils.daily_accumulation_sum
+            ],
         },
         encoding_scale=0.1,
     ),
