@@ -51,8 +51,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   also reads the first sample of the *next* month — for December, of the next year's
   January — and trims the out-of-month bins the collapse produces at each end. A missing
   look-ahead extract raises rather than silently shortening the final day, so
-  regenerating **2023 requires an ERA5 January 2024 extract**, which does not currently
-  exist. (CLIMATE-29)
+  regenerating **2023 requires an ERA5 January 2024 extract**. One exists in the GBD-2025
+  pull at `/mnt/share/geospatial/climate/extracted_data/era5/` (both datasets, all of 2024
+  and 2025, `expver='0001'` final ERA5). Because that pull came through the newer CDS API
+  it carries `number` and `expver` coordinates and is stored float32 rather than packed
+  int16, so the look-ahead now normalises coordinates before concatenating — `xr.concat`
+  refuses to join datasets whose coordinates differ. (CLIMATE-29)
 - docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
   upsampled with nearest-neighbor interpolation. It is bilinear
   (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface
