@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
+import xarray as xr
 
 from climate_data import constants as cdc
 from climate_data.data import ClimateData
@@ -58,3 +61,63 @@ def test_encoding_overflow_guard_rejects_unrepresentable_values() -> None:
             scale=1e-6,
             variable="pr",
         )
+
+
+SOURCE = "ACCESS-CM2"
+EXPERIMENT = "ssp126"
+MEMBER = "r1i1p1f1"
+# A flux of 1 kg m-2 s-1 is 86400 mm/day -- far past the 2831 mm/day ceiling, so the
+# encoding guard rejects it before anything is written.
+UNREPRESENTABLE_FLUX = 1.0
+EXISTING_CONTENT = b"the previous extract"
+
+
+def _metadata_for_one_member(zstore: str) -> pd.DataFrame:
+    """The single metadata row `extract_cmip6_main` selects on."""
+    return pd.DataFrame(
+        {
+            "source_id": [SOURCE],
+            "experiment_id": [EXPERIMENT],
+            "variable_id": ["pr"],
+            "table_id": ["day"],
+            "member_id": [MEMBER],
+            "zstore": [zstore],
+        }
+    )
+
+
+def test_failed_guard_leaves_the_existing_extract_in_place(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected extract must not delete the file it failed to replace.
+
+    The encoding guard runs *before* `shell_tools.touch`, so when it raises nothing has
+    been written and the file on disk is still the previous extract. The failure handler
+    used to unlink unconditionally, which turns "this GCM is too wet to encode" into
+    "the old file is gone and no new one exists" -- on shared storage, mid-way through
+    re-extracting the 295 corrupt `pr` files with `--overwrite`.
+    """
+    cdata = ClimateData(tmp_path)
+    _metadata_for_one_member("gs://irrelevant").to_parquet(
+        cdata.extracted_cmip6 / "cmip6-metadata.parquet"
+    )
+    out_path = cdata.extracted_cmip6_path("pr", EXPERIMENT, MEMBER)
+    out_path.write_bytes(EXISTING_CONTENT)
+
+    def _too_wet_to_encode(_zarr_path: str) -> xr.Dataset:
+        return xr.Dataset({"pr": (("time",), np.array([UNREPRESENTABLE_FLUX]))})
+
+    monkeypatch.setattr(cmip6, "load_cmip_data", _too_wet_to_encode)
+
+    with pytest.raises(ValueError, match="cannot be represented"):
+        cmip6.extract_cmip6_main(
+            cmip6_source=SOURCE,
+            cmip6_experiment=EXPERIMENT,
+            cmip6_variable="pr",
+            output_dir=tmp_path,
+            overwrite=True,
+        )
+
+    assert out_path.exists()
+    assert out_path.read_bytes() == EXISTING_CONTENT

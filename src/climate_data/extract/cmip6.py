@@ -102,6 +102,7 @@ def extract_cmip6_main(
             print("Skipping", item)
             continue
 
+        started_write = False
         try:
             print("Extracting", item)
             cmip_data = load_cmip_data(zstore_path)
@@ -119,6 +120,7 @@ def extract_cmip6_main(
 
             print("Writing to", out_path)
             shell_tools.touch(out_path, clobber=True)
+            started_write = True
 
             cmip_data.to_netcdf(
                 out_path,
@@ -134,7 +136,11 @@ def extract_cmip6_main(
                 },
             )
         except Exception as e:
-            if out_path.exists():
+            # Only clear a file this invocation started writing. Everything before
+            # `touch` -- opening the zarr, and the encoding guard rejecting the data --
+            # fails with the previous extract still intact on disk, and deleting that
+            # leaves neither a corrected file nor the one it was meant to replace.
+            if started_write and out_path.exists():
                 out_path.unlink()
             raise e
 

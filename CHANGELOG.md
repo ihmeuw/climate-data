@@ -60,6 +60,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   re-extract would have produced `ssp126_pr_<member>.nc` while the generate stage looks up
   `pr_ssp126_<member>.nc` — new files invisible to the pipeline consuming them. Present
   since the `source` parameter was dropped in `0de5beb0`. (CLIMATE-29)
+- `extract cmip6` deleted the file it had failed to replace. The failure handler unlinked
+  `out_path` unconditionally, but the encoding guard raises *before* the write begins, so
+  a rejected extract destroyed the previous file and wrote nothing in its place — leaving
+  neither a corrected file nor the one it was meant to supersede. It now clears only a
+  file the invocation actually started writing. A live risk for the 295-file `pr`
+  re-extract with `--overwrite`, where one too-wet GCM would have taken its old file with
+  it. (CLIMATE-29)
 - Because an accumulation window is closed by the following hour, generating a month now
   also reads the first sample of the *next* month — for December, of the next year's
   January — and trims the out-of-month bins the collapse produces at each end. A missing
