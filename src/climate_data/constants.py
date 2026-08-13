@@ -218,11 +218,14 @@ class _CMIP6Variables(NamedTuple):
         # 1e-6 puts the ceiling at 2831 mm/day, above the wettest day ever observed.
         #
         # The trade is resolution: the quantum goes from 0.0000864 to 0.0864 mm/day, so
-        # anything under ~0.043 mm/day now rounds to zero. Accepted because the ceiling
-        # has to clear real extremes and `compute_anomaly` damps the loss -- it forms
-        # `(target + 1) / (reference + 1)` against a multi-year monthly mean. Revisit
-        # before, not after, a re-extract: every `pr_*.nc` carries whichever value is
-        # here when it is written.
+        # anything under ~0.043 mm/day rounds to zero. Reviewed and kept: the daily
+        # product this feeds stores precipitation at `encoding_scale=0.1`, so 0.0864
+        # mm/day already resolves finer than anything downstream can represent, and
+        # `compute_anomaly` damps the remainder -- it forms `(target + 1) /
+        # (reference + 1)` against a multi-year monthly mean. `1e-7` would give a
+        # 0.00864 mm/day quantum but caps the ceiling at 283 mm/day, and the true GCM
+        # daily maxima are unmeasured. Settle any change before a re-extract, not after:
+        # every `pr_*.nc` carries whichever value is here when it is written.
         encoding_scale=1e-6,
         table_id="day",
     )
