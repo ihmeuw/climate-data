@@ -71,7 +71,8 @@ def _daily_value(collapsed: xr.Dataset, date: datetime.date) -> float:
 
 
 def test_daily_max_returns_previous_day_total() -> None:
-    """Document why ``daily_last`` exists: ``daily_max`` returns yesterday's rain.
+    """Document why ``daily_accumulation_last`` exists: ``daily_max`` returns yesterday's
+    rain.
 
     ``groupby("time.date").max()`` buckets hours 00..23, which holds the previous day's
     completed total (hour 00) and excludes today's (stamped 00:00 tomorrow). Whenever

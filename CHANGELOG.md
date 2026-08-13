@@ -26,8 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
   fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
-- Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
-  scenario data for overlapping years. (CLIMATE-22)
+- `draws` now prefers historical ERA5 over scenario data for overlapping years.
+  (CLIMATE-22)
 - Moved the storage root (`MODEL_ROOT`) to `/mnt/share/geospatial/climate/`. (CLIMATE-22)
 - Moved CI workflows off a departed maintainer's personal `GH_TOKEN` to the built-in
   `GITHUB_TOKEN`. Auto dependency-bump PRs no longer trigger CI, and the cookiecutter
@@ -84,10 +84,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   look-ahead extract raises rather than silently shortening the final day, so
   regenerating **2023 requires an ERA5 January 2024 extract**. One exists in the GBD-2025
   pull at `/mnt/share/geospatial/climate/extracted_data/era5/` (both datasets, all of 2024
-  and 2025, `expver='0001'` final ERA5). Because that pull came through the newer CDS API
-  it carries `number` and `expver` coordinates and is stored float32 rather than packed
-  int16, so the look-ahead now normalises coordinates before concatenating — `xr.concat`
-  refuses to join datasets whose coordinates differ. (CLIMATE-29)
+  and 2025, `expver='0001'` final ERA5). Files pulled through the newer CDS API carry
+  `number` and `expver` coordinates and are stored float32 rather than packed int16, so the
+  look-ahead now normalises coordinates before concatenating — `xr.concat` refuses to join
+  datasets whose coordinates differ. That format split is **not** chronological, as this
+  entry first described it: it tracks download date. `valid_time` covers 1950–1989 and
+  2024, `time` covers 1990–2023, so there are two seams — 1989→1990 and 2023→2024 — and the
+  full 1950–2023 regeneration crossed both, in opposite directions. (CLIMATE-29)
 - The look-ahead sample was accepted on trust. `.isel(time=[0])` assumed the next month
   opens on midnight — ERA5-Land `1950_01` opens at 01:00, so a file of that shape exists in
   the archive, and accepting one leaves the month's final day on its 23-hour partial. And
@@ -109,11 +112,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   existence, so widening it would add a year of downloads to a step that already
   re-downloads terabytes when run with its defaults. (CLIMATE-29)
 - docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
-  upsampled with nearest-neighbor interpolation. It is bilinear
-  (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface
-  temperature (`:195`), which has no ERA5-Land counterpart. The stale wording appears
-  to come from `interpolate_to_target_latlon`'s default, which both call sites
-  override. Also documented that ocean pixels are therefore supplied entirely by the
+  upsampled with nearest-neighbor interpolation. It is bilinear — the two
+  `interpolate_to_target_latlon(..., method="linear")` calls in
+  `generate_historical_daily_main`; nearest is used only for sea-surface temperature, on
+  the `method="nearest"` branch of the same function, which has no ERA5-Land counterpart.
+  The stale wording appears to come from `interpolate_to_target_latlon`'s default, which
+  both call sites override. Also documented that ocean pixels are therefore supplied entirely by the
   upsampled 0.25° field, so the product's effective resolution is 0.1° only over land.
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations

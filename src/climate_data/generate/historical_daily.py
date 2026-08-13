@@ -140,8 +140,11 @@ def drop_noncore_coords(ds: xr.Dataset) -> xr.Dataset:
     refuses to join datasets whose coordinates differ, so a look-ahead that crosses from
     an old extract into a new one has to be normalised first.
 
-    This is live at the 2023/2024 seam: the 1950-2023 extracts predate the format change
-    and the January 2024 look-ahead comes from the newer GBD-2025 pull.
+    Which era a file belongs to tracks its *download* date, not its data year: surveying
+    the archive, `valid_time` covers 1950-1989 and 2024 while `time` covers 1990-2023. So
+    there are two seams, not the single 2023/2024 one this used to describe -- 1989->1990
+    crosses new format into old, 2023->2024 crosses old into new -- and the 1950-2023
+    regeneration passed through both.
     """
     extra = []
     for coord in ds.coords:

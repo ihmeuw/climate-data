@@ -92,8 +92,9 @@ def test_drop_noncore_coords_allows_concat_across_extract_formats() -> None:
 
     Extracts pulled through the newer CDS API carry `number` and `expver` coordinates
     that the 1950-2023 extracts lack, and `xr.concat` refuses to join datasets whose
-    coordinates differ. This is live at the 2023/2024 seam: closing 31 Dec 2023 reads the
-    January 2024 file from the newer GBD-2025 pull.
+    coordinates differ. The format era tracks download date rather than data year --
+    `valid_time` covers 1950-1989 and 2024, `time` covers 1990-2023 -- so this is live at
+    two seams, 1989->1990 and 2023->2024, and the full history regeneration crossed both.
     """
     time = xr.date_range("2023-12-31T23:00", periods=1, freq="h", use_cftime=False)
     old = xr.Dataset({"value": (("time",), np.zeros(1))}, coords={"time": time})
@@ -123,10 +124,9 @@ def test_missing_lookahead_raises_and_december_looks_into_january(
 ) -> None:
     """December needs the next *year's* January, and an absent file must be loud.
 
-    ERA5 extracts stop at 2023, so regenerating 2023 requires a January 2024 file that
-    does not exist. Failing loudly is deliberate: the alternative is a silent fallback to
-    the 23-hour partial, and a warning buried in a 74-job cluster log is how CLIMATE-23
-    went unnoticed.
+    Failing loudly is deliberate: the alternative is a silent fallback to the 23-hour
+    partial, and a warning buried in a 74-job cluster log is how CLIMATE-23 went
+    unnoticed.
     """
     cdata = ClimateData(tmp_path, read_only=True)
 

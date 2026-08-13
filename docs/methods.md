@@ -117,8 +117,9 @@ The historical daily database is constructed from ERA5 data through a series of 
      given day requires the following hour, so the final day of each month is read from the
      next month's file:
      - ERA5-Land: accumulates since 00Z, so the day's total is the window's **closing
-       sample** (`daily_last`). Taking the maximum instead is only equivalent while the
-       window rises monotonically, which int16 packing does not guarantee.
+       sample** (`utils.daily_accumulation_last`). Taking the maximum instead is only
+       equivalent while the window rises monotonically, which int16 packing does not
+       guarantee.
      - ERA5 single-level: hourly increments, so the day's total is their **sum**
 
 3. **Spatial harmonization**:

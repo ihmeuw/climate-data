@@ -47,7 +47,8 @@ def check_encoding_covers(
                 f"The {label} value of {variable} ({value:g}) cannot be represented by"
                 f" its int16 encoding (offset={offset:g}, scale={scale:g}): it would be"
                 f" stored as {stored:.0f}, outside +/-{INT16_MAX}, and would wrap modulo"
-                f" 65536. Widen scale_factor in constants.CMIP6_VARIABLES."
+                f" 65536. Widen encoding_scale for {variable} in"
+                f" constants.CMIP6_VARIABLES."
             )
             raise ValueError(msg)
 
@@ -109,10 +110,14 @@ def extract_cmip6_main(
 
             # Costs one extra pass over the data, which `to_netcdf` would read anyway.
             # Worth it: a silently wrapped extract is only detectable downstream, and
-            # only by someone who notices negative rainfall.
+            # only by someone who notices negative rainfall. Both bounds are reduced in
+            # one `compute` so it stays a single traversal of the GCS-backed zarr --
+            # computing them separately streamed the whole array twice.
+            arr = cmip_data[cmip6_variable]
+            bounds = xr.Dataset({"min": arr.min(), "max": arr.max()}).compute()
             check_encoding_covers(
-                data_min=float(cmip_data[cmip6_variable].min()),
-                data_max=float(cmip_data[cmip6_variable].max()),
+                data_min=float(bounds["min"]),
+                data_max=float(bounds["max"]),
                 offset=offset,
                 scale=scale,
                 variable=cmip6_variable,
