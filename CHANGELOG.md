@@ -16,6 +16,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `reanalysis` + `ensemble_spread` 2m-temperature files (2024/2025) from CDS,
   matching Katrin Burkart's `era5_{product_type}_{variable}_{year}.nc` layout, to
   fill the GBD temperature-uncertainty gap. (CLIMATE-22)
+- docs: a `Running the pipeline` page (`docs/running.md`) for the operational side the
+  methodology page does not cover — stage order and the two dependencies that are easy to
+  miss, the three non-obvious `scenario_inclusion` behaviours (it surveys *all* CMIP6
+  variables at once, so a root holding one variable drops the rest from the inclusion
+  metadata; a member with an incomplete extract silently drops out rather than erroring; it
+  runs inline rather than fanning out), that daily scenario fields are transient by default
+  because `scenario_annual` calls `generate_scenario_daily_main(..., write_output=False)`, a
+  table of which outputs honour `-o` and the one that does not, measured output sizes
+  (~823 MB per daily year against 3.2–3.4 MB per annual file), job shapes per step, and
+  measured GCS throughput. (CLIMATE-29)
 - docs: an `Output schema` section for the temperature person-days product, covering the
   three output tiers and their path templates, the index levels and the `year` /
   `year_id` difference between the block and compiled tiers, that the 800 columns are a
