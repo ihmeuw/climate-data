@@ -150,12 +150,21 @@ def daily_accumulation_last(ds: xr.Dataset) -> xr.Dataset:
 
     Note `resample` emits a regular axis with NaN for empty bins, unlike `groupby`, which
     emits observed groups only. Callers must trim the partial bins at each end.
+
+    `skipna=False` because the default steps back past an absent closing sample to hour
+    23, reintroducing the incomplete window this function exists to eliminate. NaN is the
+    honest answer for a window that never closed. It is not, however, a detectable one:
+    `generate_historical_daily_main` fills ERA5-Land NaNs from the interpolated
+    single-level field -- that is how ocean pixels are supplied -- so such a pixel carries
+    a complete 0.25 degree value rather than a truncated 0.1 degree one, and never reaches
+    `validate_output`. Preferring the coarse-but-whole value is the point; detecting the
+    substitution would need a separate check against the sea mask.
     """
     resampled = ds.resample(
         time=ACCUMULATION_FREQ,
         closed=ACCUMULATION_CLOSED,
         label=ACCUMULATION_LABEL,
-    ).last()
+    ).last(skipna=False)
     return resampled.rename({"time": "date"})
 
 

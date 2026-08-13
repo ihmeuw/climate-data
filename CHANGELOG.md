@@ -60,6 +60,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   re-extract would have produced `ssp126_pr_<member>.nc` while the generate stage looks up
   `pr_ssp126_<member>.nc` — new files invisible to the pipeline consuming them. Present
   since the `source` parameter was dropped in `0de5beb0`. (CLIMATE-29)
+- The ERA5-Land collapse silently accepted a day whose closing sample was missing.
+  `Resample.last` defaults to `skipna=True`, so it stepped back to hour 23 and returned
+  the 23-hour partial — the incomplete window the collapse exists to remove — one pixel at
+  a time. It now passes `skipna=False`. **This is not detectable in the output:**
+  ERA5-Land NaNs are filled from the interpolated single-level field, which is the
+  mechanism that supplies ocean pixels, so such a pixel ends up carrying a complete 0.25°
+  value rather than a truncated 0.1° one and never reaches `validate_output`. Preferring
+  the coarse-but-whole value is the intent; detecting the substitution would need a
+  separate check against the sea mask. A survey of all 1778 `total_precipitation` extracts
+  found every day 1950–2023 in possession of its closing *timestamp*, so the remaining
+  exposure is a transient NaN at a land pixel. (CLIMATE-29)
 - `extract cmip6` deleted the file it had failed to replace. The failure handler unlinked
   `out_path` unconditionally, but the encoding guard raises *before* the write begins, so
   a rejected extract destroyed the previous file and wrote nothing in its place — leaving

@@ -97,3 +97,28 @@ def test_daily_accumulation_last_returns_the_closing_sample() -> None:
 
     assert _daily_value(collapsed, DAY0) == DAY0_TOTAL
     assert _daily_value(collapsed, DAY1) == DAY1_TOTAL
+
+
+def test_daily_accumulation_last_nans_a_day_missing_its_closing_sample() -> None:
+    """An absent closing sample must not silently become the 23-hour partial.
+
+    ``Resample.last`` defaults to ``skipna=True``, which steps back past a missing
+    closing sample to hour 23 -- reintroducing, one pixel at a time, exactly the
+    incomplete window this collapse exists to eliminate. ``skipna=False`` yields NaN
+    instead.
+
+    NaN is the honest answer, not a loud one: ``generate_historical_daily_main`` fills
+    ERA5-Land NaNs from the interpolated single-level field, which is how ocean pixels
+    are supplied, so this pixel ends up carrying a complete 0.25 degree value rather
+    than a truncated 0.1 degree one. Neither setting reaches ``validate_output``.
+    """
+    ds = _minimal_hourly_precip()
+    # Drop the sample that closes day 0: 00:00 of day 1, at hour 24 of the cube.
+    ds["value"][HOURS_PER_DAY] = np.nan
+
+    collapsed = utils.daily_accumulation_last(ds)
+
+    assert np.isnan(_daily_value(collapsed, DAY0))
+    assert _daily_value(collapsed, DAY0) != DAY0_PARTIAL
+    # Day 1 still closes on its own look-ahead sample.
+    assert _daily_value(collapsed, DAY1) == DAY1_TOTAL
