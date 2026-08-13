@@ -16,7 +16,7 @@ from climate_data import (
 from climate_data import (
     constants as cdc,
 )
-from climate_data.data import ClimateData
+from climate_data.data import ClimateData, gcm_member_id
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 INT16_MAX = 32767
@@ -89,15 +89,20 @@ def extract_cmip6_main(
     print(f"Extracting {len(meta_subset)} members...")
 
     for i, (member, zstore_path) in enumerate(meta_subset.items()):
-        item = f"{i + 1}/{len(meta_subset)} {member}"
+        item = f"{i + 1}/{len(meta_subset)} {cmip6_source} {member}"
         # Keywords, not positionals: this call previously passed
         # (experiment, variable, member) into a (variable, experiment, gcm_member)
         # signature, so it wrote `ssp126_pr_<member>.nc` while the generate stage looks
-        # up `pr_ssp126_<member>.nc`. Naming the arguments makes that unrepeatable.
+        # up `pr_ssp126_<gcm_member>.nc`. Naming the arguments makes that unrepeatable.
+        #
+        # `gcm_member` is `<source>_<variant>`, not the bare `member_id` this loop
+        # iterates: `member_id` is unique only within a source, so keying on it alone
+        # made every source's `r1i1p1f1` write the same file. `data.gcm_member_id` is
+        # shared with `ClimateData.get_gcms`, which is what reads these back.
         out_path = cdata.extracted_cmip6_path(
             variable=cmip6_variable,
             experiment=cmip6_experiment,
-            gcm_member=str(member),
+            gcm_member=gcm_member_id(cmip6_source, str(member)),
         )
         if out_path.exists() and not overwrite:
             print("Skipping", item)

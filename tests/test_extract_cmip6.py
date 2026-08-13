@@ -8,7 +8,7 @@ import pytest
 import xarray as xr
 
 from climate_data import constants as cdc
-from climate_data.data import ClimateData
+from climate_data.data import ClimateData, gcm_member_id
 from climate_data.extract import cmip6
 
 # A daily rainfall well above anything a GCM produces, but not absurd: the wettest
@@ -39,8 +39,10 @@ def test_extracted_cmip6_path_argument_order(tmp_path: Path) -> None:
     """Pin the (variable, experiment, gcm_member) order the consumer relies on.
 
     `extract_cmip6_main` passed (experiment, variable, member) into this signature, so a
-    re-extract would have written `ssp126_pr_<member>.nc` while `scenario_daily` looks up
-    `pr_ssp126_<member>.nc` -- new files invisible to the pipeline that consumes them.
+    re-extract would have written `ssp126_pr_<gcm_member>.nc` while `scenario_daily` looks
+    up `pr_ssp126_<gcm_member>.nc` -- new files invisible to the pipeline that consumes
+    them. Note `gcm_member` is `<source>_<variant>`, not the bare `member_id`; keying on
+    the variant alone was a separate bug, covered below.
     """
     cdata = ClimateData(tmp_path, read_only=True)
 
@@ -102,7 +104,11 @@ def test_failed_guard_leaves_the_existing_extract_in_place(
     _metadata_for_one_member("gs://irrelevant").to_parquet(
         cdata.extracted_cmip6 / "cmip6-metadata.parquet"
     )
-    out_path = cdata.extracted_cmip6_path("pr", EXPERIMENT, MEMBER)
+    # Must be the path the extract actually targets, or the unlink under test would miss
+    # it and this would pass vacuously.
+    out_path = cdata.extracted_cmip6_path(
+        "pr", EXPERIMENT, gcm_member_id(SOURCE, MEMBER)
+    )
     out_path.write_bytes(EXISTING_CONTENT)
 
     def _too_wet_to_encode(_zarr_path: str) -> xr.Dataset:
@@ -121,3 +127,81 @@ def test_failed_guard_leaves_the_existing_extract_in_place(
 
     assert out_path.exists()
     assert out_path.read_bytes() == EXISTING_CONTENT
+
+
+# A representable flux: 1e-5 kg m-2 s-1 is 0.864 mm/day, well inside the 1e-6 encoding.
+REPRESENTABLE_FLUX = 1e-5
+OTHER_SOURCE = "CESM2-WACCM"
+
+
+def _one_member_of_pr(_zarr_path: str) -> xr.Dataset:
+    """A minimal `pr` dataset the encoding guard accepts and `to_netcdf` can write."""
+    time = xr.date_range("2015-01-01", periods=2, freq="D", use_cftime=False)
+    return xr.Dataset(
+        {"pr": (("time", "lat", "lon"), np.full((2, 2, 2), REPRESENTABLE_FLUX))},
+        coords={"time": time, "lat": [0.0, 1.0], "lon": [0.0, 1.0]},
+    )
+
+
+def test_extract_writes_the_filename_the_generate_stage_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The extract's output name must be the one `get_gcms` hands to `scenario_daily`.
+
+    `extract_cmip6_main` iterates the metadata indexed by `member_id`, so it used to key
+    the output on the bare variant -- writing `pr_ssp126_r1i1p1f1.nc`. But `get_gcms`
+    returns `<source>_<variant>`, and `scenario_daily` feeds that straight into
+    `extracted_cmip6_path`, so it looked up `pr_ssp126_<source>_<variant>.nc`: a name
+    nothing had written. Every re-extracted file would have been invisible to the stage
+    that consumes it.
+
+    Asserted against `get_gcms`'s real output rather than a hard-coded string, so the
+    writer and the reader cannot drift apart again.
+    """
+    cdata = ClimateData(tmp_path)
+    _metadata_for_one_member("gs://irrelevant").to_parquet(
+        cdata.extracted_cmip6 / "cmip6-metadata.parquet"
+    )
+    # What `scenario_daily` will ask for: `get_gcms` reads the inclusion metadata, whose
+    # index is (model, variant), and joins them.
+    inclusion = pd.DataFrame(
+        {"pr": [True]},
+        index=pd.MultiIndex.from_tuples([(SOURCE, MEMBER)], names=["model", "variant"]),
+    )
+    inclusion.to_parquet(cdata.results_metadata / "scenario_inclusion_metadata.parquet")
+    monkeypatch.setattr(cmip6, "load_cmip_data", _one_member_of_pr)
+
+    cmip6.extract_cmip6_main(
+        cmip6_source=SOURCE,
+        cmip6_experiment=EXPERIMENT,
+        cmip6_variable="pr",
+        output_dir=tmp_path,
+        overwrite=True,
+    )
+
+    written = sorted(p.name for p in cdata.extracted_cmip6.glob("pr_*.nc"))
+    expected = cdata.extracted_cmip6_path(
+        "pr", EXPERIMENT, cdata.get_gcms(["pr"])[0]
+    ).name
+
+    assert written == [expected]
+    assert SOURCE in expected
+
+
+def test_two_sources_sharing_a_member_id_get_distinct_paths() -> None:
+    """A CMIP6 `member_id` is unique only within a source, so the key needs both.
+
+    `r1i1p1f1` is shared by 24 of the extracted sources in ssp126 and 30 in ssp585.
+    Keyed on the variant alone, 295 extractions collapsed onto 171 filenames -- 124 of
+    them overwriting each other, and doing it concurrently at `concurrency_limit=50`.
+    """
+    cdata = ClimateData("/nonexistent", read_only=True)
+
+    a = cdata.extracted_cmip6_path("pr", EXPERIMENT, gcm_member_id(SOURCE, MEMBER))
+    b = cdata.extracted_cmip6_path(
+        "pr", EXPERIMENT, gcm_member_id(OTHER_SOURCE, MEMBER)
+    )
+
+    assert a != b
+    assert a.name == f"pr_{EXPERIMENT}_{SOURCE}_{MEMBER}.nc"

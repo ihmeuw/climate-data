@@ -71,6 +71,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   separate check against the sea mask. A survey of all 1778 `total_precipitation` extracts
   found every day 1950–2023 in possession of its closing *timestamp*, so the remaining
   exposure is a transient NaN at a land pixel. (CLIMATE-29)
+- `extract cmip6` dropped the source from its output filename. When `0de5beb0` collapsed
+  `extracted_cmip6_path` from `(variable, experiment, source, member)` to
+  `(variable, experiment, gcm_member)`, the reader was updated to match —
+  `ClimateData.get_gcms` returns `<source>_<variant>` — but the writer kept passing the bare
+  `member_id`. A CMIP6 `member_id` is unique only *within* a source, so `r1i1p1f1` is shared
+  by 24 of the extracted sources in ssp126 and 30 in ssp585: a `pr` re-extract's 295
+  extractions would have collapsed onto **171 filenames, 124 of them overwriting each
+  other**, concurrently at `concurrency_limit=50` — and not one of those names is what
+  `scenario_daily` looks up, so every file would have been invisible to the stage consuming
+  it. `88b3dc7` fixed that commit's transposed arguments but not its dropped source. The key
+  is now built by a shared `data.gcm_member_id`, called by both the writer and
+  `get_gcms`. The 295 files on disk predate `0de5beb0` and are named correctly. Caught by a
+  one-member validation extract, before the full re-extract ran. (CLIMATE-29)
 - `extract cmip6` deleted the file it had failed to replace. The failure handler unlinked
   `out_path` unconditionally, but the encoding guard raises *before* the write begins, so
   a rejected extract destroyed the previous file and wrote nothing in its place — leaving
