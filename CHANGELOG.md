@@ -88,6 +88,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   it carries `number` and `expver` coordinates and is stored float32 rather than packed
   int16, so the look-ahead now normalises coordinates before concatenating — `xr.concat`
   refuses to join datasets whose coordinates differ. (CLIMATE-29)
+- The look-ahead sample was accepted on trust. `.isel(time=[0])` assumed the next month
+  opens on midnight — ERA5-Land `1950_01` opens at 01:00, so a file of that shape exists in
+  the archive, and accepting one leaves the month's final day on its 23-hour partial. And
+  `xr.concat` defaulted to `join="outer"`, so a look-ahead on a different grid would have
+  widened both months onto a union grid and NaN-filled the difference, which the
+  single-level fill then hides from `validate_output`. A non-midnight stamp now raises and
+  the concat is `join="exact"`. That guards the single-level datasets; `load_variable`
+  overwrites ERA5-Land's coordinates from `cdc.ERA5_LAND_*`, so a genuine land-grid change
+  would still be relabelled first — the real land files differ by ~1e-5° across the format
+  change, which is why that overwrite exists. (CLIMATE-29)
 - That look-ahead could not be produced through either CLI. Both ERA5 extract tasks bound
   `--year` to `HISTORY_YEARS`, which stops at the last history year, so the year the
   look-ahead needs was rejected by click and the failure message named a command nothing
