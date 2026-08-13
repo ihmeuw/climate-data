@@ -10,6 +10,7 @@ import xarray as xr
 from climate_data import constants as cdc
 from climate_data.data import ClimateData, gcm_member_id
 from climate_data.extract import cmip6
+from climate_data.extract.cmip6 import select_members
 
 # A daily rainfall well above anything a GCM produces, but not absurd: the wettest
 # observed daily totals on Earth are ~1800 mm. The encoding must represent this without
@@ -187,6 +188,58 @@ def test_extract_writes_the_filename_the_generate_stage_reads(
 
     assert written == [expected]
     assert SOURCE in expected
+
+
+def _metadata_for_three_members() -> pd.DataFrame:
+    """Two variants of our source plus a same-variant member of a different source."""
+    rows = []
+    for source, member in (
+        (SOURCE, MEMBER),
+        (SOURCE, "r2i1p1f1"),
+        (OTHER_SOURCE, MEMBER),
+    ):
+        rows.append(
+            {
+                "source_id": source,
+                "experiment_id": EXPERIMENT,
+                "variable_id": "pr",
+                "table_id": "day",
+                "member_id": member,
+                "zstore": f"gs://{source}/{member}",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def test_select_members_narrows_to_one_member() -> None:
+    """`--gcm-member` must isolate a single member so each can be its own job.
+
+    The runner fans out one job per member because member counts are wildly uneven
+    (MIROC6 has 50 `pr` members where most sources have one) and because
+    `extract_cmip6_main` re-raises, so a member the encoding guard rejects would abandon
+    every member behind it in the same job.
+    """
+    meta = _metadata_for_three_members()
+
+    both = select_members(meta, SOURCE, EXPERIMENT, "pr")
+    one = select_members(meta, SOURCE, EXPERIMENT, "pr", gcm_member_id(SOURCE, MEMBER))
+
+    # The other source's identically-named variant must not leak into either result.
+    assert sorted(both) == [MEMBER, "r2i1p1f1"]
+    assert list(one) == [MEMBER]
+    assert one[MEMBER] == f"gs://{SOURCE}/{MEMBER}"
+
+
+def test_select_members_raises_on_an_unknown_member() -> None:
+    """A member that does not exist must fail loudly, not extract nothing.
+
+    The runner and the task enumerate the same space, so a mismatch between them would
+    otherwise produce jobs that silently write no file and report success.
+    """
+    meta = _metadata_for_three_members()
+
+    with pytest.raises(ValueError, match="No CMIP6 member"):
+        select_members(meta, SOURCE, EXPERIMENT, "pr", "ACCESS-CM2_r99i1p1f1")
 
 
 def test_two_sources_sharing_a_member_id_get_distinct_paths() -> None:

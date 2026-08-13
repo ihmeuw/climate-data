@@ -26,6 +26,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
   fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
+- `extract cmip6` fans out one job per ensemble member instead of one per
+  (source, experiment). Member counts are very uneven — MIROC6 publishes 50 `pr` members
+  where most sources publish one — so three jobs carried fifty times the work of a typical
+  one. More importantly `extract_cmip6_main` re-raises inside the member loop, so a member
+  the encoding guard rejects abandoned every member behind it in the same job, with
+  `max_attempts=1` and no resume; per-member jobs contain a rejection to the member that
+  caused it. The runner now also skips members already on disk unless `--overwrite`, so a
+  resumed run does not redo whole groups. A `pr` re-extract is 295 jobs, up from 66. The
+  member space is not a cartesian product, so it is enumerated from the metadata and passed
+  as `flat_node_args`, the pattern `generate scenario_daily` already uses. (CLIMATE-29)
 - `draws` now prefers historical ERA5 over scenario data for overlapping years.
   (CLIMATE-22)
 - Moved the storage root (`MODEL_ROOT`) to `/mnt/share/geospatial/climate/`. (CLIMATE-22)

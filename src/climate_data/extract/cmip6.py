@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 import gcsfs
+import pandas as pd
 import xarray as xr
 from rra_tools import shell_tools
 
@@ -65,27 +66,67 @@ def load_cmip_data(zarr_path: str) -> xr.Dataset:
     return ds  # type: ignore[no-any-return]
 
 
-def extract_cmip6_main(
+def select_members(
+    meta: pd.DataFrame,
     cmip6_source: str,
     cmip6_experiment: str,
     cmip6_variable: str,
-    output_dir: str | Path,
-    overwrite: bool,
-) -> None:
-    print(f"Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}")
-    cdata = ClimateData(output_dir)
-    meta = cdata.load_cmip6_metadata()
+    gcm_member: str | None = None,
+) -> dict[str, str]:
+    """The `{member_id: zstore}` this job should extract.
 
-    *_, offset, scale, table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
-
+    With `gcm_member` given, narrows to that one ensemble member so the runner can put
+    each member in its own job. Shared with the runner, which enumerates the same space
+    to build its task list -- if these two disagreed, the runner would submit jobs whose
+    member does not exist and they would silently extract nothing.
+    """
+    *_, table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
     mask = (
         (meta.source_id == cmip6_source)
         & (meta.experiment_id == cmip6_experiment)
         & (meta.variable_id == cmip6_variable)
         & (meta.table_id == table_id)
     )
+    # `to_dict` on a pandas index is `dict[Hashable, Any]`; coerce once here so callers
+    # get plain strings and do not each have to re-cast the variant.
+    members: dict[str, str] = {}
+    for variant, zstore in meta[mask].set_index("member_id").zstore.to_dict().items():
+        members[str(variant)] = str(zstore)
+    if gcm_member is None:
+        return members
 
-    meta_subset = meta[mask].set_index("member_id").zstore.to_dict()
+    selected = {}
+    for variant, zstore in members.items():
+        if gcm_member_id(cmip6_source, variant) == gcm_member:
+            selected[variant] = zstore
+    if not selected:
+        available = []
+        for variant in members:
+            available.append(gcm_member_id(cmip6_source, variant))
+        msg = (
+            f"No CMIP6 member {gcm_member!r} for {cmip6_source} {cmip6_experiment}"
+            f" {cmip6_variable}. Available: {sorted(available)}"
+        )
+        raise ValueError(msg)
+    return selected
+
+
+def extract_cmip6_main(
+    cmip6_source: str,
+    cmip6_experiment: str,
+    cmip6_variable: str,
+    output_dir: str | Path,
+    overwrite: bool,
+    gcm_member: str | None = None,
+) -> None:
+    print(f"Checking metadata for {cmip6_source} {cmip6_experiment} {cmip6_variable}")
+    cdata = ClimateData(output_dir)
+    meta = cdata.load_cmip6_metadata()
+
+    *_, offset, scale, _table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
+    meta_subset = select_members(
+        meta, cmip6_source, cmip6_experiment, cmip6_variable, gcm_member
+    )
     print(f"Extracting {len(meta_subset)} members...")
 
     for i, (member, zstore_path) in enumerate(meta_subset.items()):
@@ -102,7 +143,7 @@ def extract_cmip6_main(
         out_path = cdata.extracted_cmip6_path(
             variable=cmip6_variable,
             experiment=cmip6_experiment,
-            gcm_member=gcm_member_id(cmip6_source, str(member)),
+            gcm_member=gcm_member_id(cmip6_source, member),
         )
         if out_path.exists() and not overwrite:
             print("Skipping", item)
@@ -159,12 +200,14 @@ def extract_cmip6_main(
 @clio.with_cmip6_source()
 @clio.with_cmip6_experiment()
 @clio.with_cmip6_variable()
+@clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_overwrite()
 def extract_cmip6_task(
     cmip6_source: str,
     cmip6_experiment: str,
     cmip6_variable: str,
+    gcm_member: str | None,
     output_dir: str,
     overwrite: bool,
 ) -> None:
@@ -174,6 +217,7 @@ def extract_cmip6_task(
         cmip6_variable,
         output_dir,
         overwrite,
+        gcm_member,
     )
 
 
@@ -202,17 +246,50 @@ def extract_cmip6(
     to load and examine this table. The extraction criteria does not completely
     capture model inclusion criteria as it does not account for the year range avaialable
     in the data. This determiniation is made when we proccess the data in later steps.
+
+    Fans out one job per ensemble member rather than one per (source, experiment). The
+    member counts are wildly uneven -- MIROC6 has 50 `pr` members where most sources have
+    one -- so grouping them made three jobs carry fifty times the work of a typical one.
+    More importantly, `extract_cmip6_main` re-raises on failure, so a member the encoding
+    guard rejects used to abandon every member behind it in the same job. One job per
+    member contains that to the member that failed, and makes a resumed run skip the
+    members already written instead of redoing whole groups.
+
+    The member space is not a cartesian product -- not every source publishes every
+    variant for every experiment -- so it is enumerated from the metadata and passed as
+    `flat_node_args`.
     """
     overwrite_arg = {"overwrite": None} if overwrite else {}
 
+    cdata = ClimateData(output_dir)
+    meta = cdata.load_cmip6_metadata()
+
+    to_run = []
+    complete = []
+    for variable in cmip6_variable:
+        for experiment in cmip6_experiment:
+            for source in cmip6_source:
+                members = select_members(meta, source, experiment, variable)
+                for variant in members:
+                    member = gcm_member_id(source, variant)
+                    path = cdata.extracted_cmip6_path(variable, experiment, member)
+                    if path.exists() and not overwrite:
+                        complete.append(member)
+                    else:
+                        to_run.append((source, experiment, variable, member))
+
+    if not to_run:
+        print("All tasks already done.")
+        return
+
+    print(f"{len(complete)} tasks already done. Launching {len(to_run)} tasks")
     run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="extract cmip6",
-        node_args={
-            "cmip6-source": cmip6_source,
-            "cmip6-experiment": cmip6_experiment,
-            "cmip6-variable": cmip6_variable,
-        },
+        flat_node_args=(
+            ("cmip6-source", "cmip6-experiment", "cmip6-variable", "gcm-member"),
+            to_run,
+        ),
         task_args={
             "output-dir": output_dir,
             **overwrite_arg,
