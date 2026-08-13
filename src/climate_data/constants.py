@@ -156,6 +156,12 @@ class CMIP6Variable(NamedTuple):
     encoding_offset: float
     encoding_scale: float
     table_id: Literal["day", "Oday"]
+    # Signed unless the variable cannot be negative. `int16` spends half its range on
+    # negatives, which a flux like precipitation never uses -- `uint16` doubles the
+    # representable ceiling at identical resolution. Read this by attribute, never by
+    # positional unpacking: two call sites used `*_, offset, scale, table_id` and would
+    # have silently misbound when this field was added.
+    encoding_dtype: Literal["int16", "uint16"] = "int16"
 
 
 class _CMIP6Variables(NamedTuple):
@@ -215,19 +221,25 @@ class _CMIP6Variables(NamedTuple):
         # `pr` is a flux in kg m-2 s-1, so the scale must span daily rainfall expressed
         # per second. At 1e-9 the int16 ceiling was 2.83 mm/day and anything wetter
         # wrapped modulo 65536, decoding as garbage including negative precipitation.
-        # 1e-6 puts the ceiling at 2831 mm/day, above the wettest day ever observed.
         #
-        # The trade is resolution: the quantum goes from 0.0000864 to 0.0864 mm/day, so
-        # anything under ~0.043 mm/day rounds to zero. Reviewed and kept: the daily
-        # product this feeds stores precipitation at `encoding_scale=0.1`, so 0.0864
-        # mm/day already resolves finer than anything downstream can represent, and
-        # `compute_anomaly` damps the remainder -- it forms `(target + 1) /
-        # (reference + 1)` against a multi-year monthly mean. `1e-7` would give a
-        # 0.00864 mm/day quantum but caps the ceiling at 283 mm/day, and the true GCM
-        # daily maxima are unmeasured. Settle any change before a re-extract, not after:
-        # every `pr_*.nc` carries whichever value is here when it is written.
+        # Resolution is the thing to protect: at 1e-6 the quantum is 0.0864 mm/day, just
+        # under the 0.1 mm/day the daily product downstream stores, so the input is not
+        # the limiting factor. Coarsening the scale to buy headroom would invert that --
+        # 2e-6 gives 0.173 mm/day, worse than the output it feeds. So headroom comes from
+        # the dtype instead: precipitation is never negative, and `uint16` puts the whole
+        # 65535-code range above zero for a 5662 mm/day ceiling at the same quantum.
+        # `_FillValue` sits at the top of that range, so zero rainfall encodes as 0 and
+        # can never collide with it.
+        #
+        # Measured: one member peaked at 1012 mm/day and ACCESS-CM2 ssp585 at 3108, which
+        # overflowed the 2831 mm/day signed ceiling by 9.8% and is 55% of the unsigned
+        # one. `1e-7` was rejected outright -- a 283 mm/day ceiling fails on both.
+        #
+        # Settle any change before a re-extract, not after: every `pr_*.nc` carries
+        # whichever encoding is here when it is written.
         encoding_scale=1e-6,
         table_id="day",
+        encoding_dtype="uint16",
     )
 
     def names(self) -> list[str]:

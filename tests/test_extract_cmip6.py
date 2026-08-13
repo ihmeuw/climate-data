@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import netCDF4
 import numpy as np
 import pandas as pd
 import pytest
@@ -33,7 +34,10 @@ def test_pr_encoding_represents_realistic_extremes() -> None:
     flux = EXTREME_RAINFALL_MM_PER_DAY / SECONDS_PER_DAY
     stored = (flux - pr.encoding_offset) / pr.encoding_scale
 
-    assert abs(stored) <= INT16_MAX
+    # Against the limits of the dtype `pr` actually declares, not a hard-coded signed
+    # bound: this assertion passed for the wrong reason while `pr` was int16.
+    low, high = cmip6.STORED_LIMITS[pr.encoding_dtype]
+    assert low <= stored <= high
 
 
 def test_extracted_cmip6_path_argument_order(tmp_path: Path) -> None:
@@ -188,6 +192,100 @@ def test_extract_writes_the_filename_the_generate_stage_reads(
 
     assert written == [expected]
     assert SOURCE in expected
+
+
+# The maximum that overflowed the signed encoding: ACCESS-CM2 ssp585 r1i1p1f1 peaked at
+# 0.0359783 kg m-2 s-1, i.e. 3108 mm/day, needing code 35978 against int16's 32767.
+OVERFLOWED_INT16_FLUX = 0.0359783
+OVERFLOWED_INT16_CODE = 35978
+
+
+def test_pr_encoding_admits_the_value_that_overflowed_int16() -> None:
+    """The observed CMIP6 maximum must fit the encoding `pr` now declares.
+
+    `ACCESS-CM2 ssp585 r1i1p1f1` exceeded the 2831 mm/day signed ceiling by 9.8% and
+    failed the guard mid re-extract. `uint16` spends none of its range on negatives, so
+    the same scale reaches 5662 mm/day and this value sits at 55% of it.
+    """
+    pr = cdc.CMIP6_VARIABLES.get("pr")
+    stored = (OVERFLOWED_INT16_FLUX - pr.encoding_offset) / pr.encoding_scale
+    low, high = cmip6.STORED_LIMITS[pr.encoding_dtype]
+
+    assert round(stored) == OVERFLOWED_INT16_CODE
+    assert stored > INT16_MAX  # would have wrapped under the old signed encoding
+    assert low <= stored <= high
+
+
+def test_guard_rejects_a_negative_value_under_an_unsigned_encoding() -> None:
+    """A negative flux must fail rather than wrap into a huge positive.
+
+    Under `int16` a small negative was representable and silently plausible. Under
+    `uint16` it cannot be stored at all, and for a flux that is the honest outcome --
+    negative precipitation is exactly the corruption this guard exists to prevent.
+    """
+    with pytest.raises(ValueError, match="cannot be represented"):
+        cmip6.check_encoding_covers(
+            data_min=-1e-6,
+            data_max=1e-5,
+            offset=0.0,
+            scale=1e-6,
+            variable="pr",
+            dtype="uint16",
+        )
+
+
+def test_extract_writes_unsigned_and_preserves_zero_precipitation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zero rainfall must survive the round trip as 0.0, never as missing data.
+
+    This is the trap in the alternative fix. Buying headroom by shifting `add_offset` on a
+    signed dtype maps zero rainfall onto a code adjacent to `_FillValue = -32767`, and
+    zero is overwhelmingly the most common value in a precipitation field -- so getting it
+    wrong would decode a large fraction of the archive as NaN. `uint16` puts `_FillValue`
+    at the top of the range instead, leaving zero encoded as 0.
+
+    Drives the real `extract_cmip6_main` so the assertion covers what `to_netcdf` actually
+    writes, not what the encoding dict says.
+    """
+    cdata = ClimateData(tmp_path)
+    _metadata_for_one_member("gs://irrelevant").to_parquet(
+        cdata.extracted_cmip6 / "cmip6-metadata.parquet"
+    )
+
+    def _zero_and_the_overflowing_max(_zarr_path: str) -> xr.Dataset:
+        time = xr.date_range("2015-01-01", periods=2, freq="D", use_cftime=False)
+        values = np.array([[[0.0]], [[OVERFLOWED_INT16_FLUX]]])
+        return xr.Dataset(
+            {"pr": (("time", "lat", "lon"), values)},
+            coords={"time": time, "lat": [0.0], "lon": [0.0]},
+        )
+
+    monkeypatch.setattr(cmip6, "load_cmip_data", _zero_and_the_overflowing_max)
+
+    cmip6.extract_cmip6_main(
+        cmip6_source=SOURCE,
+        cmip6_experiment=EXPERIMENT,
+        cmip6_variable="pr",
+        output_dir=tmp_path,
+        overwrite=True,
+    )
+
+    written = cdata.extracted_cmip6_path(
+        "pr", EXPERIMENT, gcm_member_id(SOURCE, MEMBER)
+    )
+    with netCDF4.Dataset(written) as raw:
+        stored = raw.variables["pr"]
+        assert stored.dtype == np.uint16
+        # `getncattr`, not attribute access: `_FillValue` is a netCDF attribute name and
+        # ruff reads the dot form as reaching into a private member.
+        assert stored.getncattr("_FillValue") == cmip6.UINT16_MAX
+
+    decoded = xr.open_dataset(written)["pr"].to_numpy().ravel()
+    assert decoded[0] == 0.0
+    assert not np.isnan(decoded[0])
+    assert decoded[1] == pytest.approx(OVERFLOWED_INT16_FLUX, abs=1e-6)
 
 
 def _metadata_for_three_members() -> pd.DataFrame:

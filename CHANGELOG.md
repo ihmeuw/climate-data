@@ -67,6 +67,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `last` rather than `max` because the two agree only while the window rises
   monotonically, which int16 packing does not guarantee. Reported by Anna Rutherford
   (EOD/WASH). (CLIMATE-29)
+- CMIP6 `pr` is now encoded **unsigned**. At `int16`/`1e-6` the ceiling was 2831 mm/day, and
+  a real member exceeded it: `ACCESS-CM2 ssp585 r1i1p1f1` peaks at 3108 mm/day, needing code
+  35978 against 32767, and failed the guard partway through a re-extract. Precipitation is
+  never negative, so half the signed range was never usable; `uint16` reaches **5662 mm/day
+  at the same 0.0864 mm/day quantum**. Coarsening `encoding_scale` instead was rejected —
+  `2e-6` gives a 0.173 mm/day quantum, worse than the 0.1 mm/day the daily product
+  downstream stores, which would make the input the limiting factor. `_FillValue` moves to
+  the top of the unsigned range (65535), so zero rainfall encodes as `0` and cannot be
+  decoded as missing — the trap in the alternative of shifting `add_offset` on a signed
+  dtype, where zero would land adjacent to `-32767`. `CMIP6Variable` carries an
+  `encoding_dtype` (default `int16`; only `pr` overrides it) and the guard checks the
+  bounds of the declared dtype, so an unsigned variable now rejects negatives outright
+  rather than wrapping them. The other seven variables are unchanged — temperatures need
+  the sign. Both readers of these files (`scenario_daily`, `scenario_inclusion`) go through
+  xarray, which decodes native unsigned types transparently. (CLIMATE-29)
 - CMIP6 `pr` was extracted as int16 with `scale_factor=1e-9`. `pr` is a flux in
   kg m-2 s-1, so that put the representable ceiling at **2.83 mm/day**: anything wetter
   wrapped modulo 65536 and decoded as garbage, including negative precipitation. Measured

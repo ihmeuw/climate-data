@@ -143,9 +143,21 @@ roughly **55 MB/s** single-threaded. The extract's encoding guard reduces each a
 and max before writing, so budget **two** passes over each member's source data — the guard's
 traversal and `to_netcdf`'s.
 
-The guard refuses to write values the declared `int16` encoding cannot represent, rather than
-letting them wrap silently. A rejected member fails loudly with an actionable message and
-leaves any previous file intact. Treat an occasional rejection on an unusually extreme model
-as designed behaviour: widen that variable's `encoding_scale` in `constants.CMIP6_VARIABLES`
-and re-run the member. Because the encoding is written into every file, settle a scale change
-*before* a bulk re-extract, not after.
+The guard refuses to write values the declared 16-bit encoding cannot represent, rather than
+letting them wrap silently. A rejected member fails loudly with an actionable message naming
+the offending value, and leaves any previous file intact. Treat an occasional rejection on an
+unusually extreme model as designed behaviour rather than a bug.
+
+There are two levers when it fires, and they are not equivalent:
+
+- **`encoding_dtype`.** A variable that cannot be negative should be `uint16`, which puts the
+  whole 65535-code range above zero — double the ceiling of `int16` at *identical*
+  resolution. `pr` uses this. `_FillValue` sits at the top of the unsigned range, so zero
+  encodes as `0` and cannot be confused with missing data.
+- **`encoding_scale`.** Coarsens the quantum to buy ceiling. Check what it costs before
+  reaching for it: the daily product stores precipitation at 0.1 mm/day, so a `pr` input
+  quantum above that would make the input the limiting factor rather than the output.
+
+Because the encoding is written into every file, settle any change **before** a bulk
+re-extract, not after — the files carry whatever was declared when they were written, and
+the only way to change it is to extract them again.

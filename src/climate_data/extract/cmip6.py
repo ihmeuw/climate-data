@@ -21,6 +21,18 @@ from climate_data.data import ClimateData, gcm_member_id
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 
 INT16_MAX = 32767
+UINT16_MAX = 65535
+
+# The code reserved for missing data, and the range of codes left for real values. Both
+# dtypes give up one code to `_FillValue`; the difference is where it sits. Signed puts it
+# at the bottom, so the usable floor is one above it. Unsigned puts it at the top, which
+# leaves zero -- overwhelmingly the most common precipitation value -- encoding as 0,
+# where it cannot be mistaken for missing.
+FILL_VALUE = {"int16": -INT16_MAX, "uint16": UINT16_MAX}
+STORED_LIMITS = {
+    "int16": (-INT16_MAX + 1, INT16_MAX),
+    "uint16": (0, UINT16_MAX - 1),
+}
 
 
 def check_encoding_covers(
@@ -29,25 +41,28 @@ def check_encoding_covers(
     offset: float,
     scale: float,
     variable: str,
+    dtype: str = "int16",
 ) -> None:
-    """Refuse to write values the int16 encoding cannot represent.
+    """Refuse to write values the declared encoding cannot represent.
 
-    Packing to int16 stores `(value - offset) / scale`, and anything beyond +/-32767
-    wraps modulo 65536. `to_netcdf` does this silently, so the corruption is invisible
-    until someone plots the result and finds negative rainfall. `pr` shipped with
-    `scale_factor=1e-9` for two years -- a 2.83 mm/day ceiling -- and produced 295 files
-    in which 26.4% of sampled cells were wrong and 12.4% were negative.
+    Packing to a 16-bit integer stores `(value - offset) / scale`, and anything outside
+    the type's range wraps modulo 65536. `to_netcdf` does this silently, so the corruption
+    is invisible until someone plots the result and finds negative rainfall. `pr` shipped
+    with `scale_factor=1e-9` for two years -- a 2.83 mm/day ceiling -- and produced 295
+    files in which 26.4% of sampled cells were wrong and 12.4% were negative.
 
     Raising here makes the next such mistake a failed extract rather than a corrupt
-    archive.
+    archive. An unsigned dtype also makes a negative value an error rather than a wrap,
+    which for a flux like precipitation is the honest outcome.
     """
+    low, high = STORED_LIMITS[dtype]
     for label, value in (("minimum", data_min), ("maximum", data_max)):
         stored = (value - offset) / scale
-        if abs(stored) > INT16_MAX:
+        if not low <= stored <= high:
             msg = (
                 f"The {label} value of {variable} ({value:g}) cannot be represented by"
-                f" its int16 encoding (offset={offset:g}, scale={scale:g}): it would be"
-                f" stored as {stored:.0f}, outside +/-{INT16_MAX}, and would wrap modulo"
+                f" its {dtype} encoding (offset={offset:g}, scale={scale:g}): it would be"
+                f" stored as {stored:.0f}, outside [{low}, {high}], and would wrap modulo"
                 f" 65536. Widen encoding_scale for {variable} in"
                 f" constants.CMIP6_VARIABLES."
             )
@@ -80,7 +95,7 @@ def select_members(
     to build its task list -- if these two disagreed, the runner would submit jobs whose
     member does not exist and they would silently extract nothing.
     """
-    *_, table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
+    table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable).table_id
     mask = (
         (meta.source_id == cmip6_source)
         & (meta.experiment_id == cmip6_experiment)
@@ -123,7 +138,12 @@ def extract_cmip6_main(
     cdata = ClimateData(output_dir)
     meta = cdata.load_cmip6_metadata()
 
-    *_, offset, scale, _table_id = cdc.CMIP6_VARIABLES.get(cmip6_variable)
+    # Attributes, not positional unpacking: the record grew an `encoding_dtype` field and
+    # a `*_, offset, scale, table_id` unpack would have silently shifted by one.
+    variable_spec = cdc.CMIP6_VARIABLES.get(cmip6_variable)
+    offset = variable_spec.encoding_offset
+    scale = variable_spec.encoding_scale
+    dtype = variable_spec.encoding_dtype
     meta_subset = select_members(
         meta, cmip6_source, cmip6_experiment, cmip6_variable, gcm_member
     )
@@ -167,6 +187,7 @@ def extract_cmip6_main(
                 offset=offset,
                 scale=scale,
                 variable=cmip6_variable,
+                dtype=dtype,
             )
 
             print("Writing to", out_path)
@@ -177,10 +198,10 @@ def extract_cmip6_main(
                 out_path,
                 encoding={
                     cmip6_variable: {
-                        "dtype": "int16",
+                        "dtype": dtype,
                         "scale_factor": scale,
                         "add_offset": offset,
-                        "_FillValue": -32767,
+                        "_FillValue": FILL_VALUE[dtype],
                         "zlib": True,
                         "complevel": 1,
                     }
