@@ -77,6 +77,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   it carries `number` and `expver` coordinates and is stored float32 rather than packed
   int16, so the look-ahead now normalises coordinates before concatenating — `xr.concat`
   refuses to join datasets whose coordinates differ. (CLIMATE-29)
+- That look-ahead could not be produced through either CLI. Both ERA5 extract tasks bound
+  `--year` to `HISTORY_YEARS`, which stops at the last history year, so the year the
+  look-ahead needs was rejected by click and the failure message named a command nothing
+  would accept; the 2024 files that let the first full run succeed came from a separate
+  GBD-2025 pull, not from this repo. The single-job tasks now span a new
+  `cdc.EXTRACT_YEARS` — the history range plus the following year — and the message prints
+  the two commands to run. `cdrun extract era5` deliberately keeps the narrower range:
+  `-y ALL` resolves to every choice and the runner decides what to fetch by file
+  existence, so widening it would add a year of downloads to a step that already
+  re-downloads terabytes when run with its defaults. (CLIMATE-29)
 - docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
   upsampled with nearest-neighbor interpolation. It is bilinear
   (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface

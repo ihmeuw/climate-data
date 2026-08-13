@@ -63,6 +63,11 @@ REFERENCE_PERIOD = slice(
 )
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
+# Accumulation windows are stamped by their end, so generating a month reads the first
+# sample of the next one and the last history year reaches into the year after it. The
+# single-job extract tasks span this; the runner deliberately does not, so `-y ALL` keeps
+# meaning "the history range" and not "one more year to download".
+EXTRACT_YEARS = [*HISTORY_YEARS, str(int(HISTORY_YEARS[-1]) + 1)]
 # Start of the temperature-exposure / person-days analysis window (the historical
 # person-days product spans this through the last year present on disk).
 EXPOSURE_START_YEAR = 1990

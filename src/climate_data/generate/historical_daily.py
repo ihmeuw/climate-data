@@ -171,9 +171,11 @@ def load_variable_with_lookahead(
     single extra sample completes the final bin without opening a new one.
 
     Raises if the look-ahead file is absent rather than degrading to the incomplete
-    23-hour window: ERA5 extracts stop at 2023, so regenerating 2023 needs a January
-    2024 file that does not exist, and that should stop the run rather than quietly
-    shorten one day. Checked before loading the target month so the run fails fast.
+    23-hour window, which should stop the run rather than quietly shorten one day.
+    Checked before loading the target month so the run fails fast. Note this reaches one
+    year past the history range -- regenerating the last history year needs the following
+    January -- which is why the extract tasks span `cdc.EXTRACT_YEARS` rather than
+    `cdc.HISTORY_YEARS`.
     """
     next_year, next_month = _next_month(year, int(month))
     lookahead_path = cdata.extracted_era5_path(dataset, variable, next_year, next_month)
@@ -181,8 +183,14 @@ def load_variable_with_lookahead(
         msg = (
             f"Cannot close {year}-{month} for {variable}: the accumulation window of its"
             f" final day ends in the following month, whose extract is missing at"
-            f" {lookahead_path}. Extract {dataset} {variable} {next_year}_{next_month}"
-            f" before generating {year}."
+            f" {lookahead_path}. Extract it before generating {year}:\n"
+            f"  cdtask extract era5_download -d {dataset} -x {variable}"
+            f" -y {next_year} -m {next_month}\n"
+            f"  cdtask extract era5_compress -d {dataset} -x {variable}"
+            f" -y {next_year} -m {next_month}\n"
+            f"Use the single-job tasks, not `cdrun extract era5`: the runner's --year"
+            f" stops at the last history year, and it decides what to fetch by file"
+            f" existence."
         )
         raise FileNotFoundError(msg)
 
