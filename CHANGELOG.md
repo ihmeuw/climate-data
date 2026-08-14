@@ -67,6 +67,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `last` rather than `max` because the two agree only while the window rises
   monotonically, which int16 packing does not guarantee. Reported by Anna Rutherford
   (EOD/WASH). (CLIMATE-29)
+- The encoding guard rejected values the writer would have stored correctly. It compared
+  the **unrounded** `(value - offset) / scale` against the dtype's limits, but `to_netcdf`
+  packs with round-half-to-even, so anything within half a quantum of a limit rounds back
+  into range. Floating-point noise in the source GCM fields — CMCC-CM2-SR5, CMCC-ESM2 and
+  GISS-E2-1-G all report a `pr` minimum a few times 1e-17 kg m-2 s-1 below zero, which is
+  -6.19e-11 stored and rounds to `0` — tripped it, and eight `pr` members failed to extract
+  with the guard reporting a stored value of `-0` as out of range. The guard now rounds
+  before comparing, so its cut sits where the writer's behaviour actually changes: half a
+  quantum below zero, where the code rounds to `-1` and casts to 65535, which is
+  `_FillValue`. That is the wrap worth refusing, and it is still refused, as is the
+  symmetric case half a quantum above the ceiling. Non-finite bounds bypass the rounding so
+  an all-NaN field still fails with the guard's own message rather than a bare
+  `cannot convert float NaN to integer`. (CLIMATE-29)
 - CMIP6 `pr` is now encoded **unsigned**. At `int16`/`1e-6` the ceiling was 2831 mm/day, and
   a real member exceeded it: `ACCESS-CM2 ssp585 r1i1p1f1` peaks at 3108 mm/day, needing code
   35978 against 32767, and failed the guard partway through a re-extract. Precipitation is

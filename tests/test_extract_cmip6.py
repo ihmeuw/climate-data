@@ -234,6 +234,111 @@ def test_guard_rejects_a_negative_value_under_an_unsigned_encoding() -> None:
         )
 
 
+# Floating-point noise in a source GCM field, not real negative rainfall. CMCC-CM2-SR5,
+# CMCC-ESM2 and GISS-E2-1-G all report a `pr` minimum a few times 1e-17 kg m-2 s-1 below
+# zero, which is -6.19e-11 in stored units -- a ten-billionth of a quantum. The writer
+# rounds it to 0 and stores it correctly.
+SUB_QUANTUM_NOISE = -6.19067e-17
+# `to_netcdf` packs with round-half-to-even, so the stored code changes at the half
+# quantum: -0.5 rounds to 0 and is safe, -0.6 rounds to -1, which casts to 65535 --
+# `_FillValue` -- and decodes as missing.
+SAFE_NEGATIVE_QUANTA = -0.5
+WRAPPING_NEGATIVE_QUANTA = -0.6
+
+
+def test_guard_admits_sub_quantum_negative_noise() -> None:
+    """Noise that rounds to zero must not fail an extract.
+
+    The guard compared the unrounded quotient, so a minimum of -6.19e-17 read as
+    "-0, outside [0, 65534]" and raised. Eight CMIP6 `pr` members failed on this and
+    needed a re-extract, and every future CMCC/GISS `pr` extract would have too.
+    """
+    cmip6.check_encoding_covers(
+        data_min=SUB_QUANTUM_NOISE,
+        data_max=1e-5,
+        offset=0.0,
+        scale=1e-6,
+        variable="pr",
+        dtype="uint16",
+    )
+
+
+def test_guard_boundary_sits_where_the_writer_wraps() -> None:
+    """Accept what rounds into range; reject what rounds out of it.
+
+    The guard's job is to predict the writer, so its cut belongs at the half quantum
+    where the writer's rounding changes the stored code -- not at the exact zero the
+    unrounded comparison used.
+    """
+    scale = 1e-6
+
+    cmip6.check_encoding_covers(
+        data_min=SAFE_NEGATIVE_QUANTA * scale,
+        data_max=1e-5,
+        offset=0.0,
+        scale=scale,
+        variable="pr",
+        dtype="uint16",
+    )
+
+    with pytest.raises(ValueError, match="cannot be represented"):
+        cmip6.check_encoding_covers(
+            data_min=WRAPPING_NEGATIVE_QUANTA * scale,
+            data_max=1e-5,
+            offset=0.0,
+            scale=scale,
+            variable="pr",
+            dtype="uint16",
+        )
+
+
+def test_guard_boundary_is_symmetric_at_the_top_of_the_range() -> None:
+    """The same rounding applies to the maximum, where the wrap is also `_FillValue`.
+
+    A maximum four tenths of a quantum above the ceiling rounds back onto it and stores
+    correctly; six tenths rounds past it onto 65535, which is `_FillValue`.
+    """
+    scale = 1e-6
+    _, high = cmip6.STORED_LIMITS["uint16"]
+
+    cmip6.check_encoding_covers(
+        data_min=0.0,
+        data_max=(high + 0.4) * scale,
+        offset=0.0,
+        scale=scale,
+        variable="pr",
+        dtype="uint16",
+    )
+
+    with pytest.raises(ValueError, match="cannot be represented"):
+        cmip6.check_encoding_covers(
+            data_min=0.0,
+            data_max=(high + 0.6) * scale,
+            offset=0.0,
+            scale=scale,
+            variable="pr",
+            dtype="uint16",
+        )
+
+
+def test_guard_reports_a_non_finite_bound_in_its_own_words() -> None:
+    """An all-NaN field must fail with the guard's message, not a conversion error.
+
+    `min` skips NaN, so a field with no finite values reduces to NaN. Rounding that
+    raises `ValueError: cannot convert float NaN to integer`, which says nothing about
+    which variable or encoding is at fault, so non-finite bounds bypass the rounding.
+    """
+    with pytest.raises(ValueError, match="cannot be represented"):
+        cmip6.check_encoding_covers(
+            data_min=float("nan"),
+            data_max=1e-5,
+            offset=0.0,
+            scale=1e-6,
+            variable="pr",
+            dtype="uint16",
+        )
+
+
 def test_extract_writes_unsigned_and_preserves_zero_precipitation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

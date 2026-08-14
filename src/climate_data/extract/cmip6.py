@@ -3,6 +3,7 @@ CMIP6 Data Extraction
 ---------------------
 """
 
+import math
 from pathlib import Path
 
 import click
@@ -45,7 +46,7 @@ def check_encoding_covers(
 ) -> None:
     """Refuse to write values the declared encoding cannot represent.
 
-    Packing to a 16-bit integer stores `(value - offset) / scale`, and anything outside
+    Packing to a 16-bit integer rounds `(value - offset) / scale`, and anything outside
     the type's range wraps modulo 65536. `to_netcdf` does this silently, so the corruption
     is invisible until someone plots the result and finds negative rainfall. `pr` shipped
     with `scale_factor=1e-9` for two years -- a 2.83 mm/day ceiling -- and produced 295
@@ -57,7 +58,15 @@ def check_encoding_covers(
     """
     low, high = STORED_LIMITS[dtype]
     for label, value in (("minimum", data_min), ("maximum", data_max)):
-        stored = (value - offset) / scale
+        quotient = (value - offset) / scale
+        # Round, because rounding is what the writer does -- `to_netcdf` packs with
+        # round-half-to-even, not truncation. Comparing the unrounded quotient rejects
+        # values the writer would have stored correctly: floating-point noise of
+        # -6.19e-17 kg m-2 s-1 in a source GCM field is -6.19e-11 stored, which rounds
+        # to 0, and cost eight CMIP6 `pr` members a re-extract. `round` raises on
+        # nan/inf, so screen those out and let them fall through to the same message
+        # rather than an opaque conversion error.
+        stored = round(quotient) if math.isfinite(quotient) else quotient
         if not low <= stored <= high:
             msg = (
                 f"The {label} value of {variable} ({value:g}) cannot be represented by"
