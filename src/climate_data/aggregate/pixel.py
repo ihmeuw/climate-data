@@ -1,4 +1,5 @@
 import itertools
+from collections.abc import Sequence
 
 import click
 import numpy as np
@@ -170,26 +171,58 @@ def pixel_task(
 @click.command()
 @clio.with_agg_version()
 @clio.with_block_key(allow_all=True)
-@clio.with_draw(allow_all=True)
-@clio.with_hierarchy(allow_all=True)
+@click.option(
+    "--draw",
+    "draw",
+    type=click.Choice([*cdc.DRAWS, clio.RUN_ALL]),
+    multiple=True,
+    default=(clio.RUN_ALL,),
+    help="Draw to process. Repeatable; ALL expands to every draw.",
+)
+@click.option(
+    "--hierarchy",
+    "hierarchy",
+    type=click.Choice([*cdc.HIERARCHY_MAP, clio.RUN_ALL]),
+    multiple=True,
+    default=(clio.RUN_ALL,),
+    help="Hierarchy to process. Repeatable; ALL expands to every hierarchy.",
+)
 @clio.with_agg_measure(allow_all=True)
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_queue()
+@click.option(
+    "--concurrency-limit",
+    "concurrency_limit",
+    type=int,
+    default=None,
+    help="Cap simultaneously running tasks. Unset means jobmon's default.",
+)
 @clio.with_dry_run()
 def pixel(
     agg_version: str,
     block_key: str,
-    draw: list[str],
-    hierarchy: list[str],
+    draw: tuple[str, ...],
+    hierarchy: tuple[str, ...],
     agg_measure: list[str],
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
     queue: str,
+    concurrency_limit: int | None,
     dry_run: bool,
 ) -> None:
+    def expand(values: tuple[str, ...], choices: Sequence[str]) -> list[str]:
+        """Resolve a repeatable choice option, honouring ALL."""
+        out: list[str] = []
+        for value in values:
+            out.extend(clio.convert_choice(value, list(choices)))
+        return sorted(set(out))
+
+    draws = expand(draw, cdc.DRAWS)
+    hierarchies = expand(hierarchy, list(cdc.HIERARCHY_MAP))
+
     ca_data = ClimateAggregateData(output_dir)
     pm_data = PopulationModelData(population_model_dir)
     modeling_frame = pm_data.load_modeling_frame()
@@ -198,7 +231,7 @@ def pixel(
 
     print("Checking for existing results")
     jobs = []
-    hbd = list(itertools.product(hierarchy, block_keys, draw))
+    hbd = list(itertools.product(hierarchies, block_keys, draws))
     for h, b, d in tqdm.tqdm(hbd):
         if not ca_data.raw_results_path(agg_version, h, b, d).exists():
             jobs.append((h, b, d))
@@ -231,5 +264,6 @@ def pixel(
         },
         log_root=ca_data.log_dir("aggregate_pixel"),
         max_attempts=3,
+        concurrency_limit=concurrency_limit,
         dry_run=dry_run,
     )
