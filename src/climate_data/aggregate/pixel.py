@@ -25,6 +25,7 @@ def pixel_main(
     population_model_root: str,
     climate_data_root: str,
     output_dir: str,
+    measures: list[str] | None = None,
     *,
     progress_bar: bool = False,
 ) -> None:
@@ -39,7 +40,8 @@ def pixel_main(
     )
 
     years = [int(y) for y in cdc.ALL_YEARS]
-    measures = cdc.AGGREGATION_MEASURES
+    if measures is None:
+        measures = cdc.AGGREGATION_MEASURES
     scenarios = cdc.AGGREGATION_SCENARIOS
 
     total_iterations = len(years) * len(measures) * len(scenarios)
@@ -120,6 +122,20 @@ def pixel_main(
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
+@click.option(
+    "--agg-measure",
+    "agg_measure",
+    type=str,
+    default=",".join(cdc.AGGREGATION_MEASURES),
+    show_default=False,
+    help=(
+        "Comma-separated climate measures to aggregate. Defaults to all of"
+        " AGGREGATION_MEASURES. This is a plain string rather than a clio choice"
+        " option because it is a task arg, not a node arg: raw_results_path is keyed"
+        " on (version, hierarchy, block, draw) with no measure component, so one job"
+        " per measure would have every job writing the same file."
+    ),
+)
 @clio.with_progress_bar()
 def pixel_task(
     agg_version: str,
@@ -129,9 +145,15 @@ def pixel_task(
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
+    agg_measure: str,
     *,
     progress_bar: bool,
 ) -> None:
+    measures = [m.strip() for m in agg_measure.split(",") if m.strip()]
+    unknown = set(measures) - set(cdc.AGGREGATION_MEASURES)
+    if unknown:
+        msg = f"Unknown aggregation measure(s): {sorted(unknown)}"
+        raise click.BadParameter(msg)
     pixel_main(
         agg_version,
         block_key,
@@ -140,6 +162,7 @@ def pixel_task(
         population_model_dir,
         climate_data_dir,
         output_dir,
+        measures,
         progress_bar=progress_bar,
     )
 
@@ -149,6 +172,7 @@ def pixel_task(
 @clio.with_block_key(allow_all=True)
 @clio.with_draw(allow_all=True)
 @clio.with_hierarchy(allow_all=True)
+@clio.with_agg_measure(allow_all=True)
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
@@ -159,6 +183,7 @@ def pixel(
     block_key: str,
     draw: list[str],
     hierarchy: list[str],
+    agg_measure: list[str],
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
@@ -192,11 +217,15 @@ def pixel(
             "population-model-dir": population_model_dir,
             "climate-data-dir": climate_data_dir,
             "output-dir": output_dir,
+            "agg-measure": ",".join(agg_measure),
         },
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "6G",
+            # Observed MaxRSS on the 17Aug run was 6.0G against a 6G request on every
+            # sampled task. The LSAE hierarchies carry more locations per block, so 6G
+            # would OOM there and max_attempts would mask it as a retry.
+            "memory": "12G",
             "runtime": "480m",
             "project": "proj_rapidresponse",
         },
