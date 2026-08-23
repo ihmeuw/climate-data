@@ -217,5 +217,29 @@ def aggregate_climate_to_hierarchy(
         .sort_values(["location_id", "year_id"])
         .reset_index(drop=True)
     )
-    results["value"] = results["weighted_climate"] / results["population"]
+
+    # The block-level results arrive with object dtype, so a zero denominator
+    # raises ZeroDivisionError from Python scalar arithmetic rather than giving
+    # the inf that float division would. Coerce first, then divide only where
+    # there are people: a population-weighted climate value is undefined for a
+    # location with no population, and NaN says that honestly.
+    #
+    # Zero-population locations are real and expected. Some are uninhabited
+    # (Antarctica, Bouvet Island, the Spratlys). Others are inhabited places the
+    # population model carries no estimate for (Aland, Svalbard, Norfolk
+    # Island), which is a coverage gap, not a modelling result -- hence the
+    # count is reported rather than silently swallowed.
+    results = results.astype({"weighted_climate": "float64", "population": "float64"})
+    population = results["population"]
+    no_population = ~(population > 0)
+    results["value"] = results["weighted_climate"] / population.where(~no_population)
+
+    if no_population.any():
+        n_loc = results.loc[no_population, "location_id"].nunique()
+        print(
+            f"No population for {n_loc} location(s) covering "
+            f"{int(no_population.sum())} location-year(s); "
+            "their value is NaN."
+        )
+
     return results
