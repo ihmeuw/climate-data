@@ -119,9 +119,10 @@ def load_and_shift_longitude_and_correct_time(
 def load_variable(
     member_path: str | Path,
     year: str | int,
+    reference_period: slice = cdc.REFERENCE_PERIOD,
 ) -> xr.Dataset:
     if year == "reference":
-        ds = load_and_shift_longitude(member_path, cdc.REFERENCE_PERIOD).rename(
+        ds = load_and_shift_longitude(member_path, reference_period).rename(
             {"time": "date"}
         )
     else:
@@ -142,8 +143,23 @@ def load_variable(
 
 
 def compute_anomaly(
-    reference: xr.Dataset, target: xr.Dataset, anomaly_type: str
+    reference: xr.Dataset,
+    target: xr.Dataset,
+    anomaly_type: str,
+    anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
 ) -> xr.Dataset:
+    if anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY:
+        if anomaly_type != "multiplicative":
+            msg = f"Anomaly scheme '{anomaly_scheme}' only applies to multiplicative variables."
+            raise ValueError(msg)
+        # Yearly multiplier: one annual-mean denominator instead of twelve
+        # monthly ones. Because ratio-of-sums equals ratio-of-means, this is
+        # identical to raking each year's total to the reference level and
+        # distributing it over days by the GCM's own daily shape. No +1
+        # stabiliser: annual-mean denominators sit far from zero, unlike
+        # dry-season monthly means, which is what CLIMATE-30 is about.
+        reference_mean = reference.mean("date")
+        return target / reference_mean
     reference = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":
         anomaly = target.groupby("date.month") - reference
@@ -163,8 +179,11 @@ def generate_scenario_daily_main(
     gcm_member: str,
     output_dir: str | Path,
     write_output: bool = True,
+    anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
+    reference_years: str = cdc.REFERENCE_YEARS_ARG,
 ) -> xr.Dataset:
     cdata = ClimateData(output_dir)
+    reference_period = utils.parse_reference_years(reference_years)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
     source_paths = [
@@ -181,21 +200,29 @@ def generate_scenario_daily_main(
     # compute anomaly, resample anomaly and compute scenario data
     # load reference (monthly) and target (daily for a given year)
     print(f"{gcm_member}: Loading reference")
-    sref = transform(*[load_variable(vp, "reference") for vp in source_paths])
+    sref = transform(
+        *[load_variable(vp, "reference", reference_period) for vp in source_paths]
+    )
 
     print(f"{gcm_member}: Loading target")
     target = transform(*[load_variable(vp, year) for vp in source_paths])
 
     print(f"{gcm_member}: computing anomaly")
-    v_anomaly = compute_anomaly(sref, target, anomaly_type)
+    v_anomaly = compute_anomaly(sref, target, anomaly_type, anomaly_scheme)
 
     print(f"{gcm_member}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
     print(f"{gcm_member}: computing scenario data")
     if anomaly_type == "additive":
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
-    else:
+    elif anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
         scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
+    else:
+        # The yearly anomaly is anchored to the annual level, so the level
+        # comes from the day-weighted annual mean of the monthly reference.
+        scenario_data = (
+            utils.annual_mean_from_monthly(historical_reference) * resampled_anomaly
+        )
     if write_output is True:
         print(f"{gcm_member}: Writing output")
         cdata.save_raw_daily_results(
@@ -218,12 +245,16 @@ def generate_scenario_daily_main(
 @clio.with_year(cdc.FORECAST_YEARS)
 @clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
+@clio.with_anomaly_scheme()
+@clio.with_reference_years()
 def generate_scenario_daily_task(
     target_variable: str,
     cmip6_experiment: str,
     year: str,
     gcm_member: str,
     output_dir: str,
+    anomaly_scheme: str,
+    reference_years: str,
 ) -> None:
     generate_scenario_daily_main(
         target_variable,
@@ -232,6 +263,8 @@ def generate_scenario_daily_task(
         gcm_member,
         output_dir,
         write_output=True,
+        anomaly_scheme=anomaly_scheme,
+        reference_years=reference_years,
     )
 
 
@@ -240,6 +273,8 @@ def generate_scenario_daily_task(
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
+@clio.with_anomaly_scheme()
+@clio.with_reference_years()
 @clio.with_queue()
 @clio.with_overwrite()
 @clio.with_dry_run()
@@ -248,6 +283,8 @@ def generate_scenario_daily(
     cmip6_experiment: list[str],
     year: list[str],
     output_dir: str,
+    anomaly_scheme: str,
+    reference_years: str,
     queue: str,
     overwrite: bool,
     dry_run: bool,
@@ -278,6 +315,8 @@ def generate_scenario_daily(
         ),
         task_args={
             "output-dir": output_dir,
+            "anomaly-scheme": anomaly_scheme,
+            "reference-years": reference_years,
         },
         task_resources={
             "queue": queue,

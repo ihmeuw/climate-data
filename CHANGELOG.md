@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- A `yearly` anomaly scheme for multiplicative variables in `generate scenario_daily`
+  (`--anomaly-scheme`, default `monthly` = historical behavior): daily values are
+  divided by the reference-period annual-mean rate, which is equivalent to raking each
+  year's total to the reference level and distributing it over days by the GCM's own
+  daily shape. Avoids the Jensen inflation of near-zero dry-season monthly denominators
+  in the `(target+1)/(reference+1)` construction. Also a `--reference-years` option for
+  the GCM reference window (default `2019-2023`, the current behavior). (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)
