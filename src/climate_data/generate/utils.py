@@ -94,6 +94,23 @@ def identity(ds: xr.Dataset) -> xr.Dataset:
 ######################
 
 
+def parse_reference_years(reference_years: str) -> slice:
+    """Turn a START-END year string (inclusive) into a date slice."""
+    start, sep, end = reference_years.partition("-")
+    if not sep or not start.isdigit() or not end.isdigit() or int(start) > int(end):
+        msg = f"reference-years must be 'START-END' with START <= END, got {reference_years!r}"
+        raise ValueError(msg)
+    return slice(f"{start}-01-01", f"{end}-12-31")
+
+
+def annual_mean_from_monthly(ds: xr.Dataset) -> xr.Dataset:
+    """Day-weighted annual mean of a 12-month climatology."""
+    weights = xr.DataArray(
+        cdc.DAYS_IN_MONTH, dims=["month"], coords={"month": ds["month"].to_numpy()}
+    )
+    return ds.weighted(weights).mean("month")
+
+
 def daily_mean(ds: xr.Dataset) -> xr.Dataset:
     return ds.groupby("time.date").mean()
 

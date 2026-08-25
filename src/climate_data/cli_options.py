@@ -169,6 +169,34 @@ def with_scenario[**P, T](
     )
 
 
+def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--anomaly-scheme",
+        type=click.Choice(cdc.ANOMALY_SCHEMES),
+        default=cdc.ANOMALY_SCHEME_MONTHLY,
+        show_default=True,
+        help=(
+            "How multiplicative anomalies are built: 'monthly' is the "
+            "historical per-month (target+1)/(reference+1); 'yearly' uses the "
+            "reference-period annual-mean denominator."
+        ),
+    )
+
+
+def with_reference_years[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--reference-years",
+        type=str,
+        default=cdc.REFERENCE_YEARS_ARG,
+        show_default=True,
+        help=(
+            "GCM reference window as START-END (inclusive years). Only the "
+            "GCM side moves with this; the ERA5 anchor comes from the "
+            "precomputed historical reference."
+        ),
+    )
+
+
 def with_gcm_member[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     return click.option(
         "--gcm-member",
@@ -316,6 +344,7 @@ __all__ = [
     "with_agg_measure",
     "with_agg_scenario",
     "with_agg_version",
+    "with_anomaly_scheme",
     "with_block_key",
     "with_choice",
     "with_cmip6_experiment",
@@ -335,6 +364,7 @@ __all__ = [
     "with_overwrite",
     "with_progress_bar",
     "with_queue",
+    "with_reference_years",
     "with_run_mode",
     "with_scenario",
     "with_target_variable",
