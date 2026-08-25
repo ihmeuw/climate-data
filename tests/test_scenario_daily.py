@@ -74,6 +74,25 @@ def test_yearly_rakes_totals_and_keeps_daily_shape(
     )
 
 
+def test_yearly_delta_divides_by_jensen_factor(
+    reference: xr.Dataset, target: xr.Dataset
+) -> None:
+    plain = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY
+    )
+    delta = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY_DELTA
+    )
+    yearly_means = reference.groupby("date.year").mean("date")
+    n_years = yearly_means.sizes["year"]
+    reference_mean = reference["value"].mean("date")
+    factor = (
+        1.0 + (yearly_means["value"].var("year", ddof=1) / n_years) / reference_mean**2
+    )
+    assert (factor > 1.0).all()
+    np.testing.assert_allclose(delta["value"].values, (plain["value"] / factor).values)
+
+
 def test_yearly_rejects_additive(reference: xr.Dataset, target: xr.Dataset) -> None:
     with pytest.raises(ValueError, match="multiplicative"):
         compute_anomaly(reference, target, "additive", cdc.ANOMALY_SCHEME_YEARLY)
