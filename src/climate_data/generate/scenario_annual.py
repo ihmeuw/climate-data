@@ -244,6 +244,13 @@ def build_arg_list(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_debias_method()
 @clio.with_queue()
+@click.option(
+    "--concurrency-limit",
+    "concurrency_limit",
+    type=int,
+    default=None,
+    help="Cap simultaneously running tasks. Unset means jobmon's default.",
+)
 @clio.with_overwrite()
 @clio.with_dry_run()
 def generate_scenario_annual(
@@ -252,6 +259,7 @@ def generate_scenario_annual(
     output_dir: str,
     debias_method: str,
     queue: str,
+    concurrency_limit: int | None,
     overwrite: bool,
     dry_run: bool,
 ) -> None:
@@ -291,5 +299,6 @@ def generate_scenario_annual(
             "project": "proj_rapidresponse",
         },
         max_attempts=1,
+        concurrency_limit=concurrency_limit,
         dry_run=dry_run,
     )

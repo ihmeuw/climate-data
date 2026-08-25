@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   convex, so it averages above 1 with no climate change — a level bias on every forecast
   year. `loo` is a leave-one-out estimate of that inflation, provably `>= 1`; `analytic`
   is the second-order expansion. Restricted to `DEBIAS_VARIABLES`. (CLIMATE-30)
+- `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
+  whole fan-out to the scheduler in one submission. (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)
