@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- Jensen de-bias for the multiplicative anomaly: `scenario_daily.jensen_debias_factor`
+  and a `--debias-method` option (`clio.with_debias_method`, default `none`) threaded
+  through the `scenario_daily` and `scenario_annual` runners and tasks. The forecast
+  anomaly `(T + eps) / (R + eps)` divides by a 5-year monthly mean, and `1/(R + eps)` is
+  convex, so it averages above 1 with no climate change — a level bias on every forecast
+  year. `loo` is a leave-one-out estimate of that inflation, provably `>= 1`; `analytic`
+  is the second-order expansion. Restricted to `DEBIAS_VARIABLES`. (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)

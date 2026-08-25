@@ -63,6 +63,22 @@ REFERENCE_PERIOD = slice(
 )
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
+
+# Jensen bias-correction of the multiplicative anomaly. The forecast anomaly is
+# ``(T + eps) / (R + eps)`` with ``R`` a monthly mean over only the five REFERENCE_YEARS.
+# ``1/(R + eps)`` is convex, so the anomaly averages above 1 even with no climate change --
+# a level bias on every forecast year, not just the ERA5/CMIP6 seam. Selected per run via
+# ``--debias-method``; see ``generate.scenario_daily.jensen_debias_factor``.
+#   none      ship the anomaly as-is (the default; current behaviour)
+#   loo       leave-one-out, a direct out-of-sample estimate with no series expansion
+#   analytic  second-order ``1 + Var(Rbar)/(R + eps)^2``
+DEBIAS_METHODS = ("none", "loo", "analytic")
+
+# Variables the de-bias is validated for. ``wind_speed`` and ``relative_humidity`` also use
+# the multiplicative anomaly, but ``eps = 1`` means something quite different against a mean
+# of 3-5 m/s or 50-80 %RH than against mm/day, and neither has been measured. Refuse them
+# rather than silently applying an unvalidated correction.
+DEBIAS_VARIABLES = ("total_precipitation",)
 # Accumulation windows are stamped by their end, so generating a month reads the first
 # sample of the next one and the last history year reaches into the year after it. The
 # single-job extract tasks span this; the runner deliberately does not, so `-y ALL` keeps
