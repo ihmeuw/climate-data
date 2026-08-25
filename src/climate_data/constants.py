@@ -68,12 +68,15 @@ REFERENCE_YEARS_ARG = f"{REFERENCE_YEARS[0]}-{REFERENCE_YEARS[-1]}"
 # "monthly" is the historical behavior: per-month (target + 1) / (reference + 1).
 # "yearly" divides daily values by the reference-period annual-mean rate, which
 # rakes each year's total to the reference level and distributes it over days
-# by the GCM's own daily shape.
+# by the GCM's own daily shape. "yearly-delta" additionally removes the Jensen
+# bias of the noisy window-mean denominator.
 ANOMALY_SCHEME_MONTHLY = "monthly"
 ANOMALY_SCHEME_YEARLY = "yearly"
+ANOMALY_SCHEME_YEARLY_DELTA = "yearly-delta"
 ANOMALY_SCHEMES = [
     ANOMALY_SCHEME_MONTHLY,
     ANOMALY_SCHEME_YEARLY,
+    ANOMALY_SCHEME_YEARLY_DELTA,
 ]
 
 DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
