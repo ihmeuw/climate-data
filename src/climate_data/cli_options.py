@@ -291,6 +291,22 @@ def with_debias_method[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_dry_day_rule[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the option selecting how days the driving model reports as dry are treated."""
+    return click.option(
+        "--dry-day-rule",
+        type=click.Choice(list(cdc.DRY_DAY_RULES)),
+        default="none",
+        show_default=True,
+        help=(
+            "Treatment of dry model days in the multiplicative anomaly: 'none' (ship as-is) "
+            "or 'preserve' (zero the anomaly on dry model days and renormalise the "
+            "cell-month, leaving the monthly total unchanged). Only valid for "
+            f"{', '.join(cdc.DRY_DAY_VARIABLES)}."
+        ),
+    )
+
+
 def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add the run-mode option selecting the storage-root profile."""
     return click.option(
@@ -339,6 +355,7 @@ __all__ = [
     "with_debias_method",
     "with_debugger",
     "with_draw",
+    "with_dry_day_rule",
     "with_dry_run",
     "with_era5_dataset",
     "with_era5_variable",

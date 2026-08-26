@@ -221,12 +221,66 @@ def jensen_debias_factor(
     return factor
 
 
+def apply_dry_day_rule(
+    anomaly: xr.Dataset,
+    target: xr.Dataset,
+    dry_day_rule: str,
+) -> xr.Dataset:
+    """Stop the ``eps`` offset from manufacturing rain on days the model reports as dry.
+
+    The multiplicative anomaly ``(T + eps)/(R + eps)`` is strictly positive even when the
+    model reports no rain at all, so a rainless model day still receives
+    ``E_ref(month) * a(d) > 0`` of the ERA5 climatology. Worse, ``eps`` dominates the
+    numerator for such a day, so *every* rainless day in a cell-month gets the identical
+    anomaly ``1/(R_m + eps)`` -- a flat positive floor rather than a dry spell. Wherever that
+    floor clears the 0.1 mm/day wet-day threshold the pipeline reports a wet day that neither
+    ERA5 nor the GCM has, which is what makes ``precipitation_days`` step at the boundary.
+
+    ``preserve`` zeroes the anomaly on those days and rescales the surviving days of the same
+    cell-month so the month's *summed* anomaly is unchanged. Because that sum is preserved per
+    GCM cell and ``interpolate_to_target_latlon`` is linear, the monthly -- and therefore the
+    annual -- total on the target grid is untouched to floating point. Only the distribution
+    across days moves. That is deliberate: this is a shape fix, exactly orthogonal to the
+    Jensen de-bias, which is a level fix that leaves the shape alone. The two commute, because
+    the de-bias scales a whole month uniformly and this rescale is scale-invariant.
+
+    A cell-month the model reports dry on *every* day has nothing to renormalise onto. Those
+    are left exactly as they are rather than zeroed. Zeroing them is the variant that was
+    measured and rejected: it loses up to 1.2% of the population-weighted annual total across
+    the 1-3% of cell-months that are all-dry. Keeping them is what makes this rule
+    total-preserving, and it is the whole difference between the two.
+    """
+    if dry_day_rule == "none":
+        return anomaly
+    if dry_day_rule != "preserve":
+        msg = f"Unknown dry-day rule: {dry_day_rule}"
+        raise ValueError(msg)
+
+    wet = target > cdc.DRY_DAY_THRESHOLD_MM
+    kept = anomaly.where(wet, 0.0)
+
+    month_total = anomaly.groupby("date.month").sum("date")
+    kept_total = kept.groupby("date.month").sum("date")
+    has_wet_day = kept_total > 0
+    # 1.0 on an all-dry cell-month, so the restore below survives the rescale untouched.
+    rescale = (month_total / kept_total.where(has_wet_day)).fillna(1.0)
+
+    has_wet_day_daily = has_wet_day.sel(month=anomaly["date"].dt.month).drop_vars(
+        "month"
+    )
+    kept = kept.where(has_wet_day_daily, anomaly)
+
+    rescaled = kept.groupby("date.month") * rescale
+    return rescaled.drop_vars("month")
+
+
 def compute_anomaly(
     reference: xr.Dataset,
     target: xr.Dataset,
     anomaly_type: str,
     *,
     debias_method: str,
+    dry_day_rule: str,
 ) -> xr.Dataset:
     reference_monthly = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":
@@ -235,6 +289,14 @@ def compute_anomaly(
                 f"debias_method={debias_method!r} was requested for an additive anomaly. The "
                 "Jensen bias comes from the convexity of 1/(R + eps) and has no additive "
                 "counterpart, so there is nothing to correct."
+            )
+            raise ValueError(msg)
+        if dry_day_rule != "none":
+            msg = (
+                f"dry_day_rule={dry_day_rule!r} was requested for an additive anomaly. The "
+                "rule exists because eps makes a zero-rainfall day come out positive; an "
+                "additive anomaly has no such floor, and a 'dry day' is meaningless for "
+                "temperature."
             )
             raise ValueError(msg)
         anomaly = target.groupby("date.month") - reference_monthly
@@ -249,15 +311,18 @@ def compute_anomaly(
                 reference, reference_monthly, debias_method
             )
         anomaly = (target + 1).groupby("date.month") / denominator
+        anomaly = apply_dry_day_rule(anomaly, target, dry_day_rule)
     else:
         msg = f"Unknown anomaly type: {anomaly_type}"
         raise ValueError(msg)
-    anomaly = anomaly.drop_vars("month")
+    anomaly = anomaly.drop_vars("month", errors="ignore")
     return anomaly
 
 
-def check_debias_variable(target_variable: str, debias_method: str) -> None:
-    """Refuse a de-bias for a variable it has not been validated against.
+def check_debias_variable(
+    target_variable: str, debias_method: str, dry_day_rule: str = "none"
+) -> None:
+    """Refuse a correction for a variable it has not been validated against.
 
     Called from the launchers as well as from the worker, so that ``--target-variable all``
     fails in a second rather than after submitting thousands of doomed jobs.
@@ -266,6 +331,13 @@ def check_debias_variable(target_variable: str, debias_method: str) -> None:
         msg = (
             f"debias_method={debias_method!r} is not validated for {target_variable!r}. "
             f"Allowed: {list(cdc.DEBIAS_VARIABLES)}. Name the variable explicitly rather "
+            "than using 'all'."
+        )
+        raise ValueError(msg)
+    if dry_day_rule != "none" and target_variable not in cdc.DRY_DAY_VARIABLES:
+        msg = (
+            f"dry_day_rule={dry_day_rule!r} is not validated for {target_variable!r}. "
+            f"Allowed: {list(cdc.DRY_DAY_VARIABLES)}. Name the variable explicitly rather "
             "than using 'all'."
         )
         raise ValueError(msg)
@@ -280,12 +352,13 @@ def generate_scenario_daily_main(
     write_output: bool = True,
     *,
     debias_method: str,
+    dry_day_rule: str,
 ) -> xr.Dataset:
     # NOTE: debias_method is deliberately keyword-only with NO default. A default of "none"
     # here would mean that forgetting to thread it through generate_scenario_annual_main
     # produces a silently undebiased run that reports success. Let mypy catch the call site.
     cdata = ClimateData(output_dir)
-    check_debias_variable(target_variable, debias_method)
+    check_debias_variable(target_variable, debias_method, dry_day_rule)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
     source_paths = [
@@ -308,7 +381,13 @@ def generate_scenario_daily_main(
     target = transform(*[load_variable(vp, year) for vp in source_paths])
 
     print(f"{gcm_member}: computing anomaly")
-    v_anomaly = compute_anomaly(sref, target, anomaly_type, debias_method=debias_method)
+    v_anomaly = compute_anomaly(
+        sref,
+        target,
+        anomaly_type,
+        debias_method=debias_method,
+        dry_day_rule=dry_day_rule,
+    )
 
     print(f"{gcm_member}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
@@ -318,6 +397,7 @@ def generate_scenario_daily_main(
     else:
         scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
     scenario_data.attrs["debias_method"] = debias_method
+    scenario_data.attrs["dry_day_rule"] = dry_day_rule
 
     if write_output is True:
         print(f"{gcm_member}: Writing output")
@@ -342,6 +422,7 @@ def generate_scenario_daily_main(
 @clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_debias_method()
+@clio.with_dry_day_rule()
 def generate_scenario_daily_task(
     target_variable: str,
     cmip6_experiment: str,
@@ -349,6 +430,7 @@ def generate_scenario_daily_task(
     gcm_member: str,
     output_dir: str,
     debias_method: str,
+    dry_day_rule: str,
 ) -> None:
     generate_scenario_daily_main(
         target_variable,
@@ -358,6 +440,7 @@ def generate_scenario_daily_task(
         output_dir,
         write_output=True,
         debias_method=debias_method,
+        dry_day_rule=dry_day_rule,
     )
 
 
@@ -367,6 +450,7 @@ def generate_scenario_daily_task(
 @clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_debias_method()
+@clio.with_dry_day_rule()
 @clio.with_queue()
 @clio.with_overwrite()
 @clio.with_dry_run()
@@ -376,6 +460,7 @@ def generate_scenario_daily(
     year: list[str],
     output_dir: str,
     debias_method: str,
+    dry_day_rule: str,
     queue: str,
     overwrite: bool,
     dry_run: bool,
@@ -383,7 +468,7 @@ def generate_scenario_daily(
     # Fail before submitting anything: with `-t all` a de-bias request would otherwise die
     # one job at a time, after the whole fan-out is already queued.
     for variable in target_variable:
-        check_debias_variable(variable, debias_method)
+        check_debias_variable(variable, debias_method, dry_day_rule)
     cdata = ClimateData(output_dir)
     veyg = []
     complete = []
@@ -411,6 +496,7 @@ def generate_scenario_daily(
         task_args={
             "output-dir": output_dir,
             "debias-method": debias_method,
+            "dry-day-rule": dry_day_rule,
         },
         task_resources={
             "queue": queue,

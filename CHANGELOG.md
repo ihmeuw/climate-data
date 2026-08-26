@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   convex, so it averages above 1 with no climate change — a level bias on every forecast
   year. `loo` is a leave-one-out estimate of that inflation, provably `>= 1`; `analytic`
   is the second-order expansion. Restricted to `DEBIAS_VARIABLES`. (CLIMATE-30)
+- Dry-day rule for the multiplicative anomaly: `scenario_daily.apply_dry_day_rule` and a
+  `--dry-day-rule` option (`clio.with_dry_day_rule`, default `none`) threaded through the
+  `scenario_daily` and `scenario_annual` runners and tasks. `(T + eps)/(R + eps)` is strictly
+  positive even at `T = 0`, so a rainless model day still receives a share of the ERA5 monthly
+  climatology — and because `eps` dominates for such a day, every rainless day in a cell-month
+  gets the same positive floor rather than a dry spell. `preserve` zeroes those days and
+  renormalises the cell-month onto the surviving days, so the monthly total is unchanged and
+  only its distribution across days moves. Cell-months the model reports dry on every day are
+  left alone, which is what makes the rule exactly total-preserving. Restricted to
+  `DRY_DAY_VARIABLES`. (CLIMATE-30)
 - `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
   whole fan-out to the scheduler in one submission. (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`

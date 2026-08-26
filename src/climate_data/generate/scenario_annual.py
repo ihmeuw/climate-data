@@ -95,6 +95,7 @@ def generate_scenario_annual_main(
     progress_bar: bool = False,
     *,
     debias_method: str,
+    dry_day_rule: str,
 ) -> None:
     # NOTE: keyword-only with NO default, on purpose -- see the note in
     # generate_scenario_daily_main. A default here would let a missed hand-off produce a
@@ -123,6 +124,7 @@ def generate_scenario_annual_main(
                     cmip6_experiment=scenario,
                     write_output=False,
                     debias_method=debias_method,
+                    dry_day_rule=dry_day_rule,
                 )
                 for source_variable in transform.source_variables
             ]
@@ -134,6 +136,7 @@ def generate_scenario_annual_main(
         ds = ds.compute()
 
     ds.attrs["debias_method"] = debias_method
+    ds.attrs["dry_day_rule"] = dry_day_rule
 
     print("Saving files")
     cdata.save_raw_annual_results(
@@ -153,6 +156,7 @@ def generate_scenario_annual_main(
 @clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_debias_method()
+@clio.with_dry_day_rule()
 def generate_scenario_annual_task(
     target_variable: str,
     scenario: str,
@@ -160,6 +164,7 @@ def generate_scenario_annual_task(
     gcm_member: str,
     output_dir: str,
     debias_method: str,
+    dry_day_rule: str,
 ) -> None:
     history_flags = [
         year in cdc.HISTORY_YEARS,
@@ -169,11 +174,12 @@ def generate_scenario_annual_task(
     if any(history_flags) and not all(history_flags):
         msg = f"Historical years must use the 'historical' experiment and era5 GCM member. {year} {scenario} {gcm_member}"
         raise ValueError(msg)
-    if all(history_flags) and debias_method != "none":
+    if all(history_flags) and (debias_method != "none" or dry_day_rule != "none"):
         msg = (
-            f"debias_method={debias_method!r} has no effect on the historical branch, which "
+            "debias_method / dry_day_rule have no effect on the historical branch, which "
             "reads ERA5 dailies straight from disk and never computes an anomaly. Refusing "
-            "rather than writing output whose name implies a correction was applied."
+            "rather than writing output whose provenance implies a correction was applied. "
+            f"Got debias_method={debias_method!r}, dry_day_rule={dry_day_rule!r}."
         )
         raise ValueError(msg)
 
@@ -185,6 +191,7 @@ def generate_scenario_annual_task(
         output_dir,
         progress_bar=False,
         debias_method=debias_method,
+        dry_day_rule=dry_day_rule,
     )
 
 
@@ -243,6 +250,7 @@ def build_arg_list(
 @clio.with_scenario(allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_debias_method()
+@clio.with_dry_day_rule()
 @clio.with_queue()
 @click.option(
     "--concurrency-limit",
@@ -258,6 +266,7 @@ def generate_scenario_annual(
     scenario: list[str],
     output_dir: str,
     debias_method: str,
+    dry_day_rule: str,
     queue: str,
     concurrency_limit: int | None,
     overwrite: bool,
@@ -267,7 +276,7 @@ def generate_scenario_annual(
     # must reject, and finding that out one job at a time wastes the whole fan-out.
     for variable in target_variable:
         for source_variable in TRANSFORM_MAP[variable].source_variables:
-            check_debias_variable(source_variable, debias_method)
+            check_debias_variable(source_variable, debias_method, dry_day_rule)
 
     to_run, complete = build_arg_list(
         target_variable,
@@ -290,6 +299,7 @@ def generate_scenario_annual(
         task_args={
             "output-dir": output_dir,
             "debias-method": debias_method,
+            "dry-day-rule": dry_day_rule,
         },
         task_resources={
             "queue": queue,

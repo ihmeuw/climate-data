@@ -79,6 +79,20 @@ DEBIAS_METHODS = ("none", "loo", "analytic")
 # of 3-5 m/s or 50-80 %RH than against mm/day, and neither has been measured. Refuse them
 # rather than silently applying an unvalidated correction.
 DEBIAS_VARIABLES = ("total_precipitation",)
+
+# Treatment of days the driving model reports as dry. ``(T + eps)/(R + eps)`` is strictly
+# positive even at ``T = 0``, so a rainless model day still receives a share of the ERA5
+# monthly climatology -- which manufactures wet days that neither source has. Selected per run
+# via ``--dry-day-rule``; see ``generate.scenario_daily.apply_dry_day_rule``.
+#   none      leave the anomaly alone (the default; current behaviour)
+#   preserve  zero the anomaly on dry model days and renormalise the cell-month onto the
+#             surviving days, so the month's total is untouched and only its distribution
+#             across days changes
+DRY_DAY_RULES = ("none", "preserve")
+DRY_DAY_VARIABLES = ("total_precipitation",)
+# The threshold itself is DRY_DAY_THRESHOLD_MM, defined with the CMIP6 variables below
+# because it is derived from `pr`'s encoding.
+
 # Accumulation windows are stamped by their end, so generating a month reads the first
 # sample of the next one and the last history year reaches into the year after it. The
 # single-job extract tasks span this; the runner deliberately does not, so `-y ALL` keeps
@@ -269,6 +283,15 @@ class _CMIP6Variables(NamedTuple):
 
 
 CMIP6_VARIABLES = _CMIP6Variables()
+
+# Below this daily rainfall the driving model is reporting a dry day, in mm/day. Deliberately
+# a physical threshold rather than a test for `== 0`: the extracts are quantised, so an encoded
+# zero means "below half a quantum" -- 0.0432 mm/day at `pr`'s 1e-6 scale -- and that meaning
+# already changed once, when CLIMATE-29 moved the dtype to uint16. Deriving it from the
+# encoding keeps the rule honest about what it actually tests and makes it track the encoding
+# rather than silently diverging from it.
+_SECONDS_PER_DAY = 86400
+DRY_DAY_THRESHOLD_MM = 0.5 * CMIP6_VARIABLES.pr.encoding_scale * _SECONDS_PER_DAY
 
 
 # Processing Constants
