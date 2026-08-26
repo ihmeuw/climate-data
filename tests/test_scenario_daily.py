@@ -93,6 +93,22 @@ def test_yearly_delta_divides_by_jensen_factor(
     np.testing.assert_allclose(delta["value"].values, (plain["value"] / factor).values)
 
 
+@pytest.mark.parametrize(
+    "scheme", [cdc.ANOMALY_SCHEME_YEARLY, cdc.ANOMALY_SCHEME_YEARLY_DELTA]
+)
+def test_yearly_zero_reference_forecasts_zero(
+    reference: xr.Dataset, target: xr.Dataset, scheme: str
+) -> None:
+    ref0 = reference.copy(deep=True)
+    ref0["value"].loc[{"latitude": 0.0, "longitude": 10.0}] = 0.0
+    anomaly = compute_anomaly(ref0, target, "multiplicative", scheme)
+    dry = anomaly["value"].sel(latitude=0.0, longitude=10.0)
+    assert (dry == 0.0).all()
+    wet = anomaly["value"].sel(latitude=1.0, longitude=11.0)
+    assert np.isfinite(wet).all()
+    assert (wet > 0.0).all()
+
+
 def test_yearly_rejects_additive(reference: xr.Dataset, target: xr.Dataset) -> None:
     with pytest.raises(ValueError, match="multiplicative"):
         compute_anomaly(reference, target, "additive", cdc.ANOMALY_SCHEME_YEARLY)

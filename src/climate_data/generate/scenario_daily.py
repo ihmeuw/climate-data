@@ -159,7 +159,13 @@ def compute_anomaly(
         # stabiliser: annual-mean denominators sit far from zero, unlike
         # dry-season monthly means, which is what CLIMATE-30 is about.
         reference_mean = reference.mean("date")
-        anomaly = target / reference_mean
+        # A reference window with zero rain forecasts zero rain: mask the
+        # denominator so a bone-dry cell yields 0 rather than inf/NaN, while a
+        # missing (NaN) reference stays NaN.
+        positive_mean = reference_mean.where(reference_mean > 0)
+        anomaly = (target / positive_mean).where(
+            reference_mean > 0, reference_mean * 0.0
+        )
         if anomaly_scheme == cdc.ANOMALY_SCHEME_YEARLY_DELTA:
             # The window-mean denominator is noisy, so E[T/ref] exceeds
             # T/E[ref] (Jensen). Dividing by 1 + Var(mean)/mean**2 removes
@@ -167,7 +173,8 @@ def compute_anomaly(
             yearly_means = reference.groupby("date.year").mean("date")
             n_years = yearly_means.sizes["year"]
             variance_of_mean = yearly_means.var("year", ddof=1) / n_years
-            anomaly = anomaly / (1.0 + variance_of_mean / reference_mean**2)
+            inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
+            anomaly = anomaly / (1.0 + inflation)
         return anomaly
     reference = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":

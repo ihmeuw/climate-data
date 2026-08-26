@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - A `yearly-delta` variant of the yearly scheme that additionally removes the Jensen
   bias of the noisy window-mean denominator by dividing by `1 + Var(mean)/mean^2`;
   corrects the mean and leaves the CV unchanged. (CLIMATE-30)
+- The yearly schemes guard the zero-denominator edge: a cell whose reference window
+  has no rain at all forecasts zero rain rather than inf/NaN; a missing (NaN)
+  reference still propagates NaN. (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)
