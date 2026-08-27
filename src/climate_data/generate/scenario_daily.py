@@ -84,6 +84,51 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 }
 
 
+ANOMALY_TYPES = {}
+for _variable, (_transform, _anomaly_type) in TRANSFORM_MAP.items():
+    ANOMALY_TYPES[_variable] = _anomaly_type
+
+
+def variables_for_anomaly_scheme(
+    target_variables: list[str],
+    anomaly_scheme: str,
+    anomaly_types: dict[str, str],
+) -> list[str]:
+    """Drop target variables the anomaly scheme cannot be applied to.
+
+    The yearly schemes are defined for multiplicative variables only -- `compute_anomaly`
+    raises for anything else -- while `--target-variable` defaults to ALL. Without this
+    filter the default invocation of a yearly scheme submits additive jobs that are
+    certain to fail, and they fail only after being scheduled and retried.
+
+    Skipped variables are named rather than dropped quietly, and selecting nothing but
+    additive variables is an error rather than an empty run.
+    """
+    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
+        return target_variables
+
+    keep = []
+    skip = []
+    for variable in target_variables:
+        if anomaly_types[variable] == "multiplicative":
+            keep.append(variable)
+        else:
+            skip.append(variable)
+
+    if skip:
+        print(
+            f"Anomaly scheme '{anomaly_scheme}' applies to multiplicative variables only;"
+            f" skipping {len(skip)}: {', '.join(skip)}."
+        )
+    if not keep:
+        msg = (
+            f"No multiplicative variables selected, so anomaly scheme '{anomaly_scheme}'"
+            f" has nothing to run. Selected: {', '.join(target_variables)}."
+        )
+        raise click.UsageError(msg)
+    return keep
+
+
 def load_and_shift_longitude(
     member_path: str | Path,
     time_slice: slice,
@@ -239,6 +284,11 @@ def generate_scenario_daily_main(
         scenario_data = (
             utils.annual_mean_from_monthly(historical_reference) * resampled_anomaly
         )
+    # Provenance: the output path encodes scenario/variable/year/member only, so without
+    # this a yearly file is indistinguishable from a monthly one sitting beside it.
+    scenario_data.attrs["anomaly_scheme"] = anomaly_scheme
+    scenario_data.attrs["reference_years"] = reference_years
+
     if write_output is True:
         print(f"{gcm_member}: Writing output")
         cdata.save_raw_daily_results(
@@ -306,6 +356,9 @@ def generate_scenario_daily(
     dry_run: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
+    target_variable = variables_for_anomaly_scheme(
+        target_variable, anomaly_scheme, ANOMALY_TYPES
+    )
     veyg = []
     complete = []
     for v, e, y in itertools.product(target_variable, cmip6_experiment, year):
