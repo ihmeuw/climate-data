@@ -187,6 +187,114 @@ def load_variable(
     return ds
 
 
+def _report_zeroed(n_zeroed: int, unit: str) -> None:
+    if n_zeroed:
+        # Downstream bilinear regridding spreads a zeroed native cell into
+        # its whole 0.1 degree neighbourhood, so make the extent visible.
+        print(
+            f"Zero-reference guard: {n_zeroed} {unit} have no rain in the "
+            f"reference window and will forecast zero; regridding spreads "
+            f"these zeros into neighbouring target pixels."
+        )
+
+
+def _yearly_anomaly(
+    reference: xr.Dataset, target: xr.Dataset, anomaly_scheme: str
+) -> xr.Dataset:
+    """Yearly multiplier: one annual-mean denominator instead of twelve monthly ones.
+
+    Because ratio-of-sums equals ratio-of-means, this is identical to raking each
+    year's total to the reference level and distributing it over days by the GCM's
+    own daily shape. No +1 stabiliser: annual-mean denominators sit far from zero,
+    unlike dry-season monthly means, which is what CLIMATE-30 is about.
+    """
+    reference_mean = reference.mean("date")
+    # A reference window with zero rain forecasts zero rain: mask the
+    # denominator so a bone-dry cell yields 0 rather than inf/NaN, while a
+    # missing (NaN) reference stays NaN.
+    positive_mean = reference_mean.where(reference_mean > 0)
+    n_zeroed = int(
+        sum((reference_mean[v] == 0).sum().item() for v in reference_mean.data_vars)
+    )
+    _report_zeroed(n_zeroed, "cells")
+    anomaly = (target / positive_mean).where(reference_mean > 0, reference_mean * 0.0)
+    if anomaly_scheme == cdc.ANOMALY_SCHEME_YEARLY_DELTA:
+        # The window-mean denominator is noisy, so E[T/ref] exceeds
+        # T/E[ref] (Jensen). Dividing by 1 + Var(mean)/mean**2 removes
+        # that mean bias without changing the CV.
+        yearly_means = reference.groupby("date.year").mean("date")
+        n_years = yearly_means.sizes["year"]
+        if n_years < 2:  # noqa: PLR2004
+            # With one reference year the variance is NaN and the fillna
+            # below would silently turn the correction off.
+            msg = (
+                f"Anomaly scheme '{cdc.ANOMALY_SCHEME_YEARLY_DELTA}' needs "
+                f"at least two reference years to estimate the window "
+                f"variance; got {n_years}."
+            )
+            raise ValueError(msg)
+        variance_of_mean = yearly_means.var("year", ddof=1) / n_years
+        inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
+        anomaly = anomaly / (1.0 + inflation)
+    return anomaly
+
+
+def _monthly_ratio_anomaly(
+    reference: xr.Dataset, target: xr.Dataset, anomaly_scheme: str
+) -> xr.Dataset:
+    """The yearly scheme applied per month, keeping the ERA5 monthly anchor.
+
+    A pure per-month ratio of each day to its month's reference-window mean --
+    no +1 stabiliser. A zero reference month forecasts zero; a missing (NaN)
+    reference stays NaN. The delta variants divide each month's ratio by an
+    estimate of its Jensen inflation: analytic for 'monthly-delta',
+    leave-one-out for 'monthly-loo-delta'.
+    """
+    monthly_mean = reference.groupby("date.month").mean("date")
+    positive_mean = monthly_mean.where(monthly_mean > 0)
+    n_zeroed = int(
+        sum((monthly_mean[v] == 0).sum().item() for v in monthly_mean.data_vars)
+    )
+    _report_zeroed(n_zeroed, "month-cells")
+    # 1/mean where the month has rain; 0 where it is bone-dry; NaN where missing.
+    factor = (1.0 / positive_mean).where(monthly_mean > 0, monthly_mean * 0.0)
+    if anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY_RATIO:
+        factor = factor / _monthly_jensen_factor(
+            reference, positive_mean, anomaly_scheme
+        )
+    anomaly = target.groupby("date.month") * factor
+    return anomaly.drop_vars("month")
+
+
+def _monthly_jensen_factor(
+    reference: xr.Dataset, positive_mean: xr.Dataset, anomaly_scheme: str
+) -> xr.Dataset:
+    """Per-month Jensen inflation factor: analytic (delta) or leave-one-out."""
+    per_month = reference.resample(date="1MS").mean()
+    n_years = int(reference.groupby("date.year").mean("date").sizes["year"])
+    if n_years < 2:  # noqa: PLR2004
+        msg = (
+            f"Anomaly scheme '{anomaly_scheme}' needs at least two reference "
+            f"years to estimate the per-month variance; got {n_years}."
+        )
+        raise ValueError(msg)
+    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY_DELTA:
+        variance_of_mean = per_month.groupby("date.month").var("date", ddof=1) / n_years
+        inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
+        return 1.0 + inflation
+    # Leave-one-out: the realised inflation of each window year's month against
+    # the mean of the other years, rescaled from an (n-1)- to an n-year window.
+    # Guarded entries (non-positive leave-one-out means) drop out of the
+    # average; a month with no valid entry gets factor 1 -- it forecasts zero
+    # through the ratio guard anyway.
+    month_sums = per_month.groupby("date.month").sum("date")
+    loo_mean = -(per_month.groupby("date.month") - month_sums) / (n_years - 1)
+    ratios = per_month / loo_mean.where(loo_mean > 0)
+    raw = ratios.groupby("date.month").mean("date")
+    scaled = 1.0 + ((n_years - 1) / n_years) * (raw - 1.0)
+    return scaled.fillna(1.0)
+
+
 def compute_anomaly(
     reference: xr.Dataset,
     target: xr.Dataset,
@@ -203,50 +311,9 @@ def compute_anomaly(
         if anomaly_type != "multiplicative":
             msg = f"Anomaly scheme '{anomaly_scheme}' only applies to multiplicative variables."
             raise ValueError(msg)
-        # Yearly multiplier: one annual-mean denominator instead of twelve
-        # monthly ones. Because ratio-of-sums equals ratio-of-means, this is
-        # identical to raking each year's total to the reference level and
-        # distributing it over days by the GCM's own daily shape. No +1
-        # stabiliser: annual-mean denominators sit far from zero, unlike
-        # dry-season monthly means, which is what CLIMATE-30 is about.
-        reference_mean = reference.mean("date")
-        # A reference window with zero rain forecasts zero rain: mask the
-        # denominator so a bone-dry cell yields 0 rather than inf/NaN, while a
-        # missing (NaN) reference stays NaN.
-        positive_mean = reference_mean.where(reference_mean > 0)
-        n_zeroed = int(
-            sum((reference_mean[v] == 0).sum().item() for v in reference_mean.data_vars)
-        )
-        if n_zeroed:
-            # Downstream bilinear regridding spreads a zeroed native cell into
-            # its whole 0.1 degree neighbourhood, so make the extent visible.
-            print(
-                f"Zero-reference guard: {n_zeroed} cells have no rain in the "
-                f"reference window and will forecast zero; regridding spreads "
-                f"these zeros into neighbouring target pixels."
-            )
-        anomaly = (target / positive_mean).where(
-            reference_mean > 0, reference_mean * 0.0
-        )
-        if anomaly_scheme == cdc.ANOMALY_SCHEME_YEARLY_DELTA:
-            # The window-mean denominator is noisy, so E[T/ref] exceeds
-            # T/E[ref] (Jensen). Dividing by 1 + Var(mean)/mean**2 removes
-            # that mean bias without changing the CV.
-            yearly_means = reference.groupby("date.year").mean("date")
-            n_years = yearly_means.sizes["year"]
-            if n_years < 2:  # noqa: PLR2004
-                # With one reference year the variance is NaN and the fillna
-                # below would silently turn the correction off.
-                msg = (
-                    f"Anomaly scheme '{cdc.ANOMALY_SCHEME_YEARLY_DELTA}' needs "
-                    f"at least two reference years to estimate the window "
-                    f"variance; got {n_years}."
-                )
-                raise ValueError(msg)
-            variance_of_mean = yearly_means.var("year", ddof=1) / n_years
-            inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
-            anomaly = anomaly / (1.0 + inflation)
-        return anomaly
+        if anomaly_scheme in cdc.YEARLY_ANOMALY_SCHEMES:
+            return _yearly_anomaly(reference, target, anomaly_scheme)
+        return _monthly_ratio_anomaly(reference, target, anomaly_scheme)
     reference = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":
         anomaly = target.groupby("date.month") - reference
@@ -302,7 +369,8 @@ def generate_scenario_daily_main(
     print(f"{gcm_member}: computing scenario data")
     if anomaly_type == "additive":
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
-    elif anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
+    elif anomaly_scheme not in cdc.YEARLY_ANOMALY_SCHEMES:
+        # monthly and the monthly-ratio family keep the ERA5 monthly anchor.
         scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
     else:
         # The yearly anomaly is anchored to the annual level, so the level

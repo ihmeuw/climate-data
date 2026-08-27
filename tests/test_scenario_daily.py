@@ -189,6 +189,113 @@ def test_zero_reference_guard_reports_its_count(
     assert "Zero-reference guard: 1 cells" in capsys.readouterr().out
 
 
+def test_monthly_ratio_is_the_per_month_ratio(
+    reference: xr.Dataset, target: xr.Dataset
+) -> None:
+    anomaly = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+    monthly_ref = reference.groupby("date.month").mean("date")
+    expected = target["value"].isel(date=0) / monthly_ref["value"].sel(month=1)
+    np.testing.assert_allclose(anomaly["value"].isel(date=0).values, expected.values)
+
+
+def test_monthly_ratio_equals_yearly_for_a_seasonless_reference(
+    target: xr.Dataset,
+) -> None:
+    dates = pd.date_range("2019-01-01", "2023-12-31", freq="D")
+    flat = xr.Dataset(
+        {
+            "value": (
+                ("date", "latitude", "longitude"),
+                np.full((dates.size, 2, 2), 3.0),
+            )
+        },
+        coords={"date": dates, "latitude": [0.0, 1.0], "longitude": [10.0, 11.0]},
+    )
+    a = compute_anomaly(
+        flat, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+    b = compute_anomaly(flat, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY)
+    np.testing.assert_allclose(a["value"].values, b["value"].values)
+
+
+def test_monthly_ratio_zero_month_forecasts_zero_for_that_month_only(
+    reference: xr.Dataset, target: xr.Dataset, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ref0 = reference.copy(deep=True)
+    ref_months = pd.DatetimeIndex(ref0["date"].to_numpy()).month
+    ref0["value"].data[ref_months == 1, 0, 0] = 0.0
+    anomaly = compute_anomaly(
+        ref0, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+    months = pd.DatetimeIndex(anomaly["date"].to_numpy()).month
+    cell = anomaly["value"].to_numpy()[:, 0, 0]
+    assert (cell[months == 1] == 0.0).all()
+    assert (cell[months == 2] > 0.0).all()  # noqa: PLR2004
+    assert "Zero-reference guard: 1 month-cells" in capsys.readouterr().out
+
+
+def test_monthly_delta_divides_by_the_per_month_jensen_factor(
+    reference: xr.Dataset, target: xr.Dataset
+) -> None:
+    plain = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+    delta = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_DELTA
+    )
+    per_month = reference["value"].resample(date="1MS").mean()
+    var_of_mean = per_month.groupby("date.month").var("date", ddof=1) / 5
+    mean_m = reference["value"].groupby("date.month").mean("date")
+    factor = 1.0 + var_of_mean / mean_m**2
+    assert (factor > 1.0).all()
+    months = pd.DatetimeIndex(plain["date"].to_numpy()).month
+    daily_factor = factor.sel(month=xr.DataArray(months, dims="date")).to_numpy()
+    np.testing.assert_allclose(
+        delta["value"].to_numpy(), plain["value"].to_numpy() / daily_factor
+    )
+
+
+def test_monthly_loo_delta_matches_a_hand_computed_factor(
+    reference: xr.Dataset, target: xr.Dataset
+) -> None:
+    plain = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+    loo = compute_anomaly(
+        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_LOO_DELTA
+    )
+    per_month = reference["value"].resample(date="1MS").mean()
+    ref_months = pd.DatetimeIndex(per_month["date"].to_numpy()).month
+    x = per_month.to_numpy()[ref_months == 1, 0, 0]
+    n = len(x)
+    raw = float(np.mean([xi / ((x.sum() - xi) / (n - 1)) for xi in x]))
+    factor = 1.0 + (n - 1) / n * (raw - 1.0)
+    months = pd.DatetimeIndex(plain["date"].to_numpy()).month
+    ratio = (
+        plain["value"].to_numpy()[months == 1, 0, 0]
+        / loo["value"].to_numpy()[months == 1, 0, 0]
+    )
+    np.testing.assert_allclose(ratio, factor)
+
+
+def test_monthly_delta_variants_reject_a_single_year_reference(
+    target: xr.Dataset,
+) -> None:
+    one_year = _daily_ds("2023-01-01", "2023-12-31", seed=3)
+    for scheme in (
+        cdc.ANOMALY_SCHEME_MONTHLY_DELTA,
+        cdc.ANOMALY_SCHEME_MONTHLY_LOO_DELTA,
+    ):
+        with pytest.raises(ValueError, match="at least two reference years"):
+            compute_anomaly(one_year, target, "multiplicative", scheme)
+    # the plain ratio needs no variance estimate and stays valid
+    compute_anomaly(
+        one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+
+
 def test_variables_filter_is_a_passthrough_for_monthly() -> None:
     selected = ["mean_temperature", "total_precipitation"]
     got = variables_for_anomaly_scheme(

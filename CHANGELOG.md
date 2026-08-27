@@ -25,6 +25,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   skip additive variables under the yearly schemes instead of submitting tasks that
   are certain to fail; `--concurrency-limit` on the annual runner (default 75).
   (CLIMATE-30)
+- A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
+  ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero
+  reference month forecasts zero, counted and reported); `monthly-delta` divides each
+  month's ratio by its analytic Jensen factor and `monthly-loo-delta` by a
+  leave-one-out estimate of it, rescaled from the (n-1)- to the n-year window.
+  (CLIMATE-30)
 - Guard rails on the yearly schemes: unknown scheme names raise instead of silently
   running plain yearly; `yearly-delta` raises on a single-year reference window
   instead of silently skipping the correction; `--reference-years` requires

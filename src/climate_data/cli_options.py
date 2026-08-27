@@ -177,9 +177,12 @@ def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
         show_default=True,
         help=(
             "How multiplicative anomalies are built: 'monthly' is the "
-            "historical per-month (target+1)/(reference+1); 'yearly' uses the "
-            "reference-period annual-mean denominator; 'yearly-delta' also "
-            "removes the Jensen bias of the noisy window mean."
+            "historical per-month (target+1)/(reference+1); 'monthly-ratio' "
+            "is the pure per-month ratio (no +1, zero reference month "
+            "forecasts zero), with 'monthly-delta' / 'monthly-loo-delta' "
+            "removing each month's Jensen bias analytically or by "
+            "leave-one-out; 'yearly' uses the reference-period annual-mean "
+            "denominator, with 'yearly-delta' removing its Jensen bias."
         ),
     )
 
