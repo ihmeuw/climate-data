@@ -1,5 +1,6 @@
 """Tests for the anomaly schemes in generate/scenario_daily.py."""
 
+import click
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,7 +8,11 @@ import xarray as xr
 
 from climate_data import constants as cdc
 from climate_data.generate import utils
-from climate_data.generate.scenario_daily import compute_anomaly
+from climate_data.generate.scenario_daily import (
+    ANOMALY_TYPES,
+    compute_anomaly,
+    variables_for_anomaly_scheme,
+)
 
 
 def _daily_ds(start: str, end: str, seed: int) -> xr.Dataset:
@@ -118,7 +123,9 @@ def test_parse_reference_years() -> None:
     assert utils.parse_reference_years("2019-2023") == slice("2019-01-01", "2023-12-31")
 
 
-@pytest.mark.parametrize("bad", ["2023-2019", "2019", "abcd-efgh", "2019:2023"])
+@pytest.mark.parametrize(
+    "bad", ["2023-2019", "2019", "abcd-efgh", "2019:2023", "19-2023", "0-99999"]
+)
 def test_parse_reference_years_rejects_malformed(bad: str) -> None:
     with pytest.raises(ValueError, match="reference-years"):
         utils.parse_reference_years(bad)
@@ -133,3 +140,74 @@ def test_annual_mean_from_monthly_is_day_weighted() -> None:
     got = utils.annual_mean_from_monthly(monthly)["value"].item()
     expected = float(np.sum(values * np.array(cdc.DAYS_IN_MONTH)) / 365.0)
     assert got == pytest.approx(expected)
+
+
+def test_annual_mean_from_monthly_binds_weights_by_label() -> None:
+    values = np.arange(1.0, 13.0)
+    monthly = xr.Dataset(
+        {"value": (("month",), values)},
+        coords={"month": np.arange(1, 13)},
+    )
+    shuffled = monthly.sel(month=[1, 10, 11, 12, 2, 3, 4, 5, 6, 7, 8, 9])
+    a = utils.annual_mean_from_monthly(monthly)["value"].item()
+    b = utils.annual_mean_from_monthly(shuffled)["value"].item()
+    assert a == pytest.approx(b)
+
+
+def test_annual_mean_from_monthly_rejects_partial_months() -> None:
+    monthly = xr.Dataset(
+        {"value": (("month",), np.ones(11))},
+        coords={"month": np.arange(1, 12)},
+    )
+    with pytest.raises(ValueError, match="month coordinate"):
+        utils.annual_mean_from_monthly(monthly)
+
+
+def test_unknown_anomaly_scheme_is_rejected(
+    reference: xr.Dataset, target: xr.Dataset
+) -> None:
+    with pytest.raises(ValueError, match="Unknown anomaly scheme"):
+        compute_anomaly(reference, target, "multiplicative", "yearly_delta")
+
+
+def test_yearly_delta_rejects_a_single_year_reference(target: xr.Dataset) -> None:
+    one_year = _daily_ds("2023-01-01", "2023-12-31", seed=3)
+    with pytest.raises(ValueError, match="at least two reference years"):
+        compute_anomaly(
+            one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY_DELTA
+        )
+    # the plain yearly scheme has no variance estimate and stays valid
+    compute_anomaly(one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY)
+
+
+def test_zero_reference_guard_reports_its_count(
+    reference: xr.Dataset, target: xr.Dataset, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ref0 = reference.copy(deep=True)
+    ref0["value"].loc[{"latitude": 0.0, "longitude": 10.0}] = 0.0
+    compute_anomaly(ref0, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY)
+    assert "Zero-reference guard: 1 cells" in capsys.readouterr().out
+
+
+def test_variables_filter_is_a_passthrough_for_monthly() -> None:
+    selected = ["mean_temperature", "total_precipitation"]
+    got = variables_for_anomaly_scheme(
+        selected, cdc.ANOMALY_SCHEME_MONTHLY, ANOMALY_TYPES
+    )
+    assert got == selected
+
+
+def test_variables_filter_drops_additive_under_yearly() -> None:
+    got = variables_for_anomaly_scheme(
+        ["mean_temperature", "total_precipitation", "wind_speed"],
+        cdc.ANOMALY_SCHEME_YEARLY,
+        ANOMALY_TYPES,
+    )
+    assert got == ["total_precipitation", "wind_speed"]
+
+
+def test_variables_filter_errors_when_nothing_is_runnable() -> None:
+    with pytest.raises(click.UsageError, match="nothing to run"):
+        variables_for_anomaly_scheme(
+            ["mean_temperature"], cdc.ANOMALY_SCHEME_YEARLY, ANOMALY_TYPES
+        )

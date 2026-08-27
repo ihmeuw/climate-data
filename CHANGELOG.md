@@ -16,8 +16,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   bias of the noisy window-mean denominator by dividing by `1 + Var(mean)/mean^2`;
   corrects the mean and leaves the CV unchanged. (CLIMATE-30)
 - The yearly schemes guard the zero-denominator edge: a cell whose reference window
-  has no rain at all forecasts zero rain rather than inf/NaN; a missing (NaN)
-  reference still propagates NaN. (CLIMATE-30)
+  has no rain at all forecasts zero rain rather than inf/NaN, and the count of
+  zeroed cells is reported; a missing (NaN) reference propagates NaN at the anomaly
+  stage (downstream regridding interpolates it). (CLIMATE-30)
+- The anomaly scheme reaches the production path: `generate scenario_annual` threads
+  `--anomaly-scheme` / `--reference-years` into its in-memory daily builds and stamps
+  both into the output attrs (raw daily and annual); the daily and annual runners
+  skip additive variables under the yearly schemes instead of submitting tasks that
+  are certain to fail; `--concurrency-limit` on the annual runner (default 75).
+  (CLIMATE-30)
+- Guard rails on the yearly schemes: unknown scheme names raise instead of silently
+  running plain yearly; `yearly-delta` raises on a single-year reference window
+  instead of silently skipping the correction; `--reference-years` requires
+  four-digit years; `annual_mean_from_monthly` binds day weights by month label and
+  rejects anything but a full 1..12 coordinate. (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)

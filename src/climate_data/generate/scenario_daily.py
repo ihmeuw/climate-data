@@ -84,6 +84,51 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 }
 
 
+ANOMALY_TYPES = {}
+for _variable, (_transform, _anomaly_type) in TRANSFORM_MAP.items():
+    ANOMALY_TYPES[_variable] = _anomaly_type
+
+
+def variables_for_anomaly_scheme(
+    target_variables: list[str],
+    anomaly_scheme: str,
+    anomaly_types: dict[str, str],
+) -> list[str]:
+    """Drop target variables the anomaly scheme cannot be applied to.
+
+    The yearly schemes are defined for multiplicative variables only -- `compute_anomaly`
+    raises for anything else -- while `--target-variable` defaults to ALL. Without this
+    filter the default invocation of a yearly scheme submits additive jobs that are
+    certain to fail, and they fail only after being scheduled and retried.
+
+    Skipped variables are named rather than dropped quietly, and selecting nothing but
+    additive variables is an error rather than an empty run.
+    """
+    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
+        return target_variables
+
+    keep = []
+    skip = []
+    for variable in target_variables:
+        if anomaly_types[variable] == "multiplicative":
+            keep.append(variable)
+        else:
+            skip.append(variable)
+
+    if skip:
+        print(
+            f"Anomaly scheme '{anomaly_scheme}' applies to multiplicative variables only;"
+            f" skipping {len(skip)}: {', '.join(skip)}."
+        )
+    if not keep:
+        msg = (
+            f"No multiplicative variables selected, so anomaly scheme '{anomaly_scheme}'"
+            f" has nothing to run. Selected: {', '.join(target_variables)}."
+        )
+        raise click.UsageError(msg)
+    return keep
+
+
 def load_and_shift_longitude(
     member_path: str | Path,
     time_slice: slice,
@@ -148,6 +193,12 @@ def compute_anomaly(
     anomaly_type: str,
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
 ) -> xr.Dataset:
+    if anomaly_scheme not in cdc.ANOMALY_SCHEMES:
+        msg = (
+            f"Unknown anomaly scheme: {anomaly_scheme!r}; "
+            f"expected one of {cdc.ANOMALY_SCHEMES}."
+        )
+        raise ValueError(msg)
     if anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY:
         if anomaly_type != "multiplicative":
             msg = f"Anomaly scheme '{anomaly_scheme}' only applies to multiplicative variables."
@@ -163,6 +214,17 @@ def compute_anomaly(
         # denominator so a bone-dry cell yields 0 rather than inf/NaN, while a
         # missing (NaN) reference stays NaN.
         positive_mean = reference_mean.where(reference_mean > 0)
+        n_zeroed = int(
+            sum((reference_mean[v] == 0).sum().item() for v in reference_mean.data_vars)
+        )
+        if n_zeroed:
+            # Downstream bilinear regridding spreads a zeroed native cell into
+            # its whole 0.1 degree neighbourhood, so make the extent visible.
+            print(
+                f"Zero-reference guard: {n_zeroed} cells have no rain in the "
+                f"reference window and will forecast zero; regridding spreads "
+                f"these zeros into neighbouring target pixels."
+            )
         anomaly = (target / positive_mean).where(
             reference_mean > 0, reference_mean * 0.0
         )
@@ -172,6 +234,15 @@ def compute_anomaly(
             # that mean bias without changing the CV.
             yearly_means = reference.groupby("date.year").mean("date")
             n_years = yearly_means.sizes["year"]
+            if n_years < 2:  # noqa: PLR2004
+                # With one reference year the variance is NaN and the fillna
+                # below would silently turn the correction off.
+                msg = (
+                    f"Anomaly scheme '{cdc.ANOMALY_SCHEME_YEARLY_DELTA}' needs "
+                    f"at least two reference years to estimate the window "
+                    f"variance; got {n_years}."
+                )
+                raise ValueError(msg)
             variance_of_mean = yearly_means.var("year", ddof=1) / n_years
             inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
             anomaly = anomaly / (1.0 + inflation)
@@ -239,6 +310,11 @@ def generate_scenario_daily_main(
         scenario_data = (
             utils.annual_mean_from_monthly(historical_reference) * resampled_anomaly
         )
+    # Provenance: the output path encodes scenario/variable/year/member only, so without
+    # this a yearly file is indistinguishable from a monthly one sitting beside it.
+    scenario_data.attrs["anomaly_scheme"] = anomaly_scheme
+    scenario_data.attrs["reference_years"] = reference_years
+
     if write_output is True:
         print(f"{gcm_member}: Writing output")
         cdata.save_raw_daily_results(
@@ -306,6 +382,9 @@ def generate_scenario_daily(
     dry_run: bool,
 ) -> None:
     cdata = ClimateData(output_dir)
+    target_variable = variables_for_anomaly_scheme(
+        target_variable, anomaly_scheme, ANOMALY_TYPES
+    )
     veyg = []
     complete = []
     for v, e, y in itertools.product(target_variable, cmip6_experiment, year):
