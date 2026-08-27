@@ -293,6 +293,23 @@ def with_location_id[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_concurrency_limit[**P, T](
+    default: int | None = None,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Cap how many of a workflow's tasks the scheduler runs at once."""
+    return click.option(
+        "--concurrency-limit",
+        type=int,
+        default=default,
+        show_default=True,
+        help=(
+            "Maximum tasks running concurrently. Unset submits the whole fan-out at "
+            "once, which on a large workflow of high-memory tasks is inconsiderate on "
+            "a shared cluster."
+        ),
+    )
+
+
 def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add dry-run flag to a command."""
     return click.option(
@@ -350,6 +367,7 @@ __all__ = [
     "with_choice",
     "with_cmip6_experiment",
     "with_cmip6_source",
+    "with_concurrency_limit",
     "with_debugger",
     "with_draw",
     "with_dry_run",
