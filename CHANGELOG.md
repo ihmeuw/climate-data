@@ -28,9 +28,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
   ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero
   reference month forecasts zero, counted and reported); `monthly-delta` divides each
-  month's ratio by its analytic Jensen factor and `monthly-loo-delta` by a
-  leave-one-out estimate of it, rescaled from the (n-1)- to the n-year window.
-  (CLIMATE-30)
+  month's ratio by its analytic Jensen factor, which is bounded below by 1 by
+  construction. A leave-one-out variant was evaluated and removed: the estimator
+  needs a strictly positive series, which this scheme's bare monthly denominator
+  does not provide. (CLIMATE-30)
 - Guard rails on the yearly schemes: unknown scheme names raise instead of silently
   running plain yearly; `yearly-delta` raises on a single-year reference window
   instead of silently skipping the correction; `--reference-years` requires

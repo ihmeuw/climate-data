@@ -246,9 +246,8 @@ def _monthly_ratio_anomaly(
 
     A pure per-month ratio of each day to its month's reference-window mean --
     no +1 stabiliser. A zero reference month forecasts zero; a missing (NaN)
-    reference stays NaN. The delta variants divide each month's ratio by an
-    estimate of its Jensen inflation: analytic for 'monthly-delta',
-    leave-one-out for 'monthly-loo-delta'.
+    reference stays NaN. 'monthly-delta' additionally divides each month's
+    ratio by its analytic Jensen inflation factor.
     """
     monthly_mean = reference.groupby("date.month").mean("date")
     positive_mean = monthly_mean.where(monthly_mean > 0)
@@ -269,7 +268,12 @@ def _monthly_ratio_anomaly(
 def _monthly_jensen_factor(
     reference: xr.Dataset, positive_mean: xr.Dataset, anomaly_scheme: str
 ) -> xr.Dataset:
-    """Per-month Jensen inflation factor: analytic (delta) or leave-one-out."""
+    """Per-month analytic Jensen inflation factor, 1 + Var(window mean) / mean**2.
+
+    Bounded below by 1 by construction, with no undefined cases. A leave-one-out
+    estimator was evaluated and rejected here: it requires a strictly positive
+    series, and this scheme divides by a bare monthly mean that can be zero.
+    """
     per_month = reference.resample(date="1MS").mean()
     n_years = int(reference.groupby("date.year").mean("date").sizes["year"])
     if n_years < 2:  # noqa: PLR2004
@@ -278,21 +282,9 @@ def _monthly_jensen_factor(
             f"years to estimate the per-month variance; got {n_years}."
         )
         raise ValueError(msg)
-    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY_DELTA:
-        variance_of_mean = per_month.groupby("date.month").var("date", ddof=1) / n_years
-        inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
-        return 1.0 + inflation
-    # Leave-one-out: the realised inflation of each window year's month against
-    # the mean of the other years, rescaled from an (n-1)- to an n-year window.
-    # Guarded entries (non-positive leave-one-out means) drop out of the
-    # average; a month with no valid entry gets factor 1 -- it forecasts zero
-    # through the ratio guard anyway.
-    month_sums = per_month.groupby("date.month").sum("date")
-    loo_mean = -(per_month.groupby("date.month") - month_sums) / (n_years - 1)
-    ratios = per_month / loo_mean.where(loo_mean > 0)
-    raw = ratios.groupby("date.month").mean("date")
-    scaled = 1.0 + ((n_years - 1) / n_years) * (raw - 1.0)
-    return scaled.fillna(1.0)
+    variance_of_mean = per_month.groupby("date.month").var("date", ddof=1) / n_years
+    inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
+    return 1.0 + inflation
 
 
 def compute_anomaly(

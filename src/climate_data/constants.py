@@ -73,12 +73,13 @@ REFERENCE_YEARS_ARG = f"{REFERENCE_YEARS[0]}-{REFERENCE_YEARS[-1]}"
 # The "monthly-ratio" family is the yearly scheme applied per month: a pure
 # per-month ratio (no +1 stabiliser) that keeps the ERA5 monthly anchor; a
 # zero reference month forecasts zero. "monthly-delta" divides each month's
-# ratio by its analytic Jensen factor; "monthly-loo-delta" divides by a
-# leave-one-out estimate of the same factor.
+# ratio by its analytic Jensen factor. A leave-one-out variant was tried and
+# removed: LOO needs a strictly positive series, which the eps = 0 ratio does
+# not provide -- a dry reference year makes a fold undefined, and one wet year
+# in an otherwise dry window drives the factor past 100.
 ANOMALY_SCHEME_MONTHLY = "monthly"
 ANOMALY_SCHEME_MONTHLY_RATIO = "monthly-ratio"
 ANOMALY_SCHEME_MONTHLY_DELTA = "monthly-delta"
-ANOMALY_SCHEME_MONTHLY_LOO_DELTA = "monthly-loo-delta"
 ANOMALY_SCHEME_YEARLY = "yearly"
 ANOMALY_SCHEME_YEARLY_DELTA = "yearly-delta"
 YEARLY_ANOMALY_SCHEMES = [
@@ -89,7 +90,6 @@ ANOMALY_SCHEMES = [
     ANOMALY_SCHEME_MONTHLY,
     ANOMALY_SCHEME_MONTHLY_RATIO,
     ANOMALY_SCHEME_MONTHLY_DELTA,
-    ANOMALY_SCHEME_MONTHLY_LOO_DELTA,
     *YEARLY_ANOMALY_SCHEMES,
 ]
 

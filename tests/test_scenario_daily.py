@@ -257,39 +257,12 @@ def test_monthly_delta_divides_by_the_per_month_jensen_factor(
     )
 
 
-def test_monthly_loo_delta_matches_a_hand_computed_factor(
-    reference: xr.Dataset, target: xr.Dataset
-) -> None:
-    plain = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
-    )
-    loo = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_LOO_DELTA
-    )
-    per_month = reference["value"].resample(date="1MS").mean()
-    ref_months = pd.DatetimeIndex(per_month["date"].to_numpy()).month
-    x = per_month.to_numpy()[ref_months == 1, 0, 0]
-    n = len(x)
-    raw = float(np.mean([xi / ((x.sum() - xi) / (n - 1)) for xi in x]))
-    factor = 1.0 + (n - 1) / n * (raw - 1.0)
-    months = pd.DatetimeIndex(plain["date"].to_numpy()).month
-    ratio = (
-        plain["value"].to_numpy()[months == 1, 0, 0]
-        / loo["value"].to_numpy()[months == 1, 0, 0]
-    )
-    np.testing.assert_allclose(ratio, factor)
-
-
-def test_monthly_delta_variants_reject_a_single_year_reference(
-    target: xr.Dataset,
-) -> None:
+def test_monthly_delta_rejects_a_single_year_reference(target: xr.Dataset) -> None:
     one_year = _daily_ds("2023-01-01", "2023-12-31", seed=3)
-    for scheme in (
-        cdc.ANOMALY_SCHEME_MONTHLY_DELTA,
-        cdc.ANOMALY_SCHEME_MONTHLY_LOO_DELTA,
-    ):
-        with pytest.raises(ValueError, match="at least two reference years"):
-            compute_anomaly(one_year, target, "multiplicative", scheme)
+    with pytest.raises(ValueError, match="at least two reference years"):
+        compute_anomaly(
+            one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_DELTA
+        )
     # the plain ratio needs no variance estimate and stays valid
     compute_anomaly(
         one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
