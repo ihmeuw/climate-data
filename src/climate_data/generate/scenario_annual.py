@@ -312,7 +312,7 @@ def build_arg_list(
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
 @clio.with_queue()
-@clio.with_concurrency_limit(default=75)
+@clio.with_concurrency_limit(default=500)
 @clio.with_overwrite()
 @clio.with_dry_run()
 def generate_scenario_annual(

@@ -42,7 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `--anomaly-scheme` / `--reference-years` into its in-memory daily builds and stamps
   both into the output attrs (raw daily and annual); the daily and annual runners
   skip additive variables under the yearly schemes instead of submitting tasks that
-  are certain to fail; `--concurrency-limit` on the annual runner (default 75).
+  are certain to fail; `--concurrency-limit` on the annual runner (default 500).
   (CLIMATE-30)
 - A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
   ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero
