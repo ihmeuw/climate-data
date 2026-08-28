@@ -169,6 +169,37 @@ def with_scenario[**P, T](
     )
 
 
+def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--anomaly-scheme",
+        type=click.Choice(cdc.ANOMALY_SCHEMES),
+        default=cdc.ANOMALY_SCHEME_MONTHLY,
+        show_default=True,
+        help=(
+            "How multiplicative anomalies are built: 'monthly' is the "
+            "historical per-month (target+1)/(reference+1); 'monthly-ratio' "
+            "is the pure per-month ratio (no +1, zero reference month "
+            "forecasts zero), with 'monthly-delta' removing each month's "
+            "Jensen bias analytically; 'yearly' uses the reference-period annual-mean "
+            "denominator, with 'yearly-delta' removing its Jensen bias."
+        ),
+    )
+
+
+def with_reference_years[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--reference-years",
+        type=str,
+        default=cdc.REFERENCE_YEARS_ARG,
+        show_default=True,
+        help=(
+            "GCM reference window as START-END (inclusive years). Only the "
+            "GCM side moves with this; the ERA5 anchor comes from the "
+            "precomputed historical reference."
+        ),
+    )
+
+
 def with_gcm_member[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     return click.option(
         "--gcm-member",
@@ -264,6 +295,23 @@ def with_location_id[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_concurrency_limit[**P, T](
+    default: int | None = None,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Cap how many of a workflow's tasks the scheduler runs at once."""
+    return click.option(
+        "--concurrency-limit",
+        type=int,
+        default=default,
+        show_default=True,
+        help=(
+            "Maximum tasks running concurrently. Unset submits the whole fan-out at "
+            "once, which on a large workflow of high-memory tasks is inconsiderate on "
+            "a shared cluster."
+        ),
+    )
+
+
 def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add dry-run flag to a command."""
     return click.option(
@@ -348,10 +396,12 @@ __all__ = [
     "with_agg_measure",
     "with_agg_scenario",
     "with_agg_version",
+    "with_anomaly_scheme",
     "with_block_key",
     "with_choice",
     "with_cmip6_experiment",
     "with_cmip6_source",
+    "with_concurrency_limit",
     "with_debias_method",
     "with_debugger",
     "with_draw",
@@ -369,6 +419,7 @@ __all__ = [
     "with_overwrite",
     "with_progress_bar",
     "with_queue",
+    "with_reference_years",
     "with_run_mode",
     "with_scenario",
     "with_target_variable",

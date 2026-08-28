@@ -24,6 +24,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `DRY_DAY_VARIABLES`. (CLIMATE-30)
 - `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
   whole fan-out to the scheduler in one submission. (CLIMATE-30)
+- A `yearly` anomaly scheme for multiplicative variables in `generate scenario_daily`
+  (`--anomaly-scheme`, default `monthly` = historical behavior): daily values are
+  divided by the reference-period annual-mean rate, which is equivalent to raking each
+  year's total to the reference level and distributing it over days by the GCM's own
+  daily shape. Avoids the Jensen inflation of near-zero dry-season monthly denominators
+  in the `(target+1)/(reference+1)` construction. Also a `--reference-years` option for
+  the GCM reference window (default `2019-2023`, the current behavior). (CLIMATE-30)
+- A `yearly-delta` variant of the yearly scheme that additionally removes the Jensen
+  bias of the noisy window-mean denominator by dividing by `1 + Var(mean)/mean^2`;
+  corrects the mean and leaves the CV unchanged. (CLIMATE-30)
+- The yearly schemes guard the zero-denominator edge: a cell whose reference window
+  has no rain at all forecasts zero rain rather than inf/NaN, and the count of
+  zeroed cells is reported; a missing (NaN) reference propagates NaN at the anomaly
+  stage (downstream regridding interpolates it). (CLIMATE-30)
+- The anomaly scheme reaches the production path: `generate scenario_annual` threads
+  `--anomaly-scheme` / `--reference-years` into its in-memory daily builds and stamps
+  both into the output attrs (raw daily and annual); the daily and annual runners
+  skip additive variables under the yearly schemes instead of submitting tasks that
+  are certain to fail; `--concurrency-limit` on the annual runner (default 75).
+  (CLIMATE-30)
+- A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
+  ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero
+  reference month forecasts zero, counted and reported); `monthly-delta` divides each
+  month's ratio by its analytic Jensen factor, which is bounded below by 1 by
+  construction. A leave-one-out variant was evaluated and removed: the estimator
+  needs a strictly positive series, which this scheme's bare monthly denominator
+  does not provide. (CLIMATE-30)
+- Guard rails on the yearly schemes: unknown scheme names raise instead of silently
+  running plain yearly; `yearly-delta` raises on a single-year reference window
+  instead of silently skipping the correction; `--reference-years` requires
+  four-digit years; `annual_mean_from_monthly` binds day weights by month label and
+  rejects anything but a full 1..12 coordinate. (CLIMATE-30)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)

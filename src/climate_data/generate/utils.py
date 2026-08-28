@@ -94,6 +94,41 @@ def identity(ds: xr.Dataset) -> xr.Dataset:
 ######################
 
 
+def parse_reference_years(reference_years: str) -> slice:
+    """Turn a START-END year string (inclusive, four-digit years) into a date slice."""
+    start, sep, end = reference_years.partition("-")
+    valid = (
+        bool(sep)
+        and len(start) == 4  # noqa: PLR2004
+        and len(end) == 4  # noqa: PLR2004
+        and start.isdigit()
+        and end.isdigit()
+        and int(start) <= int(end)
+    )
+    if not valid:
+        msg = (
+            "reference-years must be 'START-END' with four-digit years and "
+            f"START <= END, got {reference_years!r}"
+        )
+        raise ValueError(msg)
+    return slice(f"{start}-01-01", f"{end}-12-31")
+
+
+def annual_mean_from_monthly(ds: xr.Dataset) -> xr.Dataset:
+    """Day-weighted annual mean of a 12-month climatology.
+
+    Weights are bound by month label, not position, so a permuted month
+    coordinate still weights correctly; anything other than a full 1..12
+    coordinate is rejected rather than misweighted.
+    """
+    months = np.arange(1, 13)
+    if not np.array_equal(np.sort(ds["month"].to_numpy()), months):
+        msg = f"expected a full 1..12 month coordinate, got {ds['month'].to_numpy()}"
+        raise ValueError(msg)
+    weights = xr.DataArray(cdc.DAYS_IN_MONTH, dims=["month"], coords={"month": months})
+    return ds.weighted(weights).mean("month")
+
+
 def daily_mean(ds: xr.Dataset) -> xr.Dataset:
     return ds.groupby("time.date").mean()
 

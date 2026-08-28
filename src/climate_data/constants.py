@@ -61,6 +61,39 @@ REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",
     f"{REFERENCE_YEARS[-1]}-12-31",
 )
+# CLI form of the default GCM reference window (inclusive years).
+REFERENCE_YEARS_ARG = f"{REFERENCE_YEARS[0]}-{REFERENCE_YEARS[-1]}"
+
+# How multiplicative anomalies are constructed (see generate/scenario_daily.py).
+# "monthly" is the historical behavior: per-month (target + 1) / (reference + 1).
+# "yearly" divides daily values by the reference-period annual-mean rate, which
+# rakes each year's total to the reference level and distributes it over days
+# by the GCM's own daily shape. "yearly-delta" additionally removes the Jensen
+# bias of the noisy window-mean denominator.
+# The "monthly-ratio" family is the yearly scheme applied per month: a pure
+# per-month ratio (no +1 stabiliser) that keeps the ERA5 monthly anchor; a
+# zero reference month forecasts zero. "monthly-delta" divides each month's
+# ratio by its analytic Jensen factor. A leave-one-out variant was tried and
+# removed: LOO needs a strictly positive series, which the eps = 0 ratio does
+# not provide -- a dry reference year makes a fold undefined, and one wet year
+# in an otherwise dry window drives the factor past 100.
+ANOMALY_SCHEME_MONTHLY = "monthly"
+ANOMALY_SCHEME_MONTHLY_RATIO = "monthly-ratio"
+ANOMALY_SCHEME_MONTHLY_DELTA = "monthly-delta"
+ANOMALY_SCHEME_YEARLY = "yearly"
+ANOMALY_SCHEME_YEARLY_DELTA = "yearly-delta"
+YEARLY_ANOMALY_SCHEMES = [
+    ANOMALY_SCHEME_YEARLY,
+    ANOMALY_SCHEME_YEARLY_DELTA,
+]
+ANOMALY_SCHEMES = [
+    ANOMALY_SCHEME_MONTHLY,
+    ANOMALY_SCHEME_MONTHLY_RATIO,
+    ANOMALY_SCHEME_MONTHLY_DELTA,
+    *YEARLY_ANOMALY_SCHEMES,
+]
+
+DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
 
