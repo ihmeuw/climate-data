@@ -22,6 +22,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   only its distribution across days moves. Cell-months the model reports dry on every day are
   left alone, which is what makes the rule exactly total-preserving. Restricted to
   `DRY_DAY_VARIABLES`. (CLIMATE-30)
+- A `monthly-taper` anomaly scheme (`--anomaly-scheme monthly-taper`, with `--eps-floor`,
+  default 1.0 mm/day). It keeps the `(T + eps)/(R + eps)` construction and the ERA5 monthly
+  anchor, but makes `eps` a taper -- `max(0, floor - R)` -- so it is zero wherever the
+  reference is at or above the floor and the model's ratio passes through undamped. The
+  constant `eps = 1` damps the model's fractional change everywhere by `R/(R + 1)`, only 71%
+  surviving at the global-mean reference of 2.43 mm/day, which suppresses the projected
+  2024-2100 trend to 0.65 of the driving models' own. The taper damps less than the constant
+  at every reference level, and unlike a bare floor `T/max(R, floor)` it stays level-neutral:
+  a cell the model reports unchanged still gets exactly 1. (CLIMATE-34)
+- `jensen_debias_factor` takes the `eps` field rather than assuming the constant 1, so the
+  de-bias composes with the taper; the shipped behaviour is the `eps = 1` special case. Where
+  `eps` is zero and the other reference years are dry a leave-one-out fold is undefined, and
+  dropping it is not a repair -- it discards the fold that makes Jensen's bound hold, so the
+  factor collapses below 1 and the correction inflates rather than shrinks. Those cell-months
+  now get factor 1.0, and a factor below its guaranteed bound of 1 raises. (CLIMATE-34)
+- `--debias-method` and `--dry-day-rule` are accepted for any scheme that carries an `eps`
+  (`monthly`, `monthly-taper`) and rejected for those that do not (the yearly and
+  monthly-ratio families), rather than being rejected for everything but `monthly`.
+  (CLIMATE-34)
 - `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
   whole fan-out to the scheduler in one submission. (CLIMATE-30)
 - A `yearly` anomaly scheme for multiplicative variables in `generate scenario_daily`

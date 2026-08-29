@@ -84,6 +84,11 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 }
 
 
+# Slack on the de-bias factor's `>= 1` guarantee, for floating-point accumulation in the
+# fold average. Tight enough that a real violation (0.2 for a collapsed fold) cannot hide.
+_DEBIAS_FACTOR_TOLERANCE = 1e-9
+
+
 ANOMALY_TYPES = {}
 for _variable, (_transform, _anomaly_type) in TRANSFORM_MAP.items():
     ANOMALY_TYPES[_variable] = _anomaly_type
@@ -209,6 +214,7 @@ def jensen_debias_factor(
     reference: xr.Dataset,
     reference_monthly: xr.Dataset,
     debias_method: str,
+    eps: xr.Dataset | float = 1.0,
 ) -> xr.Dataset:
     """The factor to divide a multiplicative anomaly by, per month and per GCM cell.
 
@@ -244,24 +250,48 @@ def jensen_debias_factor(
     if debias_method == "loo":
         mean_year = by_year.mean("reference_year")
         folds = []
+        valid = []
         for i in range(n_years):
             held_out = by_year.isel(reference_year=i)
             others = (n_years * mean_year - held_out) / (n_years - 1)
-            folds.append((held_out + 1) / (others + 1))
+            fold_denominator = others + eps
+            folds.append(
+                (held_out + eps) / fold_denominator.where(fold_denominator > 0)
+            )
+            valid.append((fold_denominator > 0).astype("int8"))
         raw = xr.concat(folds, dim="reference_year").mean("reference_year")
         factor = 1.0 + ((n_years - 1) / n_years) * (raw - 1.0)
+        # Where any fold is undefined the estimate is undefined, so apply no correction.
+        # Averaging the surviving folds is NOT a repair: the undefined one is precisely
+        # the large fold that lifts the mean above 1, so dropping it collapses the factor
+        # (0.2 for a one-wet-four-dry cell-month) and the de-bias INFLATES the anomaly --
+        # the opposite of its purpose. Only reachable when eps can be zero, i.e. under the
+        # taper; the constant eps = 1 floors every denominator at 1.
+        factor = factor.where(sum(valid) == n_years, 1.0).fillna(1.0)
     elif debias_method == "analytic":
         variance = by_year.var("reference_year", ddof=1)
-        factor = 1.0 + (variance / n_years) / (reference_monthly + 1) ** 2
+        factor = 1.0 + (variance / n_years) / (reference_monthly + eps) ** 2
     else:
         msg = f"Unknown debias method: {debias_method}"
         raise ValueError(msg)
 
     factor = factor.drop_vars("reference_year", errors="ignore")
-    if not bool(np.isfinite(factor.to_dataarray()).all()):
+    values = factor.to_dataarray()
+    if not bool(np.isfinite(values).all()):
         msg = (
             f"Non-finite value in the {debias_method} de-bias factor. Interpolation would "
             "silently fill it from a neighbour rather than surface it, so refusing to proceed."
+        )
+        raise ValueError(msg)
+    minimum = float(values.min())
+    if minimum < 1.0 - _DEBIAS_FACTOR_TOLERANCE:
+        # Both estimators are >= 1 by construction -- loo by Jensen on a convex fold,
+        # analytic because it adds a non-negative term. A value below 1 means the
+        # construction's precondition failed, and dividing by it would inflate rather
+        # than shrink the anomaly. Refuse rather than ship an anti-correction.
+        msg = (
+            f"The {debias_method} de-bias factor reached {minimum!r}, below its "
+            "guaranteed lower bound of 1. Dividing by it would inflate the anomaly."
         )
         raise ValueError(msg)
     return factor
@@ -420,6 +450,50 @@ def _monthly_jensen_factor(
     return 1.0 + inflation
 
 
+def _monthly_taper_anomaly(
+    reference: xr.Dataset,
+    reference_monthly: xr.Dataset,
+    target: xr.Dataset,
+    eps_floor: float,
+    *,
+    debias_method: str,
+    dry_day_rule: str,
+) -> xr.Dataset:
+    """``(T + e) / (R + e)`` with ``e = max(0, eps_floor - R)`` -- a tapered stabiliser.
+
+    The shipped ``monthly`` scheme uses a constant ``eps = 1``, which damps the model's
+    fractional change everywhere by ``R/(R + 1)``: only 71% survives at the global-mean
+    reference of 2.43 mm/day, and the projected trend comes out at 0.65 of the driving
+    models' own. The taper is zero wherever ``R >= eps_floor``, so those cells pass the
+    model's ratio through exactly, and grows only as ``R`` approaches zero.
+
+    It keeps the property that makes the constant form safe and that a bare floor
+    ``T / max(R, eps_floor)`` loses: ``e`` enters numerator *and* denominator, so a cell
+    the model reports unchanged (``T = R``) still gets exactly 1 and keeps its ERA5
+    climatology. A bare floor returns ``R / eps_floor`` there, cutting an unchanged arid
+    cell by up to 90%.
+
+    At ``R = 0`` the taper reduces to ``(T + eps_floor) / eps_floor``, which for the
+    default floor of 1.0 is exactly what the shipped scheme already does.
+
+    Computed as ``T/D + e/D`` rather than ``(T + e)/D`` because ``e`` is month-indexed
+    while ``target`` is date-indexed; chaining two groupbys to add them would outer-broadcast
+    the daily array. The two forms are algebraically identical.
+    """
+    eps = (eps_floor - reference_monthly).clip(min=0.0)
+    denominator = reference_monthly + eps  # == max(R, eps_floor)
+    if debias_method != "none":
+        # Folded into the denominator rather than dividing the anomaly, for the same
+        # reason as the constant-eps path: `anomaly / factor` outer-broadcasts.
+        denominator = denominator * jensen_debias_factor(
+            reference, reference_monthly, debias_method, eps
+        )
+    offset = (eps / denominator).sel(month=target["date"].dt.month).drop_vars("month")
+    anomaly = target.groupby("date.month") / denominator + offset
+    anomaly = apply_dry_day_rule(anomaly, target, dry_day_rule)
+    return anomaly.drop_vars("month", errors="ignore")
+
+
 def check_scheme_compatibility(
     anomaly_scheme: str,
     anomaly_type: str,
@@ -428,17 +502,20 @@ def check_scheme_compatibility(
 ) -> None:
     """Reject combinations of the two correction axes that cannot both apply.
 
-    `debias_method` and `dry_day_rule` correct the `(T + eps) / (R + eps)` construction
-    used by the `monthly` scheme. The yearly and monthly-ratio families do not use that
-    construction at all, so asking for either against them is a mistake rather than a
-    no-op, and silently ignoring the request would produce a file whose attrs claim a
-    correction that was never applied.
+    `debias_method` and `dry_day_rule` correct the `(T + eps) / (R + eps)` construction.
+    Both `monthly` (constant eps) and `monthly-taper` (tapered eps) use it, so both accept
+    them. The yearly and monthly-ratio families have no eps for those corrections to act
+    on, so asking for either against them is a mistake rather than a no-op -- and silently
+    ignoring the request would produce a file whose attrs claim a correction that was
+    never applied.
     """
-    if debias_method != "none" or dry_day_rule != "none":
+    has_eps = anomaly_scheme in cdc.EPS_BEARING_SCHEMES
+    if not has_eps and (debias_method != "none" or dry_day_rule != "none"):
         msg = (
             f"debias_method={debias_method!r} and dry_day_rule={dry_day_rule!r} cannot "
             f"be combined with anomaly_scheme={anomaly_scheme!r}: they correct the eps "
-            "stabiliser, which this scheme does not use."
+            f"stabiliser, which this scheme does not use. Schemes that carry an eps: "
+            f"{list(cdc.EPS_BEARING_SCHEMES)}."
         )
         raise ValueError(msg)
     if anomaly_type != "multiplicative":
@@ -454,6 +531,7 @@ def compute_anomaly(
     debias_method: str,
     dry_day_rule: str,
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
+    eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
 ) -> xr.Dataset:
     if anomaly_scheme not in cdc.ANOMALY_SCHEMES:
         msg = (
@@ -461,13 +539,17 @@ def compute_anomaly(
             f"expected one of {cdc.ANOMALY_SCHEMES}."
         )
         raise ValueError(msg)
-    if anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY:
+    if anomaly_scheme not in cdc.EPS_BEARING_SCHEMES:
         check_scheme_compatibility(
             anomaly_scheme, anomaly_type, debias_method, dry_day_rule
         )
         if anomaly_scheme in cdc.YEARLY_ANOMALY_SCHEMES:
             return _yearly_anomaly(reference, target, anomaly_scheme)
         return _monthly_ratio_anomaly(reference, target, anomaly_scheme)
+    # `monthly` and `monthly-taper` share the path below: both keep the ERA5 monthly
+    # anchor and the eps construction, so both want the additive/multiplicative split,
+    # the de-bias fold and the dry-day rule rather than the ratio-family dispatch. They
+    # differ only in whether eps is a constant or a taper.
     reference_monthly = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":
         if debias_method != "none":
@@ -487,6 +569,15 @@ def compute_anomaly(
             raise ValueError(msg)
         anomaly = target.groupby("date.month") - reference_monthly
     elif anomaly_type == "multiplicative":
+        if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY_TAPER:
+            return _monthly_taper_anomaly(
+                reference,
+                reference_monthly,
+                target,
+                eps_floor,
+                debias_method=debias_method,
+                dry_day_rule=dry_day_rule,
+            )
         denominator = reference_monthly + 1
         if debias_method != "none":
             # Fold the factor into the denominator rather than dividing the anomaly by it.
@@ -541,6 +632,7 @@ def generate_scenario_daily_main(
     dry_day_rule: str,
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
     reference_years: str = cdc.REFERENCE_YEARS_ARG,
+    eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
 ) -> xr.Dataset:
     # NOTE: debias_method is deliberately keyword-only with NO default. A default of "none"
     # here would mean that forgetting to thread it through generate_scenario_annual_main
@@ -579,6 +671,7 @@ def generate_scenario_daily_main(
         debias_method=debias_method,
         dry_day_rule=dry_day_rule,
         anomaly_scheme=anomaly_scheme,
+        eps_floor=eps_floor,
     )
 
     print(f"{gcm_member}: resampling anomaly")
@@ -601,6 +694,7 @@ def generate_scenario_daily_main(
     scenario_data.attrs["dry_day_rule"] = dry_day_rule
     scenario_data.attrs["anomaly_scheme"] = anomaly_scheme
     scenario_data.attrs["reference_years"] = reference_years
+    scenario_data.attrs["eps_floor"] = eps_floor
 
     if write_output is True:
         print(f"{gcm_member}: Writing output")
@@ -628,6 +722,7 @@ def generate_scenario_daily_main(
 @clio.with_dry_day_rule()
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
+@clio.with_eps_floor()
 def generate_scenario_daily_task(
     target_variable: str,
     cmip6_experiment: str,
@@ -638,6 +733,7 @@ def generate_scenario_daily_task(
     dry_day_rule: str,
     anomaly_scheme: str,
     reference_years: str,
+    eps_floor: float,
 ) -> None:
     generate_scenario_daily_main(
         target_variable,
@@ -650,6 +746,7 @@ def generate_scenario_daily_task(
         dry_day_rule=dry_day_rule,
         anomaly_scheme=anomaly_scheme,
         reference_years=reference_years,
+        eps_floor=eps_floor,
     )
 
 
@@ -662,6 +759,7 @@ def generate_scenario_daily_task(
 @clio.with_dry_day_rule()
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
+@clio.with_eps_floor()
 @clio.with_queue()
 @clio.with_overwrite()
 @clio.with_dry_run()
@@ -674,6 +772,7 @@ def generate_scenario_daily(
     dry_day_rule: str,
     anomaly_scheme: str,
     reference_years: str,
+    eps_floor: float,
     queue: str,
     overwrite: bool,
     dry_run: bool,
@@ -715,6 +814,7 @@ def generate_scenario_daily(
             "dry-day-rule": dry_day_rule,
             "anomaly-scheme": anomaly_scheme,
             "reference-years": reference_years,
+            "eps-floor": eps_floor,
         },
         task_resources={
             "queue": queue,

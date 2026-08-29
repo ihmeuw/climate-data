@@ -180,8 +180,25 @@ def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
             "historical per-month (target+1)/(reference+1); 'monthly-ratio' "
             "is the pure per-month ratio (no +1, zero reference month "
             "forecasts zero), with 'monthly-delta' removing each month's "
-            "Jensen bias analytically; 'yearly' uses the reference-period annual-mean "
-            "denominator, with 'yearly-delta' removing its Jensen bias."
+            "Jensen bias analytically; 'monthly-taper' keeps the (T+eps)/(R+eps) "
+            "form but tapers eps to zero above --eps-floor, so a healthy "
+            "reference is left undamped; 'yearly' uses the reference-period "
+            "annual-mean denominator, with 'yearly-delta' removing its Jensen bias."
+        ),
+    )
+
+
+def with_eps_floor[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--eps-floor",
+        type=float,
+        default=cdc.DEFAULT_EPS_FLOOR,
+        show_default=True,
+        help=(
+            "Taper floor in mm/day for the 'monthly-taper' anomaly scheme. The "
+            "stabiliser is eps = max(0, floor - reference), so it is zero wherever "
+            "the reference is at or above the floor and the model's ratio passes "
+            "through exactly. Ignored by every other scheme."
         ),
     )
 
@@ -407,6 +424,7 @@ __all__ = [
     "with_draw",
     "with_dry_day_rule",
     "with_dry_run",
+    "with_eps_floor",
     "with_era5_dataset",
     "with_era5_variable",
     "with_gcm_member",
