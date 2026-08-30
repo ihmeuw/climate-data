@@ -19,6 +19,7 @@ from climate_data.generate.scenario_daily import (
 
 TAPER = cdc.ANOMALY_SCHEME_MONTHLY_TAPER
 CONTINUITY_TOL = 1e-5
+TEST_CAP = 20.0
 WET_REFERENCE_YEAR = 2019
 LAT = np.arange(2.0)
 LON = np.arange(5.0)
@@ -218,4 +219,105 @@ def test_eps_free_schemes_still_reject_the_debias_axis(
             debias_method="loo",
             dry_day_rule="none",
             anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
+        )
+
+
+# --------------------------------------------------------------------------
+# Anomaly cap (--anomaly-cap). Separate axis from eps: it bounds the multiplier
+# for ANY multiplicative scheme, and exists because a GCM whose reference window
+# is near-zero in a cell can produce an anomaly in the hundreds.
+# --------------------------------------------------------------------------
+
+
+def test_cap_bounds_the_anomaly(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    """No value survives above the cap, and values below it are untouched."""
+    target = _flat(target_dates, REFERENCE_RATES * 40.0)
+    uncapped = _taper(reference, target)["value"].to_numpy()
+    capped = compute_anomaly(
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=TAPER,
+        eps_floor=1.0,
+        anomaly_cap=TEST_CAP,
+    )["value"].to_numpy()
+    assert uncapped.max() > TEST_CAP, (
+        "fixture must exceed the cap for this to test anything"
+    )
+    assert capped.max() <= TEST_CAP + 1e-12
+    below = uncapped <= TEST_CAP
+    np.testing.assert_allclose(capped[below], uncapped[below], rtol=0, atol=1e-12)
+
+
+def test_cap_applies_to_every_scheme(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    """The cap is orthogonal to the eps axis, so the yearly family takes it too."""
+    target = _flat(target_dates, REFERENCE_RATES * 40.0)
+    for scheme in (cdc.ANOMALY_SCHEME_MONTHLY, TAPER, cdc.ANOMALY_SCHEME_YEARLY_DELTA):
+        capped = compute_anomaly(
+            reference,
+            target,
+            "multiplicative",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_scheme=scheme,
+            anomaly_cap=TEST_CAP,
+        )["value"].to_numpy()
+        assert np.nanmax(capped) <= TEST_CAP + 1e-12, scheme
+
+
+def test_cap_is_off_by_default(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    """Shipped behaviour is uncapped; the default must not silently clip."""
+    target = _flat(target_dates, REFERENCE_RATES * 40.0)
+    assert cdc.DEFAULT_ANOMALY_CAP is None
+    a = _taper(reference, target)["value"].to_numpy()
+    b = compute_anomaly(
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=TAPER,
+        eps_floor=1.0,
+        anomaly_cap=None,
+    )["value"].to_numpy()
+    np.testing.assert_array_equal(a, b)
+
+
+def test_cap_rejects_an_additive_anomaly(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    """A ceiling on a multiplier is meaningless for a difference in native units."""
+    target = _flat(target_dates, REFERENCE_RATES)
+    with pytest.raises(ValueError, match="additive anomaly"):
+        compute_anomaly(
+            reference,
+            target,
+            "additive",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_cap=TEST_CAP,
+        )
+
+
+def test_cap_rejects_a_non_positive_value(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    target = _flat(target_dates, REFERENCE_RATES)
+    with pytest.raises(ValueError, match="must be positive"):
+        compute_anomaly(
+            reference,
+            target,
+            "multiplicative",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_scheme=TAPER,
+            anomaly_cap=0.0,
         )

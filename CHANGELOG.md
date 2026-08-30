@@ -22,6 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   only its distribution across days moves. Cell-months the model reports dry on every day are
   left alone, which is what makes the rule exactly total-preserving. Restricted to
   `DRY_DAY_VARIABLES`. (CLIMATE-30)
+- An `--anomaly-cap` option: an optional ceiling on the multiplicative anomaly, applied on
+  the GCM grid before regridding. Off by default, so shipped behaviour is unchanged. A GCM
+  whose reference window is near-zero in a cell can produce an anomaly of several hundred --
+  1209 was measured on `yearly-delta` ssp585, landing as a forecast over a thousand times
+  that cell's own observed climatology. The ceiling is a property of badly-behaved models in
+  dry cells rather than of any scheme, so it is a separate axis and applies to any
+  multiplicative scheme; requesting it for an additive anomaly raises rather than being
+  ignored. Applied before regridding because capping afterwards would leave a blown-up cell
+  already smeared across its neighbours. (CLIMATE-34)
 - A `monthly-taper` anomaly scheme (`--anomaly-scheme monthly-taper`, with `--eps-floor`,
   default 1.0 mm/day). It keeps the `(T + eps)/(R + eps)` construction and the ERA5 monthly
   anchor, but makes `eps` a taper -- `max(0, floor - R)` -- so it is zero wherever the

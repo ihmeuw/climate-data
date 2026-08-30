@@ -188,6 +188,20 @@ def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_anomaly_cap[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--anomaly-cap",
+        type=float,
+        default=cdc.DEFAULT_ANOMALY_CAP,
+        show_default=True,
+        help=(
+            "Ceiling on the multiplicative anomaly, applied on the GCM grid before "
+            "regridding. Unset means no ceiling. Multiplicative variables only: a cap "
+            "on an additive anomaly is rejected rather than ignored."
+        ),
+    )
+
+
 def with_eps_floor[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     return click.option(
         "--eps-floor",
@@ -413,6 +427,7 @@ __all__ = [
     "with_agg_measure",
     "with_agg_scenario",
     "with_agg_version",
+    "with_anomaly_cap",
     "with_anomaly_scheme",
     "with_block_key",
     "with_choice",

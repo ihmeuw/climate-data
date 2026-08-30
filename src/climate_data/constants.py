@@ -110,6 +110,15 @@ EPS_BEARING_SCHEMES = (
     ANOMALY_SCHEME_MONTHLY_TAPER,
 )
 
+# Optional ceiling on the multiplicative anomaly, applied on the GCM grid before
+# regridding. A GCM whose reference window is near-zero in a cell can produce an anomaly
+# of several hundred -- 1209 was measured on `yearly-delta` ssp585 -- which lands as a
+# forecast a thousand times the cell's own observed climatology. That is a property of a
+# badly-behaved model in a dry cell, not of any scheme, so the ceiling is a separate axis
+# from the eps construction and applies to any multiplicative scheme. `None` disables it,
+# which is the shipped behaviour. Set with --anomaly-cap.
+DEFAULT_ANOMALY_CAP: float | None = None
+
 # Default taper floor, in mm/day. Deliberately the same value as the constant eps it
 # replaces, so the change reads as "eps becomes a taper" rather than a new tuned
 # parameter. Override per run with --eps-floor.

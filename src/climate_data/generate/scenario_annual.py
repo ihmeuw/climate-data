@@ -145,6 +145,7 @@ def generate_scenario_annual_main(
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
     reference_years: str = cdc.REFERENCE_YEARS_ARG,
     eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
+    anomaly_cap: float | None = cdc.DEFAULT_ANOMALY_CAP,
 ) -> None:
     # NOTE: keyword-only with NO default, on purpose -- see the note in
     # generate_scenario_daily_main. A default here would let a missed hand-off produce a
@@ -177,6 +178,7 @@ def generate_scenario_annual_main(
                     anomaly_scheme=anomaly_scheme,
                     reference_years=reference_years,
                     eps_floor=eps_floor,
+                    anomaly_cap=anomaly_cap,
                 )
                 for source_variable in transform.source_variables
             ]
@@ -214,6 +216,7 @@ def generate_scenario_annual_main(
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
 @clio.with_eps_floor()
+@clio.with_anomaly_cap()
 def generate_scenario_annual_task(
     target_variable: str,
     scenario: str,
@@ -225,6 +228,7 @@ def generate_scenario_annual_task(
     anomaly_scheme: str,
     reference_years: str,
     eps_floor: float,
+    anomaly_cap: float | None,
 ) -> None:
     history_flags = [
         year in cdc.HISTORY_YEARS,
@@ -255,6 +259,7 @@ def generate_scenario_annual_task(
         anomaly_scheme=anomaly_scheme,
         reference_years=reference_years,
         eps_floor=eps_floor,
+        anomaly_cap=anomaly_cap,
     )
 
 
@@ -317,6 +322,7 @@ def build_arg_list(
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
 @clio.with_eps_floor()
+@clio.with_anomaly_cap()
 @clio.with_queue()
 @clio.with_concurrency_limit(default=500)
 @clio.with_overwrite()
@@ -330,6 +336,7 @@ def generate_scenario_annual(
     anomaly_scheme: str,
     reference_years: str,
     eps_floor: float,
+    anomaly_cap: float | None,
     queue: str,
     concurrency_limit: int | None,
     overwrite: bool,
@@ -367,6 +374,7 @@ def generate_scenario_annual(
             "anomaly-scheme": anomaly_scheme,
             "reference-years": reference_years,
             "eps-floor": eps_floor,
+            "anomaly-cap": anomaly_cap,
         },
         task_resources={
             "queue": queue,

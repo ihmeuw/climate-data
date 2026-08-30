@@ -532,6 +532,55 @@ def compute_anomaly(
     dry_day_rule: str,
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
     eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
+    anomaly_cap: float | None = cdc.DEFAULT_ANOMALY_CAP,
+) -> xr.Dataset:
+    """The forecast anomaly, optionally capped.
+
+    A thin wrapper so the ceiling applies to every scheme without threading it through
+    each one: the scheme dispatch below has several return points, and duplicating the
+    clip at each is how one of them ends up missing it.
+
+    Applied on the GCM grid, BEFORE `interpolate_to_target_latlon`. Capping afterwards
+    would leave a blown-up cell already smeared across its neighbours by the regrid.
+
+    The cap only removes precipitation -- it cannot conserve, and whatever it clips is
+    gone from the total. That is intended: the values it removes are ones no cell's
+    observed climatology supports. But it means a cap moves the level, so it must be
+    chosen on evidence rather than set defensively.
+    """
+    anomaly = _compute_anomaly_uncapped(
+        reference,
+        target,
+        anomaly_type,
+        debias_method=debias_method,
+        dry_day_rule=dry_day_rule,
+        anomaly_scheme=anomaly_scheme,
+        eps_floor=eps_floor,
+    )
+    if anomaly_cap is None:
+        return anomaly
+    if anomaly_type != "multiplicative":
+        msg = (
+            f"anomaly_cap={anomaly_cap!r} was requested for an additive anomaly. The cap "
+            "bounds a multiplier; an additive anomaly is a difference in the variable's "
+            "own units, where a ceiling of this kind is meaningless."
+        )
+        raise ValueError(msg)
+    if anomaly_cap <= 0:
+        msg = f"anomaly_cap must be positive, got {anomaly_cap!r}."
+        raise ValueError(msg)
+    return anomaly.clip(max=anomaly_cap)
+
+
+def _compute_anomaly_uncapped(
+    reference: xr.Dataset,
+    target: xr.Dataset,
+    anomaly_type: str,
+    *,
+    debias_method: str,
+    dry_day_rule: str,
+    anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
+    eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
 ) -> xr.Dataset:
     if anomaly_scheme not in cdc.ANOMALY_SCHEMES:
         msg = (
@@ -633,6 +682,7 @@ def generate_scenario_daily_main(
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
     reference_years: str = cdc.REFERENCE_YEARS_ARG,
     eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
+    anomaly_cap: float | None = cdc.DEFAULT_ANOMALY_CAP,
 ) -> xr.Dataset:
     # NOTE: debias_method is deliberately keyword-only with NO default. A default of "none"
     # here would mean that forgetting to thread it through generate_scenario_annual_main
@@ -672,6 +722,7 @@ def generate_scenario_daily_main(
         dry_day_rule=dry_day_rule,
         anomaly_scheme=anomaly_scheme,
         eps_floor=eps_floor,
+        anomaly_cap=anomaly_cap,
     )
 
     print(f"{gcm_member}: resampling anomaly")
@@ -695,6 +746,7 @@ def generate_scenario_daily_main(
     scenario_data.attrs["anomaly_scheme"] = anomaly_scheme
     scenario_data.attrs["reference_years"] = reference_years
     scenario_data.attrs["eps_floor"] = eps_floor
+    scenario_data.attrs["anomaly_cap"] = "none" if anomaly_cap is None else anomaly_cap
 
     if write_output is True:
         print(f"{gcm_member}: Writing output")
@@ -723,6 +775,7 @@ def generate_scenario_daily_main(
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
 @clio.with_eps_floor()
+@clio.with_anomaly_cap()
 def generate_scenario_daily_task(
     target_variable: str,
     cmip6_experiment: str,
@@ -734,6 +787,7 @@ def generate_scenario_daily_task(
     anomaly_scheme: str,
     reference_years: str,
     eps_floor: float,
+    anomaly_cap: float | None,
 ) -> None:
     generate_scenario_daily_main(
         target_variable,
@@ -747,6 +801,7 @@ def generate_scenario_daily_task(
         anomaly_scheme=anomaly_scheme,
         reference_years=reference_years,
         eps_floor=eps_floor,
+        anomaly_cap=anomaly_cap,
     )
 
 
@@ -760,6 +815,7 @@ def generate_scenario_daily_task(
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
 @clio.with_eps_floor()
+@clio.with_anomaly_cap()
 @clio.with_queue()
 @clio.with_overwrite()
 @clio.with_dry_run()
@@ -773,6 +829,7 @@ def generate_scenario_daily(
     anomaly_scheme: str,
     reference_years: str,
     eps_floor: float,
+    anomaly_cap: float | None,
     queue: str,
     overwrite: bool,
     dry_run: bool,
@@ -815,6 +872,7 @@ def generate_scenario_daily(
             "anomaly-scheme": anomaly_scheme,
             "reference-years": reference_years,
             "eps-floor": eps_floor,
+            "anomaly-cap": anomaly_cap,
         },
         task_resources={
             "queue": queue,
