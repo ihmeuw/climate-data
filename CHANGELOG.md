@@ -278,3 +278,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Docs deployment: `build_docs` now authenticates with the built-in `GITHUB_TOKEN`
   (+ `contents: write`) instead of a dead personal token, so `mkdocs gh-deploy` can push
   `gh-pages` again; also fixed a malformed job `if:` expression. (CLIMATE-24)
+- `precipitation_days` was inflated in every leap year for members on a `noleap` calendar.
+  `scenario_daily.load_and_shift_longitude_and_correct_time` put each year onto the real
+  Gregorian calendar with `interp_calendar`, which resamples by **linear interpolation of
+  values**. Whenever the source calendar's year length differed from the target's — 365
+  against 366 — every target day became a blend of two source days. That is nearly harmless
+  for a total, since interpolation redistributes precipitation mass roughly conservatively,
+  but not for a threshold count: a dry day beside a wet one picked up a share of the wet
+  day's rain and crossed the 0.1 mm wet-day cut. Measured on the raw ssp245 fields, the
+  2024-minus-2025 step was +28.2 d (BCC-CSM2-MR), +23.3 d (NorESM2-MM) and +19.2 d
+  (GFDL-ESM4), against 0.2 d and 1.7 d for real-calendar members; in shipped output it was
+  ~13.5 d per noleap member and ~4.5 d in the 100-draw ensemble, in all 19 leap years
+  2024-2096 — 2024, the product's first year, included. The conversion is now by date:
+  `convert_calendar(align_on="date")` keeps each source day's value at its own date, a
+  `reindex` holds the output axis to exactly that year's days whatever the source calendar,
+  and the existing nearest-neighbour `interpolate_na` fills 29 February from 28 February.
+  It is bit-exact for the members already on a real calendar, and for every member in a
+  year whose lengths already agreed. `total_precipitation` is unaffected. Roots built before
+  this fix carry the artifact and are not regenerated here. (CLIMATE-35)

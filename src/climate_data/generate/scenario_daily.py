@@ -154,12 +154,26 @@ def load_and_shift_longitude_and_correct_time(
     member_path: str | Path,
     year: str,
 ) -> xr.Dataset:
+    """Put a member's year onto the real Gregorian calendar, day by day.
+
+    The conversion is by DATE, never by value. `interp_calendar` used to resample onto the
+    target axis by linear interpolation, so whenever the source calendar's year length
+    differed from the target's -- a `noleap` member in a leap year -- every target day
+    became a blend of two source days. That is harmless for a total but not for a
+    threshold: a dry day beside a wet one picked up a share of the wet day's rain and
+    crossed the 0.1 mm wet-day cut, inflating `precipitation_days` by ~13.5 d per noleap
+    member in all 19 leap years 2024-2096. `align_on="date"` keeps each source day's value
+    at its own date and leaves 29 February missing, and the `reindex` holds the output axis
+    to exactly this year's days regardless of the source calendar. `interpolate_na` then
+    fills the gap from the nearest real day. (CLIMATE-35)
+    """
     time_slice = slice(f"{year}-01-01", f"{year}-12-31")
     time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
     ds = load_and_shift_longitude(member_path, time_slice)
     ds = (
         ds.assign_coords(time=ds.time.dt.floor("D"))
-        .interp_calendar(time_range)
+        .convert_calendar("standard", align_on="date")
+        .reindex(time=time_range)
         .interpolate_na(dim="time", method="nearest", fill_value="extrapolate")
         .rename({"time": "date"})
     )
