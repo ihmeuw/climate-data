@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- aggregate: skip modeling-frame blocks that don't intersect the hierarchy's raking
+  shapes — they contribute only empty results, so the `pixel` and `hierarchy` stages
+  skip them (fewer jobs; e.g. `lsae_1285` 52,800 vs 78,400). Fails loudly if the
+  filter would drop every block. (#37)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)

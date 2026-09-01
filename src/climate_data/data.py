@@ -138,7 +138,9 @@ class PopulationModelData:
         return self.root / "admin-inputs" / "raking"
 
     def load_raking_shapes(
-        self, full_aggregation_hierarchy: str, bounds: tuple[float, float, float, float]
+        self,
+        full_aggregation_hierarchy: str,
+        bounds: tuple[float, float, float, float] | None = None,
     ) -> gpd.GeoDataFrame:
         """Load shapes for a full aggregation hierarchy within given bounds.
 
@@ -147,7 +149,8 @@ class PopulationModelData:
         full_aggregation_hierarchy
             The full aggregation hierarchy to load (e.g. "gbd_2021")
         bounds
-            The bounds to load (xmin, ymin, xmax, ymax)
+            The bounds to load (xmin, ymin, xmax, ymax). ``None`` (the default)
+            loads all shapes for the hierarchy.
 
         Returns
         -------
