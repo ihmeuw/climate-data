@@ -2,6 +2,7 @@ import itertools
 from collections.abc import Sequence
 
 import click
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import tqdm
@@ -168,6 +169,47 @@ def pixel_task(
     )
 
 
+def _enumerate_hierarchy_block_draw(
+    hierarchies: list[str],
+    block_keys: list[str],
+    draws: list[str],
+    block_key: str,
+    pm_data: PopulationModelData,
+    modeling_frame: gpd.GeoDataFrame,
+) -> list[tuple[str, str, str]]:
+    """Enumerate the (hierarchy, block, draw) triples worth running.
+
+    Blocks whose footprint intersects none of the hierarchy's raking shapes are
+    dropped: they contribute only empty rows to the sum/sum roll-up, so running
+    them is pure cost. The intersection set is per-hierarchy, hence the filter
+    is applied inside the hierarchy loop rather than once over `block_keys`.
+    """
+    print("Computing per-hierarchy block intersection sets")
+    intersecting_by_hier = {}
+    for hierarchy in hierarchies:
+        intersecting_by_hier[hierarchy] = utils.blocks_with_shapefile_intersections(
+            hierarchy, pm_data, modeling_frame
+        )
+
+    hbd: list[tuple[str, str, str]] = []
+    for hierarchy in hierarchies:
+        hierarchy_blocks = []
+        for block in block_keys:
+            if block in intersecting_by_hier[hierarchy]:
+                hierarchy_blocks.append(block)
+        # Only worth reporting when the user named blocks explicitly; under ALL the
+        # skipped set is the whole ocean and the count is noise.
+        if block_key != clio.RUN_ALL:
+            dropped = sorted(set(block_keys) - intersecting_by_hier[hierarchy])
+            if dropped:
+                print(
+                    f"{hierarchy}: skipping {len(dropped)} explicitly-requested "
+                    f"block(s) with no shapefile intersection: {dropped}"
+                )
+        hbd.extend(itertools.product([hierarchy], hierarchy_blocks, draws))
+    return hbd
+
+
 @click.command()
 @clio.with_agg_version()
 @clio.with_block_key(allow_all=True)
@@ -229,23 +271,14 @@ def pixel(
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
 
-    print("Computing per-hierarchy block intersection sets")
-    intersecting_by_hier = {
-        h: utils.blocks_with_shapefile_intersections(h, pm_data, modeling_frame)
-        for h in hierarchies
-    }
-
-    hbd: list[tuple[str, str, str]] = []
-    for h in hierarchies:
-        h_blocks = [b for b in block_keys if b in intersecting_by_hier[h]]
-        if block_key != clio.RUN_ALL:
-            dropped = sorted(set(block_keys) - intersecting_by_hier[h])
-            if dropped:
-                print(
-                    f"{h}: skipping {len(dropped)} explicitly-requested block(s) with "
-                    f"no shapefile intersection: {dropped}"
-                )
-        hbd.extend(itertools.product([h], h_blocks, draws))
+    hbd = _enumerate_hierarchy_block_draw(
+        hierarchies,
+        block_keys,
+        draws,
+        block_key,
+        pm_data,
+        modeling_frame,
+    )
 
     print("Checking for existing results")
     jobs = []
