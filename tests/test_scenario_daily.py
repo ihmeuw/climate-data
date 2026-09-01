@@ -9,11 +9,12 @@ import pytest
 import xarray as xr
 
 from climate_data import constants as cdc
-from climate_data.generate import utils
+from climate_data.generate import scenario_daily, utils
 from climate_data.generate.scenario_daily import (
     ANOMALY_TYPES,
     compute_anomaly,
     load_and_shift_longitude_and_correct_time,
+    load_variable,
     variables_for_anomaly_scheme,
 )
 
@@ -36,7 +37,9 @@ def _daily_ds(start: str, end: str, seed: int) -> xr.Dataset:
     )
 
 
-def _write_member(path: Path, year: int, calendar: str) -> xr.Dataset:
+def _write_member(
+    path: Path, year: int, calendar: str, end_year: int | None = None
+) -> xr.Dataset:
     """Write a synthetic one-variable CMIP6 extract on ``calendar``; return what was written.
 
     Days alternate bone dry and clearly wet, so any blend of two adjacent days lands on a
@@ -45,7 +48,11 @@ def _write_member(path: Path, year: int, calendar: str) -> xr.Dataset:
     a reordering cannot be mistaken for a passing comparison.
     """
     time = xr.date_range(
-        f"{year}-01-01", f"{year}-12-31", freq="D", calendar=calendar, use_cftime=True
+        f"{year}-01-01",
+        f"{end_year or year}-12-31",
+        freq="D",
+        calendar=calendar,
+        use_cftime=True,
     )
     daily = np.where(np.arange(time.size) % 2 == 0, DRY_RATE, WET_RATE)
     values = np.broadcast_to(daily[:, None, None], (time.size, 2, 2)).copy()
@@ -519,3 +526,48 @@ def test_a_julian_member_drops_its_phantom_leap_day_in_2100(tmp_path: Path) -> N
     got = load_and_shift_longitude_and_correct_time(path, "2100")
 
     assert got.sizes["date"] == DAYS_IN_COMMON_YEAR
+
+
+def test_a_member_that_stops_in_2099_is_relabelled_onto_2100(tmp_path: Path) -> None:
+    """CAMS-CSM1-0 and IITM-ESM stop at 2099, so 2100 reuses 2099 under 2100's dates."""
+    path = tmp_path / "pr_ssp245_SYNTH-SHORT_r1i1p1f1.nc"
+    _write_member(path, 2098, "noleap", end_year=2099)
+
+    got = load_variable(path, 2100)
+
+    dates = pd.DatetimeIndex(got["date"].to_numpy())
+    assert dates.size == DAYS_IN_COMMON_YEAR
+    assert dates[0] == pd.Timestamp("2100-01-01")
+    assert dates[-1] == pd.Timestamp("2100-12-31")
+
+
+def test_relabelling_2099_as_2100_refuses_a_mismatched_day_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 2099 that is not 365 days long must raise, not silently slide into 2101.
+
+    The relabel used to add `date.size` days to every stamp -- using the axis COUNT as a
+    calendar DURATION. The two agree only while 2099 is a complete 365-day run. Given 366
+    days it would have shifted the year onto 2100-01-02..2101-01-01, and `annual_sum`'s
+    `groupby("date.year")` would then have filed a day under 2101, with nothing raising.
+    """
+    path = tmp_path / "pr_ssp245_SYNTH-SHORT_r1i1p1f1.nc"
+    _write_member(path, 2098, "noleap", end_year=2099)
+
+    def _too_many_days(member_path: str | Path, year: str) -> xr.Dataset:
+        if year != "2099":
+            msg = "No data in slice"
+            raise KeyError(msg)
+        dates = pd.date_range("2099-01-01", periods=DAYS_IN_LEAP_YEAR)
+        values = np.zeros((dates.size, 2, 2))
+        return xr.Dataset(
+            {"pr": (("date", "latitude", "longitude"), values)},
+            coords={"date": dates, "latitude": [0.0, 1.0], "longitude": [10.0, 20.0]},
+        )
+
+    monkeypatch.setattr(
+        scenario_daily, "load_and_shift_longitude_and_correct_time", _too_many_days
+    )
+
+    with pytest.raises(ValueError, match="conflicting sizes"):
+        load_variable(path, 2100)

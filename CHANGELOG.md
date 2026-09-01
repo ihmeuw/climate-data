@@ -296,3 +296,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   It is bit-exact for the members already on a real calendar, and for every member in a
   year whose lengths already agreed. `total_precipitation` is unaffected. Roots built before
   this fix carry the artifact and are not regenerated here. (CLIMATE-35)
+- The 2100 fallback relabelled 2099 by adding `date.size` days to every stamp, using the
+  axis **count** as a calendar **duration**. The two agree only while 2099 comes back as a
+  complete 365-day run, and `assign_coords` validates nothing, so a longer axis would have
+  slid the year onto 2100-01-02..2101-01-01 and `annual_sum`'s `groupby("date.year")` would
+  have filed a day under 2101 in silence. It now assigns 2100's own date range, which makes
+  a mismatched day count raise instead. No shipped output changes: 2099 is 365 days on every
+  calendar present in the extracts, so the arithmetic was giving the right answer for the
+  right years by coincidence rather than by construction. (CLIMATE-35)
