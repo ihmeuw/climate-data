@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   shapes — they contribute only empty results, so the `pixel` and `hierarchy` stages
   skip them (fewer jobs; e.g. `lsae_1285` 52,800 vs 78,400). Fails loudly if the
   filter would drop every block. (#37)
+- `aggregate pixel --agg-measure`: aggregate a subset of the ten measures instead of
+  always all of them, which is ~9x faster per task for a single measure (measured mean
+  17 min against 2.6 h for a ten-measure production task). Measure is passed as a **task
+  arg**, not a node arg, because `ClimateAggregateData.raw_results_path` is keyed on
+  `(version, hierarchy, block_key, draw)` with no measure component — one job per measure
+  would have every measure's job writing the same file. **A filtered run must use its own
+  `--agg-version`**; see `docs/running.md`.
+- `aggregate pixel --draw` and `--hierarchy` are now repeatable, and a
+  `--concurrency-limit` caps simultaneously running tasks. Previously passing either
+  option twice silently kept only the last value.
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)
@@ -40,6 +50,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
   fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
+- `aggregate pixel` task memory raised 6G -> 12G. Observed MaxRSS on the 17Aug run was
+  6.0G against a 6G request on *every* sampled task, and the LSAE hierarchies carry more
+  locations per block, so 6G would OOM there with `max_attempts=3` masking it as a retry.
+  Confirmed on real data 01Sep: MaxRSS ~8.5 GiB.
 - `extract cmip6` fans out one job per ensemble member instead of one per
   (source, experiment). Member counts are very uneven — MIROC6 publishes 50 `pr` members
   where most sources publish one — so three jobs carried fifty times the work of a typical
@@ -58,6 +72,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   template-sync workflow is retired (daily schedule removed); reviving it needs a
   non-personal token. (CLIMATE-24)
 ### Fixed
+- `aggregate hierarchy` failed every job with `ZeroDivisionError`.
+  `aggregate_climate_to_hierarchy` divided `weighted_climate` by `population` with no
+  zero guard, and because block-level results carry object dtype the division raised from
+  Python scalar arithmetic rather than producing `inf`. Now coerces to float64 and divides
+  only where `population > 0`, leaving NaN elsewhere and printing the masked count.
+  Zero-population locations are real and split two ways: genuinely uninhabited
+  (Antarctica, Bouvet, the Spratlys) and inhabited places the population model has no
+  estimate for (Aland, Svalbard, Norfolk, Christmas, Cocos, Pitcairn), which ~400 LSAE
+  level-3 units inherit. Measured on `2026_08_21_PRECIP_TEST`, draw 000, ssp245:
+  `gbd_2023` 2,718 of 138,618 rows NaN (1.96%), 0 inf.
 - `total_precipitation` was inflated ~1.5-1.6x across the whole historical record.
   ERA5 stamps an accumulation window by its **end**, so day D's window (forecast steps
   01-24) has its closing sample timestamped `00:00` of day D+1 — these are interval
