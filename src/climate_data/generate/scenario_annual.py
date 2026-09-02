@@ -1,5 +1,6 @@
 import itertools
 from pathlib import Path
+from typing import Any
 
 import click
 import xarray as xr
@@ -360,6 +361,23 @@ def generate_scenario_annual(
 
     if not to_run:
         return
+    # `anomaly_cap` is None whenever no ceiling was requested, which is the default.
+    # Passing the key through with a None value renders a bare `--anomaly-cap` onto the
+    # task command line with nothing after it, and click rejects it -- so EVERY task of
+    # an uncapped run fails with "Option '--anomaly-cap' requires an argument." while the
+    # controller still exits 0. Omit the key instead, and let the task's own default
+    # stand. Every run between b25dc84 and this fix passed an explicit cap, which is why
+    # the default path went unexercised.
+    task_args: dict[str, Any] = {
+        "output-dir": output_dir,
+        "debias-method": debias_method,
+        "dry-day-rule": dry_day_rule,
+        "anomaly-scheme": anomaly_scheme,
+        "reference-years": reference_years,
+        "eps-floor": eps_floor,
+    }
+    if anomaly_cap is not None:
+        task_args["anomaly-cap"] = anomaly_cap
     run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="generate scenario_annual",
@@ -367,15 +385,7 @@ def generate_scenario_annual(
             ("target-variable", "scenario", "year", "gcm-member"),
             to_run,
         ),
-        task_args={
-            "output-dir": output_dir,
-            "debias-method": debias_method,
-            "dry-day-rule": dry_day_rule,
-            "anomaly-scheme": anomaly_scheme,
-            "reference-years": reference_years,
-            "eps-floor": eps_floor,
-            "anomaly-cap": anomaly_cap,
-        },
+        task_args=task_args,
         task_resources={
             "queue": queue,
             "cores": 1,
