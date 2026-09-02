@@ -290,17 +290,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   (GFDL-ESM4), against 0.2 d and 1.7 d for real-calendar members; in shipped output it was
   ~13.5 d per noleap member and ~4.5 d in the 100-draw ensemble, in all 19 leap years
   2024-2096 — 2024, the product's first year, included. The conversion is now by date:
-  `convert_calendar(align_on="date")` keeps each source day's value at its own date, a
-  `reindex` holds the output axis to exactly that year's days whatever the source calendar,
-  and the existing nearest-neighbour `interpolate_na` fills 29 February from 28 February.
-  It is bit-exact for the members already on a real calendar, and for every member in a
-  year whose lengths already agreed. `total_precipitation` is unaffected. Roots built before
-  this fix carry the artifact and are not regenerated here. (CLIMATE-35)
+  `convert_calendar` keeps each source day's value at its own date, a `reindex` holds the
+  output axis to exactly that year's days whatever the source calendar, and the existing
+  nearest-neighbour `interpolate_na` fills 29 February from 28 February. It is bit-exact
+  for the members already on a real calendar, and for every member in a year whose lengths
+  already agreed.
+
+  Scope, since the blending ran for **every** variable rather than precipitation alone.
+  What it cost depends on the field. Temperature is smooth, so it barely moved: the annual
+  mean shifts ~0.005 K, and on `days_over_30C` the cos-lat global mean moves 0.08 d because
+  cells are knocked both ways and cancel — though three quarters of the cells with any hot
+  day are off by a day or more, worst case 15 d, so it is cancelling noise rather than no
+  effect. Precipitation is spiky and mostly zero against a threshold sitting on the floor,
+  so the smear could only push dry days UP over the line: that one-way ratchet is why
+  `precipitation_days` alone took a coherent bias. `total_precipitation` is near-neutral
+  globally (area-weighted 0.03%) but not per cell — median 0.3%, p99 4.3% — so the earlier
+  claim that it is simply "unaffected" holds only for the global mean. Figures are from the
+  raw GCM grid, ahead of the ERA5 anchor and the regrid, which halved the effect for
+  precipitation and can be expected to damp these similarly.
+
+  Roots built before this fix carry the artifact and are not regenerated here. (CLIMATE-35)
 - The 2100 fallback relabelled 2099 by adding `date.size` days to every stamp, using the
   axis **count** as a calendar **duration**. The two agree only while 2099 comes back as a
   complete 365-day run, and `assign_coords` validates nothing, so a longer axis would have
   slid the year onto 2100-01-02..2101-01-01 and `annual_sum`'s `groupby("date.year")` would
   have filed a day under 2101 in silence. It now assigns 2100's own date range, which makes
-  a mismatched day count raise instead. No shipped output changes: 2099 is 365 days on every
-  calendar present in the extracts, so the arithmetic was giving the right answer for the
-  right years by coincidence rather than by construction. (CLIMATE-35)
+  a mismatched day count raise instead.
+
+  This is hardening against a latent fault, not a fix for an observed one. No shipped output
+  changes — 2099 is 365 days on every calendar present in the extracts, so the arithmetic
+  was right for the right years by coincidence rather than by construction — and the
+  mismatch cannot arise today, because the `reindex` above already pins the day count. The
+  guard is there so that a future change to the calendar conversion fails loudly instead of
+  silently misfiling a year. (CLIMATE-35)

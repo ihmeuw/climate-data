@@ -159,20 +159,30 @@ def load_and_shift_longitude_and_correct_time(
     The conversion is by DATE, never by value. `interp_calendar` used to resample onto the
     target axis by linear interpolation, so whenever the source calendar's year length
     differed from the target's -- a `noleap` member in a leap year -- every target day
-    became a blend of two source days. That is harmless for a total but not for a
-    threshold: a dry day beside a wet one picked up a share of the wet day's rain and
-    crossed the 0.1 mm wet-day cut, inflating `precipitation_days` by ~13.5 d per noleap
-    member in all 19 leap years 2024-2096. `align_on="date"` keeps each source day's value
-    at its own date and leaves 29 February missing, and the `reindex` holds the output axis
-    to exactly this year's days regardless of the source calendar. `interpolate_na` then
-    fills the gap from the nearest real day. (CLIMATE-35)
+    became a blend of two source days. `convert_calendar` maps each source day onto its own
+    date instead and leaves 29 February missing; the `reindex` holds the output axis to
+    exactly this year's days whatever the source calendar, and `interpolate_na` fills the
+    gap from the nearest real day.
+
+    Every variable comes through here, not just precipitation, but what the blending cost
+    depends on the field. Temperature is smooth, so blending barely moves it and the
+    threshold measures it feeds -- `days_over_30C`, the suitability maps -- were knocked
+    either way and largely cancelled in the spatial mean. Precipitation is spiky and mostly
+    zero against a 0.1 mm cut sitting on the floor, so smearing a wet day onto its dry
+    neighbours could only push them UP over the line, never below it. That one-way ratchet
+    is why `precipitation_days` took a coherent ~13.5 d per noleap member in all 19 leap
+    years 2024-2096 while everything else came out as cancelling noise. (CLIMATE-35)
+
+    No `align_on` is passed: it only takes effect when a `360_day` calendar is involved,
+    and no member in the extracts uses one. If that changes, `align_on` needs a deliberate
+    choice rather than xarray's default.
     """
     time_slice = slice(f"{year}-01-01", f"{year}-12-31")
     time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
     ds = load_and_shift_longitude(member_path, time_slice)
     ds = (
         ds.assign_coords(time=ds.time.dt.floor("D"))
-        .convert_calendar("standard", align_on="date")
+        .convert_calendar("standard")
         .reindex(time=time_range)
         .interpolate_na(dim="time", method="nearest", fill_value="extrapolate")
         .rename({"time": "date"})
