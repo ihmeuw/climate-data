@@ -138,7 +138,9 @@ class PopulationModelData:
         return self.root / "admin-inputs" / "raking"
 
     def load_raking_shapes(
-        self, full_aggregation_hierarchy: str, bounds: tuple[float, float, float, float]
+        self,
+        full_aggregation_hierarchy: str,
+        bounds: tuple[float, float, float, float] | None = None,
     ) -> gpd.GeoDataFrame:
         """Load shapes for a full aggregation hierarchy within given bounds.
 
@@ -147,7 +149,8 @@ class PopulationModelData:
         full_aggregation_hierarchy
             The full aggregation hierarchy to load (e.g. "gbd_2021")
         bounds
-            The bounds to load (xmin, ymin, xmax, ymax)
+            The bounds to load (xmin, ymin, xmax, ymax). ``None`` (the default)
+            loads all shapes for the hierarchy.
 
         Returns
         -------
@@ -782,6 +785,8 @@ class ClimateAggregateData:
     def __init__(
         self,
         root: str | Path = cdc.AGGREGATE_ROOT,
+        *,
+        read_only: bool = False,
     ) -> None:
         """Initialize the climate aggregate data manager.
 
@@ -789,9 +794,15 @@ class ClimateAggregateData:
         ----------
         root
             Path to the model root directory
+        read_only
+            If ``True``, do not create the root or logs directories. Use this for
+            path construction and reads (including dry runs), so merely building a
+            manager never writes to shared storage.
         """
         self._root = Path(root)
-        self._create_model_root()
+        self._read_only = read_only
+        if not read_only:
+            self._create_model_root()
 
     def _create_model_root(self) -> None:
         """Create the model root directory and logs directory."""

@@ -275,6 +275,29 @@ def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_concurrency_limit[**P, T](
+    *,
+    default: int | None = None,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the jobmon concurrency-limit option to a command.
+
+    Pass ``default`` to throttle a runner out of the box; leaving it unset means
+    the option defaults to ``None``, which ``run_parallel_maybe_dry_run`` drops
+    so jobmon applies its own default (10000, effectively unthrottled).
+    """
+    return click.option(
+        "--concurrency-limit",
+        type=click.INT,
+        default=default,
+        show_default=True,
+        help=(
+            "Cap on tasks running at once, to keep write latency on shared "
+            "storage manageable. jobmon's own default is 10000, which is "
+            "effectively unthrottled."
+        ),
+    )
+
+
 def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add the run-mode option selecting the storage-root profile."""
     return click.option(
@@ -320,6 +343,7 @@ __all__ = [
     "with_choice",
     "with_cmip6_experiment",
     "with_cmip6_source",
+    "with_concurrency_limit",
     "with_debugger",
     "with_draw",
     "with_dry_run",

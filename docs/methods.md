@@ -108,9 +108,18 @@ The historical daily database is constructed from ERA5 data through a series of 
    - Temperature variables are aggregated to daily mean, maximum, and minimum values
    - Wind speed is calculated as the vector magnitude of u and v components
    - Relative humidity is derived from temperature and dewpoint temperature
-   - Precipitation is processed differently for land and single-level datasets:
-     - ERA5-Land: daily maximum (this is a cumulative variable in the land dataset)
-     - ERA5 single-level: daily sum
+   - Precipitation is processed differently for land and single-level datasets. ERA5 stamps
+     an accumulation window by its **end**: day D's window runs forecast steps 01–24, and
+     step 24 carries the timestamp `00:00` of day D+1. These timestamps are interval labels
+     rather than instants, so both datasets are collapsed with an interval-aware resample
+     binning on `(D 00:00, D+1 00:00]` labelled `D` — one whole accumulation window per day,
+     rather than a calendar-day bucket that straddles two. A consequence is that closing a
+     given day requires the following hour, so the final day of each month is read from the
+     next month's file:
+     - ERA5-Land: accumulates since 00Z, so the day's total is the window's **closing
+       sample** (`daily_last`). Taking the maximum instead is only equivalent while the
+       window rises monotonically, which int16 packing does not guarantee.
+     - ERA5 single-level: hourly increments, so the day's total is their **sum**
 
 3. **Spatial harmonization**:
    - ERA5-Land data (0.1° × 0.1°) is left in its native resolution
@@ -188,7 +197,7 @@ The annual variables are produced by aggregating the daily data to annual time s
 
 Each variable is processed with appropriate encoding scales to optimize storage:
 - Temperature variables: 0.01°C precision
-- Precipitation: 10mm precision
+- Precipitation: 0.1mm precision daily, 10mm annual
 - Count-based metrics: Integer values
 
 These annual variables provide a comprehensive set of climate indicators relevant to health impact assessment, capturing both average conditions and extreme events that may influence health outcomes.
