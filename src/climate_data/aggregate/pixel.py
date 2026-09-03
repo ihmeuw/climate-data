@@ -171,9 +171,26 @@ def pixel(
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
 
+    print("Computing per-hierarchy block intersection sets")
+    intersecting_by_hier = {
+        h: utils.blocks_with_shapefile_intersections(h, pm_data, modeling_frame)
+        for h in hierarchy
+    }
+
+    hbd: list[tuple[str, str, str]] = []
+    for h in hierarchy:
+        h_blocks = [b for b in block_keys if b in intersecting_by_hier[h]]
+        if block_key != clio.RUN_ALL:
+            dropped = sorted(set(block_keys) - intersecting_by_hier[h])
+            if dropped:
+                print(
+                    f"{h}: skipping {len(dropped)} explicitly-requested block(s) with "
+                    f"no shapefile intersection: {dropped}"
+                )
+        hbd.extend(itertools.product([h], h_blocks, draw))
+
     print("Checking for existing results")
     jobs = []
-    hbd = list(itertools.product(hierarchy, block_keys, draw))
     for h, b, d in tqdm.tqdm(hbd):
         if not ca_data.raw_results_path(agg_version, h, b, d).exists():
             jobs.append((h, b, d))
