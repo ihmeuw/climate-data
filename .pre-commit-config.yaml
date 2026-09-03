@@ -29,7 +29,11 @@ repos:
         types: [ python ]
       - id: mypy
         name: mypy
-        entry: poetry run mypy .
+        # Name the source roots rather than `.`: with pass_filenames: false this hook
+        # walks the whole working tree, so an untracked scratch/ directory fails the
+        # hook locally on errors CI never sees. These three roots cover every tracked
+        # .py file (43 files, same set as `mypy $(git ls-files '*.py')`).
+        entry: poetry run mypy src tests scripts
         require_serial: true
         language: system
         types: [python]

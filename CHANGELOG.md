@@ -38,6 +38,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   template-sync workflow is retired (daily schedule removed); reviving it needs a
   non-personal token. (CLIMATE-24)
 ### Fixed
+- `total_precipitation` was inflated ~1.5-1.6x across the whole historical record.
+  ERA5 stamps an accumulation window by its **end**, so day D's window (forecast steps
+  01-24) has its closing sample timestamped `00:00` of day D+1 — these are interval
+  labels, not instants. The `groupby("time.date")` buckets therefore straddled two
+  windows: each opened with the *previous* day's completed total and never saw its own.
+  Collapsing ERA5-Land with `daily_max` consequently returned `max(yesterday's total,
+  today's 23-hour partial)`. Both ERA5 datasets now collapse with an interval-aware
+  `resample(closed="right", label="left")`, which bins on `(D 00:00, D+1 00:00]` labelled
+  `D` — one whole window per day — via the new `utils.daily_accumulation_last` (ERA5-Land,
+  cumulative) and `utils.daily_accumulation_sum` (single-levels, hourly increments).
+  `last` rather than `max` because the two agree only while the window rises
+  monotonically, which int16 packing does not guarantee. Reported by Anna Rutherford
+  (EOD/WASH). (CLIMATE-29)
+- Because an accumulation window is closed by the following hour, generating a month now
+  also reads the first sample of the *next* month — for December, of the next year's
+  January — and trims the out-of-month bins the collapse produces at each end. A missing
+  look-ahead extract raises rather than silently shortening the final day, so
+  regenerating **2023 requires an ERA5 January 2024 extract**. One exists in the GBD-2025
+  pull at `/mnt/share/geospatial/climate/extracted_data/era5/` (both datasets, all of 2024
+  and 2025, `expver='0001'` final ERA5). Because that pull came through the newer CDS API
+  it carries `number` and `expver` coordinates and is stored float32 rather than packed
+  int16, so the look-ahead now normalises coordinates before concatenating — `xr.concat`
+  refuses to join datasets whose coordinates differ. (CLIMATE-29)
 - docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
   upsampled with nearest-neighbor interpolation. It is bilinear
   (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface
