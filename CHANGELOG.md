@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- aggregate: skip modeling-frame blocks that don't intersect the hierarchy's raking
+  shapes — they contribute only empty results, so the `pixel` and `hierarchy` stages
+  skip them (fewer jobs; e.g. `lsae_1285` 52,800 vs 78,400). Fails loudly if the
+  filter would drop every block. (#37)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)
@@ -29,6 +33,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   write latency on shared storage manageable. (CLIMATE-25)
 - `ClimateAggregateData(..., read_only=True)`, mirroring `ClimateData`, so building a
   manager purely to construct paths no longer creates directories. (CLIMATE-25)
+- docs: an `Output schema` section for the temperature person-days product, covering the
+  three output tiers and their path templates, the index levels and the `year` /
+  `year_id` difference between the block and compiled tiers, that the 800 columns are a
+  daily-temperature axis labelled by bin lower edge, that the first and last bin of both
+  the temperature and zone axes are **unbounded** catch-alls, the person-days units and
+  what can and cannot be inverted from them, that scenario/member/hierarchy/draw are
+  path-encoded only, that the compiled tier interleaves aggregate with most-detailed
+  locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
+  fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
 - Extended `HISTORY_YEARS` through 2025; `draws` now prefers historical ERA5 over
   scenario data for overlapping years. (CLIMATE-22)
@@ -41,6 +54,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
   production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
+- `total_precipitation` was inflated ~1.5-1.6x across the whole historical record.
+  ERA5 stamps an accumulation window by its **end**, so day D's window (forecast steps
+  01-24) has its closing sample timestamped `00:00` of day D+1 — these are interval
+  labels, not instants. The `groupby("time.date")` buckets therefore straddled two
+  windows: each opened with the *previous* day's completed total and never saw its own.
+  Collapsing ERA5-Land with `daily_max` consequently returned `max(yesterday's total,
+  today's 23-hour partial)`. Both ERA5 datasets now collapse with an interval-aware
+  `resample(closed="right", label="left")`, which bins on `(D 00:00, D+1 00:00]` labelled
+  `D` — one whole window per day — via the new `utils.daily_accumulation_last` (ERA5-Land,
+  cumulative) and `utils.daily_accumulation_sum` (single-levels, hourly increments).
+  `last` rather than `max` because the two agree only while the window rises
+  monotonically, which int16 packing does not guarantee. Reported by Anna Rutherford
+  (EOD/WASH). (CLIMATE-29)
+- Because an accumulation window is closed by the following hour, generating a month now
+  also reads the first sample of the *next* month — for December, of the next year's
+  January — and trims the out-of-month bins the collapse produces at each end. A missing
+  look-ahead extract raises rather than silently shortening the final day, so
+  regenerating **2023 requires an ERA5 January 2024 extract**. One exists in the GBD-2025
+  pull at `/mnt/share/geospatial/climate/extracted_data/era5/` (both datasets, all of 2024
+  and 2025, `expver='0001'` final ERA5). Because that pull came through the newer CDS API
+  it carries `number` and `expver` coordinates and is stored float32 rather than packed
+  int16, so the look-ahead now normalises coordinates before concatenating — `xr.concat`
+  refuses to join datasets whose coordinates differ. (CLIMATE-29)
+- docs: the ERA5 spatial-harmonization section claimed the 0.25° single-level data is
+  upsampled with nearest-neighbor interpolation. It is bilinear
+  (`generate/historical_daily.py:219`, `:228`); nearest is used only for sea-surface
+  temperature (`:195`), which has no ERA5-Land counterpart. The stale wording appears
+  to come from `interpolate_to_target_latlon`'s default, which both call sites
+  override. Also documented that ocean pixels are therefore supplied entirely by the
+  upsampled 0.25° field, so the product's effective resolution is 0.1° only over land.
 - `cdrun special temperature_person_days --dry-run` no longer creates
   `<output-dir>/<hierarchy>/` and a `logs/` child on shared storage: the aggregate-data
   manager was constructed before `dry_run` was consulted, so a preview wrote. (CLIMATE-25)
