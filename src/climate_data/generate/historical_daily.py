@@ -140,8 +140,11 @@ def drop_noncore_coords(ds: xr.Dataset) -> xr.Dataset:
     refuses to join datasets whose coordinates differ, so a look-ahead that crosses from
     an old extract into a new one has to be normalised first.
 
-    This is live at the 2023/2024 seam: the 1950-2023 extracts predate the format change
-    and the January 2024 look-ahead comes from the newer GBD-2025 pull.
+    Which era a file belongs to tracks its *download* date, not its data year: surveying
+    the archive, `valid_time` covers 1950-1989 and 2024 while `time` covers 1990-2023. So
+    there are two seams, not the single 2023/2024 one this used to describe -- 1989->1990
+    crosses new format into old, 2023->2024 crosses old into new -- and the 1950-2023
+    regeneration passed through both.
     """
     extra = []
     for coord in ds.coords:
@@ -171,9 +174,11 @@ def load_variable_with_lookahead(
     single extra sample completes the final bin without opening a new one.
 
     Raises if the look-ahead file is absent rather than degrading to the incomplete
-    23-hour window: ERA5 extracts stop at 2023, so regenerating 2023 needs a January
-    2024 file that does not exist, and that should stop the run rather than quietly
-    shorten one day. Checked before loading the target month so the run fails fast.
+    23-hour window, which should stop the run rather than quietly shorten one day.
+    Checked before loading the target month so the run fails fast. Note this reaches one
+    year past the history range -- regenerating the last history year needs the following
+    January -- which is why the extract tasks span `cdc.EXTRACT_YEARS` rather than
+    `cdc.HISTORY_YEARS`.
     """
     next_year, next_month = _next_month(year, int(month))
     lookahead_path = cdata.extracted_era5_path(dataset, variable, next_year, next_month)
@@ -181,8 +186,14 @@ def load_variable_with_lookahead(
         msg = (
             f"Cannot close {year}-{month} for {variable}: the accumulation window of its"
             f" final day ends in the following month, whose extract is missing at"
-            f" {lookahead_path}. Extract {dataset} {variable} {next_year}_{next_month}"
-            f" before generating {year}."
+            f" {lookahead_path}. Extract it before generating {year}:\n"
+            f"  cdtask extract era5_download -d {dataset} -x {variable}"
+            f" -y {next_year} -m {next_month}\n"
+            f"  cdtask extract era5_compress -d {dataset} -x {variable}"
+            f" -y {next_year} -m {next_month}\n"
+            f"Use the single-job tasks, not `cdrun extract era5`: the runner's --year"
+            f" stops at the last history year, and it decides what to fetch by file"
+            f" existence."
         )
         raise FileNotFoundError(msg)
 
@@ -190,7 +201,26 @@ def load_variable_with_lookahead(
     lookahead = drop_noncore_coords(
         load_variable(cdata, variable, next_year, next_month, dataset).isel(time=[0])
     )
-    return xr.concat([ds, lookahead], dim="time")
+
+    # Taking sample zero assumes the next month opens on midnight, which is what closes
+    # the target month's final day. ERA5-Land 1950_01 opens at 01:00 instead, so the
+    # assumption does fail somewhere in the archive -- silently, at one day per month.
+    stamp = pd.Timestamp(lookahead.time.to_index()[0])
+    if (stamp.hour, stamp.minute) != (0, 0):
+        msg = (
+            f"Cannot close {year}-{month} for {variable}: the look-ahead at"
+            f" {lookahead_path} opens at {stamp}, not midnight, so its first sample does"
+            f" not close the final day of {year}-{month}."
+        )
+        raise ValueError(msg)
+
+    # `join="exact"` rather than the default `"outer"`: a look-ahead on a different grid
+    # should fail here, not silently NaN-pad both months onto a union grid. Note this
+    # guards the single-level datasets only -- `load_variable` overwrites ERA5-Land's
+    # coordinates from `cdc.ERA5_LAND_*`, so a genuine land-grid change would be relabelled
+    # before reaching this point. The real land files differ across the CDS format change
+    # by ~1e-5 degrees, which is why that overwrite exists.
+    return xr.concat([ds, lookahead], dim="time", join="exact")
 
 
 def trim_to_month(ds: xr.Dataset, year: str, month: int) -> xr.Dataset:
@@ -263,8 +293,8 @@ def generate_historical_daily_main(
     datasets = []
     for month in range(1, 13):
         month_str = f"{month:02d}"
-        print(f"month {month_str}")
-        print("    loading single-levels")
+        print(f"month {month_str}", flush=True)
+        print("    loading single-levels", flush=True)
         single_level = [
             loader(
                 cdata,
@@ -275,7 +305,7 @@ def generate_historical_daily_main(
             )
             for sv in transform.source_variables
         ]
-        print("    collapsing")
+        print("    collapsing", flush=True)
         ds_single_level = transform(
             *single_level, key=cdc.ERA5_DATASETS.reanalysis_era5_single_levels
         ).compute()
@@ -287,7 +317,7 @@ def generate_historical_daily_main(
             ds_single_level = trim_to_month(ds_single_level, year, month)
 
         if target_variable == cdc.ERA5_VARIABLES.sea_surface_temperature:
-            print("    interpolating")
+            print("    interpolating", flush=True)
             ds_single_level = utils.interpolate_to_target_latlon(
                 ds_single_level, method="nearest"
             )
@@ -295,7 +325,7 @@ def generate_historical_daily_main(
             # sea surface temperature is only available in the single-level dataset
             datasets.append(ds_single_level)
         else:
-            print("    loading land")
+            print("    loading land", flush=True)
             land = [
                 loader(
                     cdata, sv, year, month_str, cdc.ERA5_DATASETS.reanalysis_era5_land
@@ -303,7 +333,7 @@ def generate_historical_daily_main(
                 for sv in transform.source_variables
             ]
 
-            print("    collapsing")
+            print("    collapsing", flush=True)
             with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
                 ds_land = transform(
                     *land, key=cdc.ERA5_DATASETS.reanalysis_era5_land
@@ -312,7 +342,7 @@ def generate_historical_daily_main(
             if needs_lookahead:
                 ds_land = trim_to_month(ds_land, year, month)
 
-            print("    interpolating single level")
+            print("    interpolating single level", flush=True)
             ds_single_level = utils.interpolate_to_target_latlon(
                 ds_single_level,
                 method="linear",
@@ -320,10 +350,10 @@ def generate_historical_daily_main(
                 target_lat=ds_land.latitude,
             )
 
-            print("    combining")
+            print("    combining", flush=True)
             combined = ds_land.fillna(ds_single_level).combine_first(ds_single_level)
 
-            print("    interpolating combined")
+            print("    interpolating combined", flush=True)
             combined = utils.interpolate_to_target_latlon(combined, method="linear")
 
             datasets.append(combined)

@@ -63,6 +63,11 @@ REFERENCE_PERIOD = slice(
 )
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
+# Accumulation windows are stamped by their end, so generating a month reads the first
+# sample of the next one and the last history year reaches into the year after it. The
+# single-job extract tasks span this; the runner deliberately does not, so `-y ALL` keeps
+# meaning "the history range" and not "one more year to download".
+EXTRACT_YEARS = [*HISTORY_YEARS, str(int(HISTORY_YEARS[-1]) + 1)]
 # Start of the temperature-exposure / person-days analysis window (the historical
 # person-days product spans this through the last year present on disk).
 EXPOSURE_START_YEAR = 1990
@@ -151,6 +156,12 @@ class CMIP6Variable(NamedTuple):
     encoding_offset: float
     encoding_scale: float
     table_id: Literal["day", "Oday"]
+    # Signed unless the variable cannot be negative. `int16` spends half its range on
+    # negatives, which a flux like precipitation never uses -- `uint16` doubles the
+    # representable ceiling at identical resolution. Read this by attribute, never by
+    # positional unpacking: two call sites used `*_, offset, scale, table_id` and would
+    # have silently misbound when this field was added.
+    encoding_dtype: Literal["int16", "uint16"] = "int16"
 
 
 class _CMIP6Variables(NamedTuple):
@@ -207,8 +218,28 @@ class _CMIP6Variables(NamedTuple):
         name="pr",
         description="Precipitation",
         encoding_offset=0.0,
-        encoding_scale=1e-9,
+        # `pr` is a flux in kg m-2 s-1, so the scale must span daily rainfall expressed
+        # per second. At 1e-9 the int16 ceiling was 2.83 mm/day and anything wetter
+        # wrapped modulo 65536, decoding as garbage including negative precipitation.
+        #
+        # Resolution is the thing to protect: at 1e-6 the quantum is 0.0864 mm/day, just
+        # under the 0.1 mm/day the daily product downstream stores, so the input is not
+        # the limiting factor. Coarsening the scale to buy headroom would invert that --
+        # 2e-6 gives 0.173 mm/day, worse than the output it feeds. So headroom comes from
+        # the dtype instead: precipitation is never negative, and `uint16` puts the whole
+        # 65535-code range above zero for a 5662 mm/day ceiling at the same quantum.
+        # `_FillValue` sits at the top of that range, so zero rainfall encodes as 0 and
+        # can never collide with it.
+        #
+        # Measured: one member peaked at 1012 mm/day and ACCESS-CM2 ssp585 at 3108, which
+        # overflowed the 2831 mm/day signed ceiling by 9.8% and is 55% of the unsigned
+        # one. `1e-7` was rejected outright -- a 283 mm/day ceiling fails on both.
+        #
+        # Settle any change before a re-extract, not after: every `pr_*.nc` carries
+        # whichever encoding is here when it is written.
+        encoding_scale=1e-6,
         table_id="day",
+        encoding_dtype="uint16",
     )
 
     def names(self) -> list[str]:

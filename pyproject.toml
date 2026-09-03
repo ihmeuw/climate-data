@@ -112,6 +112,7 @@ ignore = [
     "S311",     # Not using random numbers for crypto purposes
     "S101",     # Use of `assert` detected
     "PERF401",  # billg hates list comprehensions
+    "PERF403",  # ... and the dict-comprehension version of the same nudge
 ]
 
 [tool.ruff.lint.per-file-ignores]

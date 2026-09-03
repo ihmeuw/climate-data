@@ -311,6 +311,19 @@ class PopulationModelData:
         return hierarchy_df
 
 
+def gcm_member_id(source: str, variant: str) -> str:
+    """The `<source>_<variant>` key identifying one CMIP6 ensemble member.
+
+    Both halves are load-bearing. A CMIP6 `member_id` is only unique *within* a source --
+    `r1i1p1f1` is shared by 24 of the 22 extracted sources in ssp126 and 30 in ssp585 --
+    so a filename keyed on the variant alone collides across models. Defined once here
+    because `extract_cmip6_main` writes these paths and `ClimateData.get_gcms` reads them;
+    when they disagreed, the extract wrote `pr_ssp126_r1i1p1f1.nc` for every source, each
+    overwriting the last, and the generate stage looked for a name nothing had written.
+    """
+    return f"{source}_{variant}"
+
+
 class ClimateData:
     """Class for managing the climate data used in the project."""
 
@@ -427,9 +440,10 @@ class ClimateData:
     ) -> list[str]:
         inclusion_meta = self.load_scenario_inclusion_metadata()[source_variables]
         inclusion_meta = inclusion_meta[inclusion_meta.all(axis=1)]
-        return [
-            f"{model}_{variant}" for model, variant in inclusion_meta.index.tolist()
-        ]
+        gcms = []
+        for model, variant in inclusion_meta.index.tolist():
+            gcms.append(gcm_member_id(model, variant))
+        return gcms
 
     @property
     def ncei_climate_stations(self) -> Path:
@@ -539,7 +553,14 @@ class ClimateData:
 
     @property
     def raw_daily_results(self) -> Path:
-        # NOTE: temporarily points at erf-scratch instead of self.daily_results / "raw"
+        # NOTE: temporarily points at erf-scratch instead of self.daily_results / "raw".
+        # This ignores self.root, so *any* ClimateData -- including one built on a tmp or
+        # scratch root -- creates and writes here, because _create_model_root mkdirs it
+        # unless read_only=True. That is why tests/conftest.py has to patch
+        # cdc.AGGREGATE_ROOT to keep the suite hermetic; without it six tests fail on CI
+        # runners while passing on the cluster, where the directory already exists.
+        # If the redirect is still wanted it should be an explicit constructor argument
+        # rather than an unconditional override.
         return cdc.AGGREGATE_ROOT / "erf-scratch"
 
     def raw_daily_results_path(

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
@@ -91,8 +92,9 @@ def test_drop_noncore_coords_allows_concat_across_extract_formats() -> None:
 
     Extracts pulled through the newer CDS API carry `number` and `expver` coordinates
     that the 1950-2023 extracts lack, and `xr.concat` refuses to join datasets whose
-    coordinates differ. This is live at the 2023/2024 seam: closing 31 Dec 2023 reads the
-    January 2024 file from the newer GBD-2025 pull.
+    coordinates differ. The format era tracks download date rather than data year --
+    `valid_time` covers 1950-1989 and 2024, `time` covers 1990-2023 -- so this is live at
+    two seams, 1989->1990 and 2023->2024, and the full history regeneration crossed both.
     """
     time = xr.date_range("2023-12-31T23:00", periods=1, freq="h", use_cftime=False)
     old = xr.Dataset({"value": (("time",), np.zeros(1))}, coords={"time": time})
@@ -122,10 +124,9 @@ def test_missing_lookahead_raises_and_december_looks_into_january(
 ) -> None:
     """December needs the next *year's* January, and an absent file must be loud.
 
-    ERA5 extracts stop at 2023, so regenerating 2023 requires a January 2024 file that
-    does not exist. Failing loudly is deliberate: the alternative is a silent fallback to
-    the 23-hour partial, and a warning buried in a 74-job cluster log is how CLIMATE-23
-    went unnoticed.
+    Failing loudly is deliberate: the alternative is a silent fallback to the 23-hour
+    partial, and a warning buried in a 74-job cluster log is how CLIMATE-23 went
+    unnoticed.
     """
     cdata = ClimateData(tmp_path, read_only=True)
 
@@ -137,3 +138,83 @@ def test_missing_lookahead_raises_and_december_looks_into_january(
             "12",
             cdc.ERA5_DATASETS.reanalysis_era5_land,
         )
+
+
+SINGLE_LEVELS = cdc.ERA5_DATASETS.reanalysis_era5_single_levels
+PRECIP = cdc.ERA5_VARIABLES.total_precipitation
+# Longitudes as the extracts store them, 0..360, before `load_and_shift_longitude`.
+STORED_LONGITUDES = (0.0, 0.25)
+STORED_LATITUDES = (1.0, 0.75)
+
+
+def _write_single_levels_month(
+    cdata: ClimateData,
+    year: str,
+    month: str,
+    first_stamp: str,
+    n_hours: int = 3,
+    longitudes: tuple[float, ...] = STORED_LONGITUDES,
+) -> None:
+    """Write the smallest file `load_variable` will accept for the single-level dataset.
+
+    Only the single-level branch is usable at this size: the ERA5-Land branch overwrites
+    its coordinates from `cdc.ERA5_LAND_*`, which would demand the full 1801x3600 grid.
+    """
+    time = xr.date_range(first_stamp, periods=n_hours, freq="h", use_cftime=False)
+    shape = (n_hours, len(STORED_LATITUDES), len(longitudes))
+    ds = xr.Dataset(
+        {"tp": (("time", "latitude", "longitude"), np.zeros(shape))},
+        coords={
+            "time": time,
+            "latitude": list(STORED_LATITUDES),
+            "longitude": list(longitudes),
+        },
+    )
+    ds.to_netcdf(cdata.extracted_era5_path(SINGLE_LEVELS, PRECIP, year, month))
+
+
+def test_lookahead_must_open_on_midnight(tmp_path: Path) -> None:
+    """A look-ahead whose first sample is not midnight does not close the final day.
+
+    `.isel(time=[0])` takes whatever the next month opens with and treats it as the
+    closing sample of this month's last day. That assumption is not free: ERA5-Land
+    `1950_01` opens at 01:00, so a file of that shape exists in the archive. Silently
+    accepting it leaves the final day on its 23-hour partial -- one bad day per month,
+    invisible in the output.
+    """
+    cdata = ClimateData(tmp_path)
+    _write_single_levels_month(cdata, "2020", "01", "2020-01-31T21:00")
+    _write_single_levels_month(cdata, "2020", "02", "2020-02-01T01:00")
+
+    with pytest.raises(ValueError, match="not midnight"):
+        hd.load_variable_with_lookahead(cdata, PRECIP, "2020", "01", SINGLE_LEVELS)
+
+
+def test_lookahead_on_a_different_grid_raises(tmp_path: Path) -> None:
+    """A look-ahead on another grid must fail, not NaN-pad onto a union grid.
+
+    `xr.concat` defaults to `join="outer"`, which would quietly widen both months to the
+    union of their coordinates and fill the difference with NaN -- and NaNs in the land
+    field are then filled from the single-level field, so the damage would not surface in
+    `validate_output`. `join="exact"` makes the mismatch loud.
+    """
+    cdata = ClimateData(tmp_path)
+    _write_single_levels_month(cdata, "2020", "01", "2020-01-31T21:00")
+    _write_single_levels_month(
+        cdata, "2020", "02", "2020-02-01T00:00", longitudes=(0.0, 0.5)
+    )
+
+    with pytest.raises(ValueError, match="align|exact|index"):
+        hd.load_variable_with_lookahead(cdata, PRECIP, "2020", "01", SINGLE_LEVELS)
+
+
+def test_lookahead_on_a_matching_grid_joins(tmp_path: Path) -> None:
+    """The guards must not reject the ordinary case they are wrapped around."""
+    cdata = ClimateData(tmp_path)
+    _write_single_levels_month(cdata, "2020", "01", "2020-01-31T21:00")
+    _write_single_levels_month(cdata, "2020", "02", "2020-02-01T00:00")
+
+    joined = hd.load_variable_with_lookahead(cdata, PRECIP, "2020", "01", SINGLE_LEVELS)
+
+    assert joined.sizes["time"] == 3 + 1
+    assert pd.Timestamp(joined.time.to_index()[-1]) == pd.Timestamp("2020-02-01T00:00")
