@@ -30,7 +30,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   dry cells rather than of any scheme, so it is a separate axis and applies to any
   multiplicative scheme; requesting it for an additive anomaly raises rather than being
   ignored. Applied before regridding because capping afterwards would leave a blown-up cell
-  already smeared across its neighbours. (CLIMATE-34)
+  already smeared across its neighbours. The ceiling binds at the granularity each scheme
+  anchors at -- the annual multiplier for the yearly family, the per-calendar-month
+  multiplier for the monthly family -- because bounding the annual mean of a monthly scheme
+  would let one blown-up month drag the rescale factor down and crush the other eleven. It
+  rescales the daily series to meet the ceiling rather than clipping each day: an
+  elementwise clip at 20 sits inside the ordinary distribution of daily rainfall against an
+  annual denominator, and on `yearly-delta` ssp126 it altered 20.5% of land pixels in 2083,
+  82% of which had an annual anomaly at or below 2. A cell already under the ceiling comes
+  out bit-identical to uncapped. (CLIMATE-34)
 - A `monthly-taper` anomaly scheme (`--anomaly-scheme monthly-taper`, with `--eps-floor`,
   default 1.0 mm/day). It keeps the `(T + eps)/(R + eps)` construction and the ERA5 monthly
   anchor, but makes `eps` a taper -- `max(0, floor - R)` -- so it is zero wherever the
