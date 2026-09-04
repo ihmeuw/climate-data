@@ -326,23 +326,6 @@ def with_location_id[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
-def with_concurrency_limit[**P, T](
-    default: int | None = None,
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Cap how many of a workflow's tasks the scheduler runs at once."""
-    return click.option(
-        "--concurrency-limit",
-        type=int,
-        default=default,
-        show_default=True,
-        help=(
-            "Maximum tasks running concurrently. Unset submits the whole fan-out at "
-            "once, which on a large workflow of high-memory tasks is inconsiderate on "
-            "a shared cluster."
-        ),
-    )
-
-
 def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add dry-run flag to a command."""
     return click.option(
@@ -351,6 +334,29 @@ def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
         default=False,
         show_default=True,
         help="Print sbatch-like previews instead of submitting jobs.",
+    )
+
+
+def with_concurrency_limit[**P, T](
+    *,
+    default: int | None = None,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the jobmon concurrency-limit option to a command.
+
+    Pass ``default`` to throttle a runner out of the box; leaving it unset means
+    the option defaults to ``None``, which ``run_parallel_maybe_dry_run`` drops
+    so jobmon applies its own default (10000, effectively unthrottled).
+    """
+    return click.option(
+        "--concurrency-limit",
+        type=click.INT,
+        default=default,
+        show_default=True,
+        help=(
+            "Cap on tasks running at once, to keep write latency on shared "
+            "storage manageable. jobmon's own default is 10000, which is "
+            "effectively unthrottled."
+        ),
     )
 
 
