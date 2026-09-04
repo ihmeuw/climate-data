@@ -154,12 +154,36 @@ def load_and_shift_longitude_and_correct_time(
     member_path: str | Path,
     year: str,
 ) -> xr.Dataset:
+    """Put a member's year onto the real Gregorian calendar, day by day.
+
+    The conversion is by DATE, never by value. `interp_calendar` used to resample onto the
+    target axis by linear interpolation, so whenever the source calendar's year length
+    differed from the target's -- a `noleap` member in a leap year -- every target day
+    became a blend of two source days. `convert_calendar` maps each source day onto its own
+    date instead and leaves 29 February missing; the `reindex` holds the output axis to
+    exactly this year's days whatever the source calendar, and `interpolate_na` fills the
+    gap from the nearest real day.
+
+    Every variable comes through here, not just precipitation, but what the blending cost
+    depends on the field. Temperature is smooth, so blending barely moves it and the
+    threshold measures it feeds -- `days_over_30C`, the suitability maps -- were knocked
+    either way and largely cancelled in the spatial mean. Precipitation is spiky and mostly
+    zero against a 0.1 mm cut sitting on the floor, so smearing a wet day onto its dry
+    neighbours could only push them UP over the line, never below it. That one-way ratchet
+    is why `precipitation_days` took a coherent ~13.5 d per noleap member in all 19 leap
+    years 2024-2096 while everything else came out as cancelling noise. (CLIMATE-35)
+
+    No `align_on` is passed: it only takes effect when a `360_day` calendar is involved,
+    and no member in the extracts uses one. If that changes, `align_on` needs a deliberate
+    choice rather than xarray's default.
+    """
     time_slice = slice(f"{year}-01-01", f"{year}-12-31")
     time_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
     ds = load_and_shift_longitude(member_path, time_slice)
     ds = (
         ds.assign_coords(time=ds.time.dt.floor("D"))
-        .interp_calendar(time_range)
+        .convert_calendar("standard")
+        .reindex(time=time_range)
         .interpolate_na(dim="time", method="nearest", fill_value="extrapolate")
         .rename({"time": "date"})
     )
@@ -180,9 +204,17 @@ def load_variable(
             ds = load_and_shift_longitude_and_correct_time(member_path, str(year))
         except KeyError as e:
             if int(year) == 2100:  # noqa: PLR2004
-                # Some datasets stop in 2099.  Just reuse the last year
+                # Some datasets stop in 2099.  Just reuse the last year, relabelled onto
+                # 2100's own dates.  This used to add `date.size` days to every stamp,
+                # using the axis COUNT as a calendar DURATION -- the two agree only while
+                # 2099 is a complete 365-day run, and `assign_coords` validates nothing, so
+                # a longer axis would have slid the year onto 2100-01-02..2101-01-01 and
+                # `groupby("date.year")` would have filed a day under 2101 in silence.
+                # Assigning the target range instead makes a mismatch raise.
                 ds = load_and_shift_longitude_and_correct_time(member_path, "2099")
-                ds = ds.assign_coords(date=ds.date + np.timedelta64(ds.date.size, "D"))
+                ds = ds.assign_coords(
+                    date=pd.date_range("2100-01-01", "2100-12-31"),
+                )
             else:
                 raise e
 
