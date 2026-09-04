@@ -219,3 +219,68 @@ def aggregate_climate_to_hierarchy(
     )
     results["value"] = results["weighted_climate"] / results["population"]
     return results
+
+
+def blocks_with_shapefile_intersections(
+    hierarchy: str,
+    pm_data: PopulationModelData,
+    modeling_frame: gpd.GeoDataFrame | None = None,
+) -> set[str]:
+    """Return the block_keys whose footprint intersects the hierarchy's raking shapes.
+
+    Blocks whose (dissolved) modeling-frame geometry intersects no raking polygon
+    contribute only empty rows to the sum/sum aggregation, so the pipeline can skip
+    them. The shapefile lookup is delegated to
+    ``PopulationModelData.load_raking_shapes``, which routes to the right file for
+    whichever hierarchy is in use.
+
+    .. note::
+
+        This uses the block *geometry* vs the full shape set, whereas the production
+        emptiness gate in ``build_location_masks`` uses the raster *bounding box* vs
+        bbox-filtered shapes. Equivalence was validated empirically for ``lsae_1285``
+        (bit-for-bit identical output) but is frame/hierarchy-dependent — re-validate
+        if the modeling frame or a hierarchy's shapes change.
+
+    Parameters
+    ----------
+    hierarchy
+        The full aggregation hierarchy whose raking shapes gate the blocks.
+    pm_data
+        PopulationModelData used to load the raking shapes (and the modeling frame
+        when one is not supplied).
+    modeling_frame
+        Optional pre-loaded modeling frame. Loaded via
+        ``pm_data.load_modeling_frame()`` when ``None``; pass the already-loaded
+        frame to avoid a redundant re-read.
+
+    Returns
+    -------
+    set[str]
+        The block_keys with at least one intersecting raking polygon.
+
+    Raises
+    ------
+    ValueError
+        If no block intersects any raking shape while blocks exist — a likely
+        CRS/shapefile misconfiguration that would otherwise silently skip
+        everything.
+    """
+    if modeling_frame is None:
+        modeling_frame = pm_data.load_modeling_frame()
+    blocks_gdf = (
+        modeling_frame[["block_key", "geometry"]].dissolve(by="block_key").reset_index()
+    )
+    shapes = pm_data.load_raking_shapes(hierarchy)
+    if shapes.crs != blocks_gdf.crs:
+        shapes = shapes.to_crs(blocks_gdf.crs)
+    joined = gpd.sjoin(blocks_gdf, shapes, how="inner", predicate="intersects")
+    intersecting = set(joined["block_key"].unique())
+    if not intersecting and len(blocks_gdf):
+        msg = (
+            f"No blocks intersect the raking shapes for hierarchy '{hierarchy}' "
+            f"({len(blocks_gdf)} blocks checked) — refusing to silently skip every "
+            "block. Check the CRS, the shapefile path, and the sjoin."
+        )
+        raise ValueError(msg)
+    return intersecting
