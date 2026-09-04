@@ -1,6 +1,8 @@
 import itertools
+from collections.abc import Sequence
 
 import click
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import tqdm
@@ -25,6 +27,7 @@ def pixel_main(
     population_model_root: str,
     climate_data_root: str,
     output_dir: str,
+    measures: list[str] | None = None,
     *,
     progress_bar: bool = False,
 ) -> None:
@@ -39,7 +42,8 @@ def pixel_main(
     )
 
     years = [int(y) for y in cdc.ALL_YEARS]
-    measures = cdc.AGGREGATION_MEASURES
+    if measures is None:
+        measures = cdc.AGGREGATION_MEASURES
     scenarios = cdc.AGGREGATION_SCENARIOS
 
     total_iterations = len(years) * len(measures) * len(scenarios)
@@ -120,6 +124,20 @@ def pixel_main(
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
+@click.option(
+    "--agg-measure",
+    "agg_measure",
+    type=str,
+    default=",".join(cdc.AGGREGATION_MEASURES),
+    show_default=False,
+    help=(
+        "Comma-separated climate measures to aggregate. Defaults to all of"
+        " AGGREGATION_MEASURES. This is a plain string rather than a clio choice"
+        " option because it is a task arg, not a node arg: raw_results_path is keyed"
+        " on (version, hierarchy, block, draw) with no measure component, so one job"
+        " per measure would have every job writing the same file."
+    ),
+)
 @clio.with_progress_bar()
 def pixel_task(
     agg_version: str,
@@ -129,9 +147,15 @@ def pixel_task(
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
+    agg_measure: str,
     *,
     progress_bar: bool,
 ) -> None:
+    measures = [m.strip() for m in agg_measure.split(",") if m.strip()]
+    unknown = set(measures) - set(cdc.AGGREGATION_MEASURES)
+    if unknown:
+        msg = f"Unknown aggregation measure(s): {sorted(unknown)}"
+        raise click.BadParameter(msg)
     pixel_main(
         agg_version,
         block_key,
@@ -140,54 +164,121 @@ def pixel_task(
         population_model_dir,
         climate_data_dir,
         output_dir,
+        measures,
         progress_bar=progress_bar,
     )
+
+
+def _enumerate_hierarchy_block_draw(
+    hierarchies: list[str],
+    block_keys: list[str],
+    draws: list[str],
+    block_key: str,
+    pm_data: PopulationModelData,
+    modeling_frame: gpd.GeoDataFrame,
+) -> list[tuple[str, str, str]]:
+    """Enumerate the (hierarchy, block, draw) triples worth running.
+
+    Blocks whose footprint intersects none of the hierarchy's raking shapes are
+    dropped: they contribute only empty rows to the sum/sum roll-up, so running
+    them is pure cost. The intersection set is per-hierarchy, hence the filter
+    is applied inside the hierarchy loop rather than once over `block_keys`.
+    """
+    print("Computing per-hierarchy block intersection sets")
+    intersecting_by_hier = {}
+    for hierarchy in hierarchies:
+        intersecting_by_hier[hierarchy] = utils.blocks_with_shapefile_intersections(
+            hierarchy, pm_data, modeling_frame
+        )
+
+    hbd: list[tuple[str, str, str]] = []
+    for hierarchy in hierarchies:
+        hierarchy_blocks = []
+        for block in block_keys:
+            if block in intersecting_by_hier[hierarchy]:
+                hierarchy_blocks.append(block)
+        # Only worth reporting when the user named blocks explicitly; under ALL the
+        # skipped set is the whole ocean and the count is noise.
+        if block_key != clio.RUN_ALL:
+            dropped = sorted(set(block_keys) - intersecting_by_hier[hierarchy])
+            if dropped:
+                print(
+                    f"{hierarchy}: skipping {len(dropped)} explicitly-requested "
+                    f"block(s) with no shapefile intersection: {dropped}"
+                )
+        hbd.extend(itertools.product([hierarchy], hierarchy_blocks, draws))
+    return hbd
 
 
 @click.command()
 @clio.with_agg_version()
 @clio.with_block_key(allow_all=True)
-@clio.with_draw(allow_all=True)
-@clio.with_hierarchy(allow_all=True)
+@click.option(
+    "--draw",
+    "draw",
+    type=click.Choice([*cdc.DRAWS, clio.RUN_ALL]),
+    multiple=True,
+    default=(clio.RUN_ALL,),
+    help="Draw to process. Repeatable; ALL expands to every draw.",
+)
+@click.option(
+    "--hierarchy",
+    "hierarchy",
+    type=click.Choice([*cdc.HIERARCHY_MAP, clio.RUN_ALL]),
+    multiple=True,
+    default=(clio.RUN_ALL,),
+    help="Hierarchy to process. Repeatable; ALL expands to every hierarchy.",
+)
+@clio.with_agg_measure(allow_all=True)
 @clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_queue()
+@click.option(
+    "--concurrency-limit",
+    "concurrency_limit",
+    type=int,
+    default=None,
+    help="Cap simultaneously running tasks. Unset means jobmon's default.",
+)
 @clio.with_dry_run()
 def pixel(
     agg_version: str,
     block_key: str,
-    draw: list[str],
-    hierarchy: list[str],
+    draw: tuple[str, ...],
+    hierarchy: tuple[str, ...],
+    agg_measure: list[str],
     population_model_dir: str,
     climate_data_dir: str,
     output_dir: str,
     queue: str,
+    concurrency_limit: int | None,
     dry_run: bool,
 ) -> None:
+    def expand(values: tuple[str, ...], choices: Sequence[str]) -> list[str]:
+        """Resolve a repeatable choice option, honouring ALL."""
+        out: list[str] = []
+        for value in values:
+            out.extend(clio.convert_choice(value, list(choices)))
+        return sorted(set(out))
+
+    draws = expand(draw, cdc.DRAWS)
+    hierarchies = expand(hierarchy, list(cdc.HIERARCHY_MAP))
+
     ca_data = ClimateAggregateData(output_dir)
     pm_data = PopulationModelData(population_model_dir)
     modeling_frame = pm_data.load_modeling_frame()
     block_keys = modeling_frame["block_key"].unique().tolist()
     block_keys = clio.convert_choice(block_key, block_keys)
 
-    print("Computing per-hierarchy block intersection sets")
-    intersecting_by_hier = {
-        h: utils.blocks_with_shapefile_intersections(h, pm_data, modeling_frame)
-        for h in hierarchy
-    }
-
-    hbd: list[tuple[str, str, str]] = []
-    for h in hierarchy:
-        h_blocks = [b for b in block_keys if b in intersecting_by_hier[h]]
-        if block_key != clio.RUN_ALL:
-            dropped = sorted(set(block_keys) - intersecting_by_hier[h])
-            if dropped:
-                print(
-                    f"{h}: skipping {len(dropped)} explicitly-requested block(s) with "
-                    f"no shapefile intersection: {dropped}"
-                )
-        hbd.extend(itertools.product([h], h_blocks, draw))
+    hbd = _enumerate_hierarchy_block_draw(
+        hierarchies,
+        block_keys,
+        draws,
+        block_key,
+        pm_data,
+        modeling_frame,
+    )
 
     print("Checking for existing results")
     jobs = []
@@ -209,15 +300,20 @@ def pixel(
             "population-model-dir": population_model_dir,
             "climate-data-dir": climate_data_dir,
             "output-dir": output_dir,
+            "agg-measure": ",".join(agg_measure),
         },
         task_resources={
             "queue": queue,
             "cores": 1,
-            "memory": "6G",
+            # Observed MaxRSS on the 17Aug run was 6.0G against a 6G request on every
+            # sampled task. The LSAE hierarchies carry more locations per block, so 6G
+            # would OOM there and max_attempts would mask it as a retry.
+            "memory": "12G",
             "runtime": "480m",
             "project": "proj_rapidresponse",
         },
         log_root=ca_data.log_dir("aggregate_pixel"),
         max_attempts=3,
+        concurrency_limit=concurrency_limit,
         dry_run=dry_run,
     )

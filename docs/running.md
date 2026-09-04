@@ -96,6 +96,37 @@ rely on `-o`:
 Treat this row as a known wart rather than intended design. The other paths are all rooted
 on `-o` as you would expect.
 
+## A measure-filtered `aggregate pixel` run needs its own `--agg-version`
+
+`--agg-measure` lets you aggregate one measure instead of all ten. The saving is large
+(~9x per task for a single measure), but it is **safe only under a convention the code does
+not enforce**, and getting it wrong produces silently incomplete aggregates rather than an
+error.
+
+Two facts combine badly:
+
+1. `ClimateAggregateData.raw_results_path(version, hierarchy, block_key, draw)` has **no
+   measure component**, so a filtered run and an all-measure run write to the *same* path.
+2. The `pixel` runner skips work whose output already exists:
+
+   ```python
+   if not ca_data.raw_results_path(agg_version, h, b, d).exists():
+       jobs.append((h, b, d))
+   ```
+
+So running `--agg-measure total_precipitation` and later re-running the **same
+`agg_version`** without the flag skips every block already written, and the missing nine
+measures are never computed. Nothing errors, the controller exits 0, and
+`aggregate hierarchy` then loads raw results filtered to a measure that has no rows.
+
+**The rule: a version is either all-measure or filtered, never a mixture.** Give each
+filtered run its own `agg_version`, following the existing `YYYY_MM_DD_<PURPOSE>` naming
+(e.g. `2026_08_21_PRECIP_TEST`). The skip check stays correct within any single version.
+
+**Hierarchy, by contrast, *is* part of the key**, so hierarchies can safely be added to an
+existing version later — a run of `gbd_2023` today and `lsae_1209` next week write to
+different paths and will not skip each other.
+
 ## Measured output sizes
 
 | product | per file | notes |
