@@ -323,6 +323,38 @@ def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_debias_method[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the option selecting the Jensen de-bias applied to a multiplicative anomaly."""
+    return click.option(
+        "--debias-method",
+        type=click.Choice(list(cdc.DEBIAS_METHODS)),
+        default="none",
+        show_default=True,
+        help=(
+            "Correct the ratio-estimator (Jensen) bias in the multiplicative anomaly: "
+            "'none' (ship as-is), 'loo' (leave-one-out, a direct out-of-sample estimate), "
+            "or 'analytic' (second-order expansion). Only valid for "
+            f"{', '.join(cdc.DEBIAS_VARIABLES)}."
+        ),
+    )
+
+
+def with_dry_day_rule[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the option selecting how days the driving model reports as dry are treated."""
+    return click.option(
+        "--dry-day-rule",
+        type=click.Choice(list(cdc.DRY_DAY_RULES)),
+        default="none",
+        show_default=True,
+        help=(
+            "Treatment of dry model days in the multiplicative anomaly: 'none' (ship as-is) "
+            "or 'preserve' (zero the anomaly on dry model days and renormalise the "
+            "cell-month, leaving the monthly total unchanged). Only valid for "
+            f"{', '.join(cdc.DRY_DAY_VARIABLES)}."
+        ),
+    )
+
+
 def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add the run-mode option selecting the storage-root profile."""
     return click.option(
@@ -370,8 +402,10 @@ __all__ = [
     "with_cmip6_experiment",
     "with_cmip6_source",
     "with_concurrency_limit",
+    "with_debias_method",
     "with_debugger",
     "with_draw",
+    "with_dry_day_rule",
     "with_dry_run",
     "with_era5_dataset",
     "with_era5_variable",

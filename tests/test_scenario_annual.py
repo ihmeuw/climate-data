@@ -72,6 +72,8 @@ def test_annual_main_threads_the_scheme_into_the_daily_builds(
         "2030",
         "m1",
         tmp_path,
+        debias_method="none",
+        dry_day_rule="none",
         anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY_DELTA,
         reference_years="2015-2020",
     )

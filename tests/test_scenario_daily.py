@@ -38,7 +38,9 @@ def target() -> xr.Dataset:
 def test_monthly_multiplicative_unchanged(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
-    anomaly = compute_anomaly(reference, target, "multiplicative")
+    anomaly = compute_anomaly(
+        reference, target, "multiplicative", debias_method="none", dry_day_rule="none"
+    )
     monthly_ref = reference.groupby("date.month").mean("date")
     expected = (target["value"].isel(date=0) + 1) / (
         monthly_ref["value"].sel(month=1) + 1
@@ -50,7 +52,12 @@ def test_yearly_is_daily_over_window_mean(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
     anomaly = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
     )
     expected = target["value"] / reference["value"].mean("date")
     np.testing.assert_allclose(anomaly["value"].values, expected.values)
@@ -60,7 +67,12 @@ def test_yearly_rakes_totals_and_keeps_daily_shape(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
     anomaly = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
     )
     level = 1234.5  # stand-in for the ERA5 annual-mean daily rate
     scenario = level * anomaly["value"]
@@ -83,10 +95,20 @@ def test_yearly_delta_divides_by_jensen_factor(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
     plain = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
     )
     delta = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY_DELTA
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY_DELTA,
     )
     yearly_means = reference.groupby("date.year").mean("date")
     n_years = yearly_means.sizes["year"]
@@ -106,7 +128,14 @@ def test_yearly_zero_reference_forecasts_zero(
 ) -> None:
     ref0 = reference.copy(deep=True)
     ref0["value"].loc[{"latitude": 0.0, "longitude": 10.0}] = 0.0
-    anomaly = compute_anomaly(ref0, target, "multiplicative", scheme)
+    anomaly = compute_anomaly(
+        ref0,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=scheme,
+    )
     dry = anomaly["value"].sel(latitude=0.0, longitude=10.0)
     assert (dry == 0.0).all()
     wet = anomaly["value"].sel(latitude=1.0, longitude=11.0)
@@ -116,7 +145,14 @@ def test_yearly_zero_reference_forecasts_zero(
 
 def test_yearly_rejects_additive(reference: xr.Dataset, target: xr.Dataset) -> None:
     with pytest.raises(ValueError, match="multiplicative"):
-        compute_anomaly(reference, target, "additive", cdc.ANOMALY_SCHEME_YEARLY)
+        compute_anomaly(
+            reference,
+            target,
+            "additive",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
+        )
 
 
 def test_parse_reference_years() -> None:
@@ -167,17 +203,36 @@ def test_unknown_anomaly_scheme_is_rejected(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
     with pytest.raises(ValueError, match="Unknown anomaly scheme"):
-        compute_anomaly(reference, target, "multiplicative", "yearly_delta")
+        compute_anomaly(
+            reference,
+            target,
+            "multiplicative",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_scheme="yearly_delta",
+        )
 
 
 def test_yearly_delta_rejects_a_single_year_reference(target: xr.Dataset) -> None:
     one_year = _daily_ds("2023-01-01", "2023-12-31", seed=3)
     with pytest.raises(ValueError, match="at least two reference years"):
         compute_anomaly(
-            one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY_DELTA
+            one_year,
+            target,
+            "multiplicative",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY_DELTA,
         )
     # the plain yearly scheme has no variance estimate and stays valid
-    compute_anomaly(one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY)
+    compute_anomaly(
+        one_year,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
+    )
 
 
 def test_zero_reference_guard_reports_its_count(
@@ -185,7 +240,14 @@ def test_zero_reference_guard_reports_its_count(
 ) -> None:
     ref0 = reference.copy(deep=True)
     ref0["value"].loc[{"latitude": 0.0, "longitude": 10.0}] = 0.0
-    compute_anomaly(ref0, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY)
+    compute_anomaly(
+        ref0,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
+    )
     assert "Zero-reference guard: 1 cells" in capsys.readouterr().out
 
 
@@ -193,7 +255,12 @@ def test_monthly_ratio_is_the_per_month_ratio(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
     anomaly = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
     )
     monthly_ref = reference.groupby("date.month").mean("date")
     expected = target["value"].isel(date=0) / monthly_ref["value"].sel(month=1)
@@ -214,9 +281,21 @@ def test_monthly_ratio_equals_yearly_for_a_seasonless_reference(
         coords={"date": dates, "latitude": [0.0, 1.0], "longitude": [10.0, 11.0]},
     )
     a = compute_anomaly(
-        flat, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+        flat,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
     )
-    b = compute_anomaly(flat, target, "multiplicative", cdc.ANOMALY_SCHEME_YEARLY)
+    b = compute_anomaly(
+        flat,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_YEARLY,
+    )
     np.testing.assert_allclose(a["value"].values, b["value"].values)
 
 
@@ -227,7 +306,12 @@ def test_monthly_ratio_zero_month_forecasts_zero_for_that_month_only(
     ref_months = pd.DatetimeIndex(ref0["date"].to_numpy()).month
     ref0["value"].data[ref_months == 1, 0, 0] = 0.0
     anomaly = compute_anomaly(
-        ref0, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+        ref0,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
     )
     months = pd.DatetimeIndex(anomaly["date"].to_numpy()).month
     cell = anomaly["value"].to_numpy()[:, 0, 0]
@@ -240,10 +324,20 @@ def test_monthly_delta_divides_by_the_per_month_jensen_factor(
     reference: xr.Dataset, target: xr.Dataset
 ) -> None:
     plain = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
     )
     delta = compute_anomaly(
-        reference, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_DELTA
+        reference,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_DELTA,
     )
     per_month = reference["value"].resample(date="1MS").mean()
     var_of_mean = per_month.groupby("date.month").var("date", ddof=1) / 5
@@ -261,11 +355,21 @@ def test_monthly_delta_rejects_a_single_year_reference(target: xr.Dataset) -> No
     one_year = _daily_ds("2023-01-01", "2023-12-31", seed=3)
     with pytest.raises(ValueError, match="at least two reference years"):
         compute_anomaly(
-            one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_DELTA
+            one_year,
+            target,
+            "multiplicative",
+            debias_method="none",
+            dry_day_rule="none",
+            anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_DELTA,
         )
     # the plain ratio needs no variance estimate and stays valid
     compute_anomaly(
-        one_year, target, "multiplicative", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+        one_year,
+        target,
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
     )
 
 
