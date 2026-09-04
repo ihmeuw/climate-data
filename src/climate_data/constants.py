@@ -61,8 +61,110 @@ REFERENCE_PERIOD = slice(
     f"{REFERENCE_YEARS[0]}-01-01",
     f"{REFERENCE_YEARS[-1]}-12-31",
 )
+# CLI form of the default GCM reference window (inclusive years).
+REFERENCE_YEARS_ARG = f"{REFERENCE_YEARS[0]}-{REFERENCE_YEARS[-1]}"
+
+# How multiplicative anomalies are constructed (see generate/scenario_daily.py).
+# "monthly" is the historical behavior: per-month (target + 1) / (reference + 1).
+# "yearly" divides daily values by the reference-period annual-mean rate, which
+# rakes each year's total to the reference level and distributes it over days
+# by the GCM's own daily shape. "yearly-delta" additionally removes the Jensen
+# bias of the noisy window-mean denominator.
+# The "monthly-ratio" family is the yearly scheme applied per month: a pure
+# per-month ratio (no +1 stabiliser) that keeps the ERA5 monthly anchor; a
+# zero reference month forecasts zero. "monthly-delta" divides each month's
+# ratio by its analytic Jensen factor. A leave-one-out variant was tried and
+# removed: LOO needs a strictly positive series, which the eps = 0 ratio does
+# not provide -- a dry reference year makes a fold undefined, and one wet year
+# in an otherwise dry window drives the factor past 100.
+ANOMALY_SCHEME_MONTHLY = "monthly"
+ANOMALY_SCHEME_MONTHLY_RATIO = "monthly-ratio"
+ANOMALY_SCHEME_MONTHLY_DELTA = "monthly-delta"
+ANOMALY_SCHEME_YEARLY = "yearly"
+ANOMALY_SCHEME_YEARLY_DELTA = "yearly-delta"
+YEARLY_ANOMALY_SCHEMES = [
+    ANOMALY_SCHEME_YEARLY,
+    ANOMALY_SCHEME_YEARLY_DELTA,
+]
+
+# "monthly-taper" keeps the (T + eps)/(R + eps) construction but makes eps a TAPER
+# rather than a constant: ``eps = max(0, EPS_FLOOR - R)``, so it is zero wherever the
+# reference is healthy and grows only as the reference approaches zero.
+#
+#   R >= floor : reduces to T/R          -- exact, no damping at all
+#   R <  floor : reduces to (T + e)/(R + e) with e = floor - R, so T = R still gives
+#                exactly 1 -- level-neutral, unlike a bare floor T/max(R, floor),
+#                which returns R/floor and cuts an unchanged arid cell by up to 90%
+#
+# The constant eps = 1 damps the model's fractional change everywhere by R/(R+1) --
+# only 71% survives at the global-mean R of 2.43 mm/day -- which suppresses the
+# projected trend to 0.65 of the driving models' own. The taper at EPS_FLOOR = 1.0
+# damps LESS than the constant at every reference level, and not at all above the
+# floor. Measured in the CLIMATE-34 sweeps; see the eps-floor-choice analysis.
+ANOMALY_SCHEME_MONTHLY_TAPER = "monthly-taper"
+
+# Schemes that carry an eps, and so can take --debias-method / --dry-day-rule. The
+# yearly and monthly-ratio families have no eps for those corrections to act on.
+EPS_BEARING_SCHEMES = (
+    ANOMALY_SCHEME_MONTHLY,
+    ANOMALY_SCHEME_MONTHLY_TAPER,
+)
+
+# Optional ceiling on the multiplicative anomaly, applied on the GCM grid before
+# regridding. A GCM whose reference window is near-zero in a cell can produce an anomaly
+# of several hundred -- 1209 was measured on `yearly-delta` ssp585 -- which lands as a
+# forecast a thousand times the cell's own observed climatology. That is a property of a
+# badly-behaved model in a dry cell, not of any scheme, so the ceiling is a separate axis
+# from the eps construction and applies to any multiplicative scheme. `None` disables it,
+# which is the shipped behaviour. Set with --anomaly-cap.
+DEFAULT_ANOMALY_CAP: float | None = None
+
+# Default taper floor, in mm/day. Deliberately the same value as the constant eps it
+# replaces, so the change reads as "eps becomes a taper" rather than a new tuned
+# parameter. Override per run with --eps-floor.
+DEFAULT_EPS_FLOOR = 1.0
+
+ANOMALY_SCHEMES = [
+    ANOMALY_SCHEME_MONTHLY,
+    ANOMALY_SCHEME_MONTHLY_RATIO,
+    ANOMALY_SCHEME_MONTHLY_DELTA,
+    ANOMALY_SCHEME_MONTHLY_TAPER,
+    *YEARLY_ANOMALY_SCHEMES,
+]
+
+DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS
+
+# Jensen bias-correction of the multiplicative anomaly. The forecast anomaly is
+# ``(T + eps) / (R + eps)`` with ``R`` a monthly mean over only the five REFERENCE_YEARS.
+# ``1/(R + eps)`` is convex, so the anomaly averages above 1 even with no climate change --
+# a level bias on every forecast year, not just the ERA5/CMIP6 seam. Selected per run via
+# ``--debias-method``; see ``generate.scenario_daily.jensen_debias_factor``.
+#   none      ship the anomaly as-is (the default; current behaviour)
+#   loo       leave-one-out, a direct out-of-sample estimate with no series expansion
+#   analytic  second-order ``1 + Var(Rbar)/(R + eps)^2``
+DEBIAS_METHODS = ("none", "loo", "analytic")
+
+# Variables the de-bias is validated for. ``wind_speed`` and ``relative_humidity`` also use
+# the multiplicative anomaly, but ``eps = 1`` means something quite different against a mean
+# of 3-5 m/s or 50-80 %RH than against mm/day, and neither has been measured. Refuse them
+# rather than silently applying an unvalidated correction.
+DEBIAS_VARIABLES = ("total_precipitation",)
+
+# Treatment of days the driving model reports as dry. ``(T + eps)/(R + eps)`` is strictly
+# positive even at ``T = 0``, so a rainless model day still receives a share of the ERA5
+# monthly climatology -- which manufactures wet days that neither source has. Selected per run
+# via ``--dry-day-rule``; see ``generate.scenario_daily.apply_dry_day_rule``.
+#   none      leave the anomaly alone (the default; current behaviour)
+#   preserve  zero the anomaly on dry model days and renormalise the cell-month onto the
+#             surviving days, so the month's total is untouched and only its distribution
+#             across days changes
+DRY_DAY_RULES = ("none", "preserve")
+DRY_DAY_VARIABLES = ("total_precipitation",)
+# The threshold itself is DRY_DAY_THRESHOLD_MM, defined with the CMIP6 variables below
+# because it is derived from `pr`'s encoding.
+
 # Accumulation windows are stamped by their end, so generating a month reads the first
 # sample of the next one and the last history year reaches into the year after it. The
 # single-job extract tasks span this; the runner deliberately does not, so `-y ALL` keeps
@@ -253,6 +355,15 @@ class _CMIP6Variables(NamedTuple):
 
 
 CMIP6_VARIABLES = _CMIP6Variables()
+
+# Below this daily rainfall the driving model is reporting a dry day, in mm/day. Deliberately
+# a physical threshold rather than a test for `== 0`: the extracts are quantised, so an encoded
+# zero means "below half a quantum" -- 0.0432 mm/day at `pr`'s 1e-6 scale -- and that meaning
+# already changed once, when CLIMATE-29 moved the dtype to uint16. Deriving it from the
+# encoding keeps the rule honest about what it actually tests and makes it track the encoding
+# rather than silently diverging from it.
+_SECONDS_PER_DAY = 86400
+DRY_DAY_THRESHOLD_MM = 0.5 * CMIP6_VARIABLES.pr.encoding_scale * _SECONDS_PER_DAY
 
 
 # Processing Constants

@@ -169,6 +169,68 @@ def with_scenario[**P, T](
     )
 
 
+def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--anomaly-scheme",
+        type=click.Choice(cdc.ANOMALY_SCHEMES),
+        default=cdc.ANOMALY_SCHEME_MONTHLY,
+        show_default=True,
+        help=(
+            "How multiplicative anomalies are built: 'monthly' is the "
+            "historical per-month (target+1)/(reference+1); 'monthly-ratio' "
+            "is the pure per-month ratio (no +1, zero reference month "
+            "forecasts zero), with 'monthly-delta' removing each month's "
+            "Jensen bias analytically; 'monthly-taper' keeps the (T+eps)/(R+eps) "
+            "form but tapers eps to zero above --eps-floor, so a healthy "
+            "reference is left undamped; 'yearly' uses the reference-period "
+            "annual-mean denominator, with 'yearly-delta' removing its Jensen bias."
+        ),
+    )
+
+
+def with_anomaly_cap[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--anomaly-cap",
+        type=float,
+        default=cdc.DEFAULT_ANOMALY_CAP,
+        show_default=True,
+        help=(
+            "Ceiling on the multiplicative anomaly, applied on the GCM grid before "
+            "regridding. Unset means no ceiling. Multiplicative variables only: a cap "
+            "on an additive anomaly is rejected rather than ignored."
+        ),
+    )
+
+
+def with_eps_floor[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--eps-floor",
+        type=float,
+        default=cdc.DEFAULT_EPS_FLOOR,
+        show_default=True,
+        help=(
+            "Taper floor in mm/day for the 'monthly-taper' anomaly scheme. The "
+            "stabiliser is eps = max(0, floor - reference), so it is zero wherever "
+            "the reference is at or above the floor and the model's ratio passes "
+            "through exactly. Ignored by every other scheme."
+        ),
+    )
+
+
+def with_reference_years[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--reference-years",
+        type=str,
+        default=cdc.REFERENCE_YEARS_ARG,
+        show_default=True,
+        help=(
+            "GCM reference window as START-END (inclusive years). Only the "
+            "GCM side moves with this; the ERA5 anchor comes from the "
+            "precomputed historical reference."
+        ),
+    )
+
+
 def with_gcm_member[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     return click.option(
         "--gcm-member",
@@ -275,6 +337,61 @@ def with_dry_run[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     )
 
 
+def with_concurrency_limit[**P, T](
+    *,
+    default: int | None = None,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the jobmon concurrency-limit option to a command.
+
+    Pass ``default`` to throttle a runner out of the box; leaving it unset means
+    the option defaults to ``None``, which ``run_parallel_maybe_dry_run`` drops
+    so jobmon applies its own default (10000, effectively unthrottled).
+    """
+    return click.option(
+        "--concurrency-limit",
+        type=click.INT,
+        default=default,
+        show_default=True,
+        help=(
+            "Cap on tasks running at once, to keep write latency on shared "
+            "storage manageable. jobmon's own default is 10000, which is "
+            "effectively unthrottled."
+        ),
+    )
+
+
+def with_debias_method[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the option selecting the Jensen de-bias applied to a multiplicative anomaly."""
+    return click.option(
+        "--debias-method",
+        type=click.Choice(list(cdc.DEBIAS_METHODS)),
+        default="none",
+        show_default=True,
+        help=(
+            "Correct the ratio-estimator (Jensen) bias in the multiplicative anomaly: "
+            "'none' (ship as-is), 'loo' (leave-one-out, a direct out-of-sample estimate), "
+            "or 'analytic' (second-order expansion). Only valid for "
+            f"{', '.join(cdc.DEBIAS_VARIABLES)}."
+        ),
+    )
+
+
+def with_dry_day_rule[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """Add the option selecting how days the driving model reports as dry are treated."""
+    return click.option(
+        "--dry-day-rule",
+        type=click.Choice(list(cdc.DRY_DAY_RULES)),
+        default="none",
+        show_default=True,
+        help=(
+            "Treatment of dry model days in the multiplicative anomaly: 'none' (ship as-is) "
+            "or 'preserve' (zero the anomaly on dry model days and renormalise the "
+            "cell-month, leaving the monthly total unchanged). Only valid for "
+            f"{', '.join(cdc.DRY_DAY_VARIABLES)}."
+        ),
+    )
+
+
 def with_run_mode[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Add the run-mode option selecting the storage-root profile."""
     return click.option(
@@ -316,13 +433,19 @@ __all__ = [
     "with_agg_measure",
     "with_agg_scenario",
     "with_agg_version",
+    "with_anomaly_cap",
+    "with_anomaly_scheme",
     "with_block_key",
     "with_choice",
     "with_cmip6_experiment",
     "with_cmip6_source",
+    "with_concurrency_limit",
+    "with_debias_method",
     "with_debugger",
     "with_draw",
+    "with_dry_day_rule",
     "with_dry_run",
+    "with_eps_floor",
     "with_era5_dataset",
     "with_era5_variable",
     "with_gcm_member",
@@ -335,6 +458,7 @@ __all__ = [
     "with_overwrite",
     "with_progress_bar",
     "with_queue",
+    "with_reference_years",
     "with_run_mode",
     "with_scenario",
     "with_target_variable",

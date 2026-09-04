@@ -5,6 +5,93 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- Jensen de-bias for the multiplicative anomaly: `scenario_daily.jensen_debias_factor`
+  and a `--debias-method` option (`clio.with_debias_method`, default `none`) threaded
+  through the `scenario_daily` and `scenario_annual` runners and tasks. The forecast
+  anomaly `(T + eps) / (R + eps)` divides by a 5-year monthly mean, and `1/(R + eps)` is
+  convex, so it averages above 1 with no climate change — a level bias on every forecast
+  year. `loo` is a leave-one-out estimate of that inflation, provably `>= 1`; `analytic`
+  is the second-order expansion. Restricted to `DEBIAS_VARIABLES`. (CLIMATE-30)
+- Dry-day rule for the multiplicative anomaly: `scenario_daily.apply_dry_day_rule` and a
+  `--dry-day-rule` option (`clio.with_dry_day_rule`, default `none`) threaded through the
+  `scenario_daily` and `scenario_annual` runners and tasks. `(T + eps)/(R + eps)` is strictly
+  positive even at `T = 0`, so a rainless model day still receives a share of the ERA5 monthly
+  climatology — and because `eps` dominates for such a day, every rainless day in a cell-month
+  gets the same positive floor rather than a dry spell. `preserve` zeroes those days and
+  renormalises the cell-month onto the surviving days, so the monthly total is unchanged and
+  only its distribution across days moves. Cell-months the model reports dry on every day are
+  left alone, which is what makes the rule exactly total-preserving. Restricted to
+  `DRY_DAY_VARIABLES`. (CLIMATE-30)
+- An `--anomaly-cap` option: an optional ceiling on the multiplicative anomaly, applied on
+  the GCM grid before regridding. Off by default, so shipped behaviour is unchanged. A GCM
+  whose reference window is near-zero in a cell can produce an anomaly of several hundred --
+  1209 was measured on `yearly-delta` ssp585, landing as a forecast over a thousand times
+  that cell's own observed climatology. The ceiling is a property of badly-behaved models in
+  dry cells rather than of any scheme, so it is a separate axis and applies to any
+  multiplicative scheme; requesting it for an additive anomaly raises rather than being
+  ignored. Applied before regridding because capping afterwards would leave a blown-up cell
+  already smeared across its neighbours. The ceiling binds at the granularity each scheme
+  anchors at -- the annual multiplier for the yearly family, the per-calendar-month
+  multiplier for the monthly family -- because bounding the annual mean of a monthly scheme
+  would let one blown-up month drag the rescale factor down and crush the other eleven. It
+  rescales the daily series to meet the ceiling rather than clipping each day: an
+  elementwise clip at 20 sits inside the ordinary distribution of daily rainfall against an
+  annual denominator, and on `yearly-delta` ssp126 it altered 20.5% of land pixels in 2083,
+  82% of which had an annual anomaly at or below 2. A cell already under the ceiling comes
+  out bit-identical to uncapped. (CLIMATE-34)
+- A `monthly-taper` anomaly scheme (`--anomaly-scheme monthly-taper`, with `--eps-floor`,
+  default 1.0 mm/day). It keeps the `(T + eps)/(R + eps)` construction and the ERA5 monthly
+  anchor, but makes `eps` a taper -- `max(0, floor - R)` -- so it is zero wherever the
+  reference is at or above the floor and the model's ratio passes through undamped. The
+  constant `eps = 1` damps the model's fractional change everywhere by `R/(R + 1)`, only 71%
+  surviving at the global-mean reference of 2.43 mm/day, which suppresses the projected
+  2024-2100 trend to 0.65 of the driving models' own. The taper damps less than the constant
+  at every reference level, and unlike a bare floor `T/max(R, floor)` it stays level-neutral:
+  a cell the model reports unchanged still gets exactly 1. (CLIMATE-34)
+- `jensen_debias_factor` takes the `eps` field rather than assuming the constant 1, so the
+  de-bias composes with the taper; the shipped behaviour is the `eps = 1` special case. Where
+  `eps` is zero and the other reference years are dry a leave-one-out fold is undefined, and
+  dropping it is not a repair -- it discards the fold that makes Jensen's bound hold, so the
+  factor collapses below 1 and the correction inflates rather than shrinks. Those cell-months
+  now get factor 1.0, and a factor below its guaranteed bound of 1 raises. (CLIMATE-34)
+- `--debias-method` and `--dry-day-rule` are accepted for any scheme that carries an `eps`
+  (`monthly`, `monthly-taper`) and rejected for those that do not (the yearly and
+  monthly-ratio families), rather than being rejected for everything but `monthly`.
+  (CLIMATE-34)
+- `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
+  whole fan-out to the scheduler in one submission. (CLIMATE-30)
+- A `yearly` anomaly scheme for multiplicative variables in `generate scenario_daily`
+  (`--anomaly-scheme`, default `monthly` = historical behavior): daily values are
+  divided by the reference-period annual-mean rate, which is equivalent to raking each
+  year's total to the reference level and distributing it over days by the GCM's own
+  daily shape. Avoids the Jensen inflation of near-zero dry-season monthly denominators
+  in the `(target+1)/(reference+1)` construction. Also a `--reference-years` option for
+  the GCM reference window (default `2019-2023`, the current behavior). (CLIMATE-30)
+- A `yearly-delta` variant of the yearly scheme that additionally removes the Jensen
+  bias of the noisy window-mean denominator by dividing by `1 + Var(mean)/mean^2`;
+  corrects the mean and leaves the CV unchanged. (CLIMATE-30)
+- The yearly schemes guard the zero-denominator edge: a cell whose reference window
+  has no rain at all forecasts zero rain rather than inf/NaN, and the count of
+  zeroed cells is reported; a missing (NaN) reference propagates NaN at the anomaly
+  stage (downstream regridding interpolates it). (CLIMATE-30)
+- The anomaly scheme reaches the production path: `generate scenario_annual` threads
+  `--anomaly-scheme` / `--reference-years` into its in-memory daily builds and stamps
+  both into the output attrs (raw daily and annual); the daily and annual runners
+  skip additive variables under the yearly schemes instead of submitting tasks that
+  are certain to fail; `--concurrency-limit` on the annual runner (default 500).
+  (CLIMATE-30)
+- A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
+  ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero
+  reference month forecasts zero, counted and reported); `monthly-delta` divides each
+  month's ratio by its analytic Jensen factor, which is bounded below by 1 by
+  construction. A leave-one-out variant was evaluated and removed: the estimator
+  needs a strictly positive series, which this scheme's bare monthly denominator
+  does not provide. (CLIMATE-30)
+- Guard rails on the yearly schemes: unknown scheme names raise instead of silently
+  running plain yearly; `yearly-delta` raises on a single-year reference window
+  instead of silently skipping the correction; `--reference-years` requires
+  four-digit years; `annual_mean_from_monthly` binds day weights by month label and
+  rejects anything but a full 1..12 coordinate. (CLIMATE-30)
 - aggregate: skip modeling-frame blocks that don't intersect the hierarchy's raking
   shapes — they contribute only empty results, so the `pixel` and `hierarchy` stages
   skip them (fewer jobs; e.g. `lsae_1285` 52,800 vs 78,400). Fails loudly if the
@@ -30,6 +117,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `reanalysis` + `ensemble_spread` 2m-temperature files (2024/2025) from CDS,
   matching Katrin Burkart's `era5_{product_type}_{variable}_{year}.nc` layout, to
   fill the GBD temperature-uncertainty gap. (CLIMATE-22)
+- `scripts/link_person_days_draws.py`: the person-days "step 4" draw symlinker, which
+  links the compiled per-draw parquets into the results layout. It previously lived only
+  in a personal `~/deploy` clone, so the forecast person-days product could not be
+  reproduced from a clean checkout. `--results-version` is required and must already
+  exist, `--dry-run` previews without writing, and every degenerate case (missing
+  compiled source, an existing output pointing at a different GCM, an unresolvable
+  annual draw, a draw map that disagrees between scenarios) aborts or exits non-zero
+  rather than reporting a healthy-looking run. (CLIMATE-25)
+- `--concurrency-limit` option (`clio.with_concurrency_limit`) on the
+  `temperature_person_days` runner, capping how many tasks jobmon runs at once to keep
+  write latency on shared storage manageable. (CLIMATE-25)
+- `ClimateAggregateData(..., read_only=True)`, mirroring `ClimateData`, so building a
+  manager purely to construct paths no longer creates directories. (CLIMATE-25)
 - docs: a `Running the pipeline` page (`docs/running.md`) for the operational side the
   methodology page does not cover — stage order and the two dependencies that are easy to
   miss, the three non-obvious `scenario_inclusion` behaviours (it surveys *all* CMIP6
@@ -71,6 +171,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `GITHUB_TOKEN`. Auto dependency-bump PRs no longer trigger CI, and the cookiecutter
   template-sync workflow is retired (daily schedule removed); reviving it needs a
   non-personal token. (CLIMATE-24)
+- `cdrun special temperature_person_days` now caps concurrency at 1500 by default
+  instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
+  production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
 - `aggregate hierarchy` failed every job with `ZeroDivisionError`.
   `aggregate_climate_to_hierarchy` divided `weighted_climate` by `population` with no
@@ -208,6 +311,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   The stale wording appears to come from `interpolate_to_target_latlon`'s default, which
   both call sites override. Also documented that ocean pixels are therefore supplied entirely by the
   upsampled 0.25° field, so the product's effective resolution is 0.1° only over land.
+- `cdrun special temperature_person_days --dry-run` no longer creates
+  `<output-dir>/<hierarchy>/` and a `logs/` child on shared storage: the aggregate-data
+  manager was constructed before `dry_run` was consulted, so a preview wrote. (CLIMATE-25)
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations
   (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
@@ -227,3 +333,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Docs deployment: `build_docs` now authenticates with the built-in `GITHUB_TOKEN`
   (+ `contents: write`) instead of a dead personal token, so `mkdocs gh-deploy` can push
   `gh-pages` again; also fixed a malformed job `if:` expression. (CLIMATE-24)
+- `precipitation_days` was inflated in every leap year for members on a `noleap` calendar.
+  `scenario_daily.load_and_shift_longitude_and_correct_time` put each year onto the real
+  Gregorian calendar with `interp_calendar`, which resamples by **linear interpolation of
+  values**. Whenever the source calendar's year length differed from the target's — 365
+  against 366 — every target day became a blend of two source days. That is nearly harmless
+  for a total, since interpolation redistributes precipitation mass roughly conservatively,
+  but not for a threshold count: a dry day beside a wet one picked up a share of the wet
+  day's rain and crossed the 0.1 mm wet-day cut. Measured on the raw ssp245 fields, the
+  2024-minus-2025 step was +28.2 d (BCC-CSM2-MR), +23.3 d (NorESM2-MM) and +19.2 d
+  (GFDL-ESM4), against 0.2 d and 1.7 d for real-calendar members; in shipped output it was
+  ~13.5 d per noleap member and ~4.5 d in the 100-draw ensemble, in all 19 leap years
+  2024-2096 — 2024, the product's first year, included. The conversion is now by date:
+  `convert_calendar` keeps each source day's value at its own date, a `reindex` holds the
+  output axis to exactly that year's days whatever the source calendar, and the existing
+  nearest-neighbour `interpolate_na` fills 29 February from 28 February. It is bit-exact
+  for the members already on a real calendar, and for every member in a year whose lengths
+  already agreed.
+
+  Scope, since the blending ran for **every** variable rather than precipitation alone.
+  What it cost depends on the field. Temperature is smooth, so it barely moved: the annual
+  mean shifts ~0.005 K, and on `days_over_30C` the cos-lat global mean moves 0.08 d because
+  cells are knocked both ways and cancel — though three quarters of the cells with any hot
+  day are off by a day or more, worst case 15 d, so it is cancelling noise rather than no
+  effect. Precipitation is spiky and mostly zero against a threshold sitting on the floor,
+  so the smear could only push dry days UP over the line: that one-way ratchet is why
+  `precipitation_days` alone took a coherent bias. `total_precipitation` is near-neutral
+  globally (area-weighted 0.03%) but not per cell — median 0.3%, p99 4.3% — so the earlier
+  claim that it is simply "unaffected" holds only for the global mean. Figures are from the
+  raw GCM grid, ahead of the ERA5 anchor and the regrid, which halved the effect for
+  precipitation and can be expected to damp these similarly.
+
+  Roots built before this fix carry the artifact and are not regenerated here. (CLIMATE-35)
+- The 2100 fallback relabelled 2099 by adding `date.size` days to every stamp, using the
+  axis **count** as a calendar **duration**. The two agree only while 2099 comes back as a
+  complete 365-day run, and `assign_coords` validates nothing, so a longer axis would have
+  slid the year onto 2100-01-02..2101-01-01 and `annual_sum`'s `groupby("date.year")` would
+  have filed a day under 2101 in silence. It now assigns 2100's own date range, which makes
+  a mismatched day count raise instead.
+
+  This is hardening against a latent fault, not a fix for an observed one. No shipped output
+  changes — 2099 is 365 days on every calendar present in the extracts, so the arithmetic
+  was right for the right years by coincidence rather than by construction — and the
+  mismatch cannot arise today, because the `reindex` above already pins the day count. The
+  guard is there so that a future change to the calendar conversion fails loudly instead of
+  silently misfiling a year. (CLIMATE-35)
