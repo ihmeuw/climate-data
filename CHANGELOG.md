@@ -5,6 +5,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- Jensen de-bias for the multiplicative anomaly: `scenario_daily.jensen_debias_factor`
+  and a `--debias-method` option (`clio.with_debias_method`, default `none`) threaded
+  through the `scenario_daily` and `scenario_annual` runners and tasks. The forecast
+  anomaly `(T + eps) / (R + eps)` divides by a 5-year monthly mean, and `1/(R + eps)` is
+  convex, so it averages above 1 with no climate change — a level bias on every forecast
+  year. `loo` is a leave-one-out estimate of that inflation, provably `>= 1`; `analytic`
+  is the second-order expansion. Restricted to `DEBIAS_VARIABLES`. (CLIMATE-30)
+- Dry-day rule for the multiplicative anomaly: `scenario_daily.apply_dry_day_rule` and a
+  `--dry-day-rule` option (`clio.with_dry_day_rule`, default `none`) threaded through the
+  `scenario_daily` and `scenario_annual` runners and tasks. `(T + eps)/(R + eps)` is strictly
+  positive even at `T = 0`, so a rainless model day still receives a share of the ERA5 monthly
+  climatology — and because `eps` dominates for such a day, every rainless day in a cell-month
+  gets the same positive floor rather than a dry spell. `preserve` zeroes those days and
+  renormalises the cell-month onto the surviving days, so the monthly total is unchanged and
+  only its distribution across days moves. Cell-months the model reports dry on every day are
+  left alone, which is what makes the rule exactly total-preserving. Restricted to
+  `DRY_DAY_VARIABLES`. (CLIMATE-30)
+- `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
+  whole fan-out to the scheduler in one submission. (CLIMATE-30)
+- A `yearly` anomaly scheme for multiplicative variables in `generate scenario_daily`
+  (`--anomaly-scheme`, default `monthly` = historical behavior): daily values are
+  divided by the reference-period annual-mean rate, which is equivalent to raking each
+  year's total to the reference level and distributing it over days by the GCM's own
+  daily shape. Avoids the Jensen inflation of near-zero dry-season monthly denominators
+  in the `(target+1)/(reference+1)` construction. Also a `--reference-years` option for
+  the GCM reference window (default `2019-2023`, the current behavior). (CLIMATE-30)
+- A `yearly-delta` variant of the yearly scheme that additionally removes the Jensen
+  bias of the noisy window-mean denominator by dividing by `1 + Var(mean)/mean^2`;
+  corrects the mean and leaves the CV unchanged. (CLIMATE-30)
+- The yearly schemes guard the zero-denominator edge: a cell whose reference window
+  has no rain at all forecasts zero rain rather than inf/NaN, and the count of
+  zeroed cells is reported; a missing (NaN) reference propagates NaN at the anomaly
+  stage (downstream regridding interpolates it). (CLIMATE-30)
+- The anomaly scheme reaches the production path: `generate scenario_annual` threads
+  `--anomaly-scheme` / `--reference-years` into its in-memory daily builds and stamps
+  both into the output attrs (raw daily and annual); the daily and annual runners
+  skip additive variables under the yearly schemes instead of submitting tasks that
+  are certain to fail; `--concurrency-limit` on the annual runner (default 75).
+  (CLIMATE-30)
+- A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
+  ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero
+  reference month forecasts zero, counted and reported); `monthly-delta` divides each
+  month's ratio by its analytic Jensen factor, which is bounded below by 1 by
+  construction. A leave-one-out variant was evaluated and removed: the estimator
+  needs a strictly positive series, which this scheme's bare monthly denominator
+  does not provide. (CLIMATE-30)
+- Guard rails on the yearly schemes: unknown scheme names raise instead of silently
+  running plain yearly; `yearly-delta` raises on a single-year reference window
+  instead of silently skipping the correction; `--reference-years` requires
+  four-digit years; `annual_mean_from_monthly` binds day weights by month label and
+  rejects anything but a full 1..12 coordinate. (CLIMATE-30)
 - aggregate: skip modeling-frame blocks that don't intersect the hierarchy's raking
   shapes — they contribute only empty results, so the `pixel` and `hierarchy` stages
   skip them (fewer jobs; e.g. `lsae_1285` 52,800 vs 78,400). Fails loudly if the

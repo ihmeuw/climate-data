@@ -84,6 +84,51 @@ TRANSFORM_MAP: dict[str, tuple[utils.Transform, str]] = {
 }
 
 
+ANOMALY_TYPES = {}
+for _variable, (_transform, _anomaly_type) in TRANSFORM_MAP.items():
+    ANOMALY_TYPES[_variable] = _anomaly_type
+
+
+def variables_for_anomaly_scheme(
+    target_variables: list[str],
+    anomaly_scheme: str,
+    anomaly_types: dict[str, str],
+) -> list[str]:
+    """Drop target variables the anomaly scheme cannot be applied to.
+
+    The yearly schemes are defined for multiplicative variables only -- `compute_anomaly`
+    raises for anything else -- while `--target-variable` defaults to ALL. Without this
+    filter the default invocation of a yearly scheme submits additive jobs that are
+    certain to fail, and they fail only after being scheduled and retried.
+
+    Skipped variables are named rather than dropped quietly, and selecting nothing but
+    additive variables is an error rather than an empty run.
+    """
+    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
+        return target_variables
+
+    keep = []
+    skip = []
+    for variable in target_variables:
+        if anomaly_types[variable] == "multiplicative":
+            keep.append(variable)
+        else:
+            skip.append(variable)
+
+    if skip:
+        print(
+            f"Anomaly scheme '{anomaly_scheme}' applies to multiplicative variables only;"
+            f" skipping {len(skip)}: {', '.join(skip)}."
+        )
+    if not keep:
+        msg = (
+            f"No multiplicative variables selected, so anomaly scheme '{anomaly_scheme}'"
+            f" has nothing to run. Selected: {', '.join(target_variables)}."
+        )
+        raise click.UsageError(msg)
+    return keep
+
+
 def load_and_shift_longitude(
     member_path: str | Path,
     time_slice: slice,
@@ -119,9 +164,10 @@ def load_and_shift_longitude_and_correct_time(
 def load_variable(
     member_path: str | Path,
     year: str | int,
+    reference_period: slice = cdc.REFERENCE_PERIOD,
 ) -> xr.Dataset:
     if year == "reference":
-        ds = load_and_shift_longitude(member_path, cdc.REFERENCE_PERIOD).rename(
+        ds = load_and_shift_longitude(member_path, reference_period).rename(
             {"time": "date"}
         )
     else:
@@ -141,19 +187,346 @@ def load_variable(
     return ds
 
 
-def compute_anomaly(
-    reference: xr.Dataset, target: xr.Dataset, anomaly_type: str
+def _monthly_means_by_reference_year(reference: xr.Dataset) -> xr.Dataset:
+    """Monthly means of the reference period, one slice per reference year.
+
+    Dims ``(reference_year, month, latitude, longitude)``, on the GCM's own grid. The years
+    come from the data rather than from ``cdc.REFERENCE_YEARS`` so that the ``(n-1)/n`` rescale
+    below stays consistent with whatever window was actually loaded. Selection is by boolean
+    mask rather than by date string so it works for the 360-day cftime calendars some GCMs use.
+    """
+    years = [int(y) for y in np.unique(reference["date"].dt.year.values)]
+    by_year = []
+    for year in years:
+        one_year = reference.sel(date=reference["date"].dt.year == year)
+        by_year.append(one_year.groupby("date.month").mean("date"))
+    return xr.concat(by_year, dim="reference_year").assign_coords(
+        reference_year=years,
+    )
+
+
+def jensen_debias_factor(
+    reference: xr.Dataset,
+    reference_monthly: xr.Dataset,
+    debias_method: str,
 ) -> xr.Dataset:
-    reference = reference.groupby("date.month").mean("date")
+    """The factor to divide a multiplicative anomaly by, per month and per GCM cell.
+
+    The anomaly is ``(T + 1) / (R + 1)`` with ``R`` a monthly mean over only five reference
+    years. ``1/(R + 1)`` is convex, so by Jensen's inequality the anomaly averages above 1 even
+    when the target year is drawn from the same distribution as the reference period -- a level
+    bias on every forecast year. This returns an estimate of that inflation.
+
+    ``loo`` -- leave-one-out. For each held-out reference year, form the multiplier of that
+    year against the mean of the *other* years and average over the folds. Between reference
+    years there is no climate signal, so an unbiased estimator would return 1; the excess is
+    the bias, measured from the data with no series expansion. The held-out denominator
+    averages ``n-1`` years while the pipeline averages ``n``, and the bias goes as ``1/n``, so
+    the excess is rescaled by ``(n-1)/n``.
+
+    This is provably ``>= 1``: with ``u_y = T_y + 1`` and ``S = sum_y u_y`` the held-out
+    denominator is ``(S - u_y)/(n-1)``, so each fold is ``(n-1)*u_y/(S - u_y)``, convex in
+    ``u_y``, and Jensen gives ``mean_y >= f(S/n) = 1`` with equality iff every reference year
+    is identical. So dividing by it can only shrink the anomaly, never inflate it -- which is
+    what makes the effect on a threshold count such as ``precipitation_days`` sign-definite.
+
+    ``analytic`` -- the second-order expansion ``1 + Var(Rbar)/(R + 1)^2``. Cheaper to reason
+    about but it is a truncated series, and the neglected terms matter exactly where the
+    correction is largest (near-zero ``R``, where ``eps`` dominates the denominator). Kept for
+    comparison; ``loo`` is the estimator this was built for.
+
+    ``reference_monthly`` is the pipeline's own denominator, passed in rather than recomputed so
+    the analytic form squares precisely the value the anomaly divides by.
+    """
+    by_year = _monthly_means_by_reference_year(reference)
+    n_years = by_year.sizes["reference_year"]
+
+    if debias_method == "loo":
+        mean_year = by_year.mean("reference_year")
+        folds = []
+        for i in range(n_years):
+            held_out = by_year.isel(reference_year=i)
+            others = (n_years * mean_year - held_out) / (n_years - 1)
+            folds.append((held_out + 1) / (others + 1))
+        raw = xr.concat(folds, dim="reference_year").mean("reference_year")
+        factor = 1.0 + ((n_years - 1) / n_years) * (raw - 1.0)
+    elif debias_method == "analytic":
+        variance = by_year.var("reference_year", ddof=1)
+        factor = 1.0 + (variance / n_years) / (reference_monthly + 1) ** 2
+    else:
+        msg = f"Unknown debias method: {debias_method}"
+        raise ValueError(msg)
+
+    factor = factor.drop_vars("reference_year", errors="ignore")
+    if not bool(np.isfinite(factor.to_dataarray()).all()):
+        msg = (
+            f"Non-finite value in the {debias_method} de-bias factor. Interpolation would "
+            "silently fill it from a neighbour rather than surface it, so refusing to proceed."
+        )
+        raise ValueError(msg)
+    return factor
+
+
+def apply_dry_day_rule(
+    anomaly: xr.Dataset,
+    target: xr.Dataset,
+    dry_day_rule: str,
+) -> xr.Dataset:
+    """Stop the ``eps`` offset from manufacturing rain on days the model reports as dry.
+
+    The multiplicative anomaly ``(T + eps)/(R + eps)`` is strictly positive even when the
+    model reports no rain at all, so a rainless model day still receives
+    ``E_ref(month) * a(d) > 0`` of the ERA5 climatology. Worse, ``eps`` dominates the
+    numerator for such a day, so *every* rainless day in a cell-month gets the identical
+    anomaly ``1/(R_m + eps)`` -- a flat positive floor rather than a dry spell. Wherever that
+    floor clears the 0.1 mm/day wet-day threshold the pipeline reports a wet day that neither
+    ERA5 nor the GCM has, which is what makes ``precipitation_days`` step at the boundary.
+
+    ``preserve`` zeroes the anomaly on those days and rescales the surviving days of the same
+    cell-month so the month's *summed* anomaly is unchanged. Because that sum is preserved per
+    GCM cell and ``interpolate_to_target_latlon`` is linear, the monthly -- and therefore the
+    annual -- total on the target grid is untouched to floating point. Only the distribution
+    across days moves. That is deliberate: this is a shape fix, exactly orthogonal to the
+    Jensen de-bias, which is a level fix that leaves the shape alone. The two commute, because
+    the de-bias scales a whole month uniformly and this rescale is scale-invariant.
+
+    A cell-month the model reports dry on *every* day has nothing to renormalise onto. Those
+    are left exactly as they are rather than zeroed. Zeroing them is the variant that was
+    measured and rejected: it loses up to 1.2% of the population-weighted annual total across
+    the 1-3% of cell-months that are all-dry. Keeping them is what makes this rule
+    total-preserving, and it is the whole difference between the two.
+    """
+    if dry_day_rule == "none":
+        return anomaly
+    if dry_day_rule != "preserve":
+        msg = f"Unknown dry-day rule: {dry_day_rule}"
+        raise ValueError(msg)
+
+    wet = target > cdc.DRY_DAY_THRESHOLD_MM
+    kept = anomaly.where(wet, 0.0)
+
+    month_total = anomaly.groupby("date.month").sum("date")
+    kept_total = kept.groupby("date.month").sum("date")
+    has_wet_day = kept_total > 0
+    # 1.0 on an all-dry cell-month, so the restore below survives the rescale untouched.
+    rescale = (month_total / kept_total.where(has_wet_day)).fillna(1.0)
+
+    has_wet_day_daily = has_wet_day.sel(month=anomaly["date"].dt.month).drop_vars(
+        "month"
+    )
+    kept = kept.where(has_wet_day_daily, anomaly)
+
+    rescaled = kept.groupby("date.month") * rescale
+    return rescaled.drop_vars("month")
+
+
+def _report_zeroed(n_zeroed: int, unit: str) -> None:
+    if n_zeroed:
+        # Downstream bilinear regridding spreads a zeroed native cell into
+        # its whole 0.1 degree neighbourhood, so make the extent visible.
+        print(
+            f"Zero-reference guard: {n_zeroed} {unit} have no rain in the "
+            f"reference window and will forecast zero; regridding spreads "
+            f"these zeros into neighbouring target pixels."
+        )
+
+
+def _yearly_anomaly(
+    reference: xr.Dataset, target: xr.Dataset, anomaly_scheme: str
+) -> xr.Dataset:
+    """Yearly multiplier: one annual-mean denominator instead of twelve monthly ones.
+
+    Because ratio-of-sums equals ratio-of-means, this is identical to raking each
+    year's total to the reference level and distributing it over days by the GCM's
+    own daily shape. No +1 stabiliser: annual-mean denominators sit far from zero,
+    unlike dry-season monthly means, which is what CLIMATE-30 is about.
+    """
+    reference_mean = reference.mean("date")
+    # A reference window with zero rain forecasts zero rain: mask the
+    # denominator so a bone-dry cell yields 0 rather than inf/NaN, while a
+    # missing (NaN) reference stays NaN.
+    positive_mean = reference_mean.where(reference_mean > 0)
+    n_zeroed = int(
+        sum((reference_mean[v] == 0).sum().item() for v in reference_mean.data_vars)
+    )
+    _report_zeroed(n_zeroed, "cells")
+    anomaly = (target / positive_mean).where(reference_mean > 0, reference_mean * 0.0)
+    if anomaly_scheme == cdc.ANOMALY_SCHEME_YEARLY_DELTA:
+        # The window-mean denominator is noisy, so E[T/ref] exceeds
+        # T/E[ref] (Jensen). Dividing by 1 + Var(mean)/mean**2 removes
+        # that mean bias without changing the CV.
+        yearly_means = reference.groupby("date.year").mean("date")
+        n_years = yearly_means.sizes["year"]
+        if n_years < 2:  # noqa: PLR2004
+            # With one reference year the variance is NaN and the fillna
+            # below would silently turn the correction off.
+            msg = (
+                f"Anomaly scheme '{cdc.ANOMALY_SCHEME_YEARLY_DELTA}' needs "
+                f"at least two reference years to estimate the window "
+                f"variance; got {n_years}."
+            )
+            raise ValueError(msg)
+        variance_of_mean = yearly_means.var("year", ddof=1) / n_years
+        inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
+        anomaly = anomaly / (1.0 + inflation)
+    return anomaly
+
+
+def _monthly_ratio_anomaly(
+    reference: xr.Dataset, target: xr.Dataset, anomaly_scheme: str
+) -> xr.Dataset:
+    """The yearly scheme applied per month, keeping the ERA5 monthly anchor.
+
+    A pure per-month ratio of each day to its month's reference-window mean --
+    no +1 stabiliser. A zero reference month forecasts zero; a missing (NaN)
+    reference stays NaN. 'monthly-delta' additionally divides each month's
+    ratio by its analytic Jensen inflation factor.
+    """
+    monthly_mean = reference.groupby("date.month").mean("date")
+    positive_mean = monthly_mean.where(monthly_mean > 0)
+    n_zeroed = int(
+        sum((monthly_mean[v] == 0).sum().item() for v in monthly_mean.data_vars)
+    )
+    _report_zeroed(n_zeroed, "month-cells")
+    # 1/mean where the month has rain; 0 where it is bone-dry; NaN where missing.
+    factor = (1.0 / positive_mean).where(monthly_mean > 0, monthly_mean * 0.0)
+    if anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY_RATIO:
+        factor = factor / _monthly_jensen_factor(
+            reference, positive_mean, anomaly_scheme
+        )
+    anomaly = target.groupby("date.month") * factor
+    return anomaly.drop_vars("month")
+
+
+def _monthly_jensen_factor(
+    reference: xr.Dataset, positive_mean: xr.Dataset, anomaly_scheme: str
+) -> xr.Dataset:
+    """Per-month analytic Jensen inflation factor, 1 + Var(window mean) / mean**2.
+
+    Bounded below by 1 by construction, with no undefined cases. A leave-one-out
+    estimator was evaluated and rejected here: it requires a strictly positive
+    series, and this scheme divides by a bare monthly mean that can be zero.
+    """
+    per_month = reference.resample(date="1MS").mean()
+    n_years = int(reference.groupby("date.year").mean("date").sizes["year"])
+    if n_years < 2:  # noqa: PLR2004
+        msg = (
+            f"Anomaly scheme '{anomaly_scheme}' needs at least two reference "
+            f"years to estimate the per-month variance; got {n_years}."
+        )
+        raise ValueError(msg)
+    variance_of_mean = per_month.groupby("date.month").var("date", ddof=1) / n_years
+    inflation = (variance_of_mean / positive_mean**2).fillna(0.0)
+    return 1.0 + inflation
+
+
+def check_scheme_compatibility(
+    anomaly_scheme: str,
+    anomaly_type: str,
+    debias_method: str,
+    dry_day_rule: str,
+) -> None:
+    """Reject combinations of the two correction axes that cannot both apply.
+
+    `debias_method` and `dry_day_rule` correct the `(T + eps) / (R + eps)` construction
+    used by the `monthly` scheme. The yearly and monthly-ratio families do not use that
+    construction at all, so asking for either against them is a mistake rather than a
+    no-op, and silently ignoring the request would produce a file whose attrs claim a
+    correction that was never applied.
+    """
+    if debias_method != "none" or dry_day_rule != "none":
+        msg = (
+            f"debias_method={debias_method!r} and dry_day_rule={dry_day_rule!r} cannot "
+            f"be combined with anomaly_scheme={anomaly_scheme!r}: they correct the eps "
+            "stabiliser, which this scheme does not use."
+        )
+        raise ValueError(msg)
+    if anomaly_type != "multiplicative":
+        msg = f"Anomaly scheme '{anomaly_scheme}' only applies to multiplicative variables."
+        raise ValueError(msg)
+
+
+def compute_anomaly(
+    reference: xr.Dataset,
+    target: xr.Dataset,
+    anomaly_type: str,
+    *,
+    debias_method: str,
+    dry_day_rule: str,
+    anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
+) -> xr.Dataset:
+    if anomaly_scheme not in cdc.ANOMALY_SCHEMES:
+        msg = (
+            f"Unknown anomaly scheme: {anomaly_scheme!r}; "
+            f"expected one of {cdc.ANOMALY_SCHEMES}."
+        )
+        raise ValueError(msg)
+    if anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY:
+        check_scheme_compatibility(
+            anomaly_scheme, anomaly_type, debias_method, dry_day_rule
+        )
+        if anomaly_scheme in cdc.YEARLY_ANOMALY_SCHEMES:
+            return _yearly_anomaly(reference, target, anomaly_scheme)
+        return _monthly_ratio_anomaly(reference, target, anomaly_scheme)
+    reference_monthly = reference.groupby("date.month").mean("date")
     if anomaly_type == "additive":
-        anomaly = target.groupby("date.month") - reference
+        if debias_method != "none":
+            msg = (
+                f"debias_method={debias_method!r} was requested for an additive anomaly. The "
+                "Jensen bias comes from the convexity of 1/(R + eps) and has no additive "
+                "counterpart, so there is nothing to correct."
+            )
+            raise ValueError(msg)
+        if dry_day_rule != "none":
+            msg = (
+                f"dry_day_rule={dry_day_rule!r} was requested for an additive anomaly. The "
+                "rule exists because eps makes a zero-rainfall day come out positive; an "
+                "additive anomaly has no such floor, and a 'dry day' is meaningless for "
+                "temperature."
+            )
+            raise ValueError(msg)
+        anomaly = target.groupby("date.month") - reference_monthly
     elif anomaly_type == "multiplicative":
-        anomaly = (target + 1).groupby("date.month") / (reference + 1)
+        denominator = reference_monthly + 1
+        if debias_method != "none":
+            # Fold the factor into the denominator rather than dividing the anomaly by it.
+            # `anomaly / factor` silently OUTER-BROADCASTS to (date, latitude, longitude,
+            # month) -- no error raised -- which is a 12x blow-up of an eager multi-GB daily
+            # array. Folding costs one 12-month temporary and is numerically identical.
+            denominator = denominator * jensen_debias_factor(
+                reference, reference_monthly, debias_method
+            )
+        anomaly = (target + 1).groupby("date.month") / denominator
+        anomaly = apply_dry_day_rule(anomaly, target, dry_day_rule)
     else:
         msg = f"Unknown anomaly type: {anomaly_type}"
         raise ValueError(msg)
-    anomaly = anomaly.drop_vars("month")
+    anomaly = anomaly.drop_vars("month", errors="ignore")
     return anomaly
+
+
+def check_debias_variable(
+    target_variable: str, debias_method: str, dry_day_rule: str = "none"
+) -> None:
+    """Refuse a correction for a variable it has not been validated against.
+
+    Called from the launchers as well as from the worker, so that ``--target-variable all``
+    fails in a second rather than after submitting thousands of doomed jobs.
+    """
+    if debias_method != "none" and target_variable not in cdc.DEBIAS_VARIABLES:
+        msg = (
+            f"debias_method={debias_method!r} is not validated for {target_variable!r}. "
+            f"Allowed: {list(cdc.DEBIAS_VARIABLES)}. Name the variable explicitly rather "
+            "than using 'all'."
+        )
+        raise ValueError(msg)
+    if dry_day_rule != "none" and target_variable not in cdc.DRY_DAY_VARIABLES:
+        msg = (
+            f"dry_day_rule={dry_day_rule!r} is not validated for {target_variable!r}. "
+            f"Allowed: {list(cdc.DRY_DAY_VARIABLES)}. Name the variable explicitly rather "
+            "than using 'all'."
+        )
+        raise ValueError(msg)
 
 
 def generate_scenario_daily_main(
@@ -163,8 +536,18 @@ def generate_scenario_daily_main(
     gcm_member: str,
     output_dir: str | Path,
     write_output: bool = True,
+    *,
+    debias_method: str,
+    dry_day_rule: str,
+    anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
+    reference_years: str = cdc.REFERENCE_YEARS_ARG,
 ) -> xr.Dataset:
+    # NOTE: debias_method is deliberately keyword-only with NO default. A default of "none"
+    # here would mean that forgetting to thread it through generate_scenario_annual_main
+    # produces a silently undebiased run that reports success. Let mypy catch the call site.
     cdata = ClimateData(output_dir)
+    check_debias_variable(target_variable, debias_method, dry_day_rule)
+    reference_period = utils.parse_reference_years(reference_years)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
     source_paths = [
@@ -181,21 +564,44 @@ def generate_scenario_daily_main(
     # compute anomaly, resample anomaly and compute scenario data
     # load reference (monthly) and target (daily for a given year)
     print(f"{gcm_member}: Loading reference")
-    sref = transform(*[load_variable(vp, "reference") for vp in source_paths])
+    sref = transform(
+        *[load_variable(vp, "reference", reference_period) for vp in source_paths]
+    )
 
     print(f"{gcm_member}: Loading target")
     target = transform(*[load_variable(vp, year) for vp in source_paths])
 
     print(f"{gcm_member}: computing anomaly")
-    v_anomaly = compute_anomaly(sref, target, anomaly_type)
+    v_anomaly = compute_anomaly(
+        sref,
+        target,
+        anomaly_type,
+        debias_method=debias_method,
+        dry_day_rule=dry_day_rule,
+        anomaly_scheme=anomaly_scheme,
+    )
 
     print(f"{gcm_member}: resampling anomaly")
     resampled_anomaly = utils.interpolate_to_target_latlon(v_anomaly, method="linear")
     print(f"{gcm_member}: computing scenario data")
     if anomaly_type == "additive":
         scenario_data = historical_reference + resampled_anomaly.groupby("date.month")
-    else:
+    elif anomaly_scheme not in cdc.YEARLY_ANOMALY_SCHEMES:
+        # monthly and the monthly-ratio family keep the ERA5 monthly anchor.
         scenario_data = historical_reference * resampled_anomaly.groupby("date.month")
+    else:
+        # The yearly anomaly is anchored to the annual level, so the level
+        # comes from the day-weighted annual mean of the monthly reference.
+        scenario_data = (
+            utils.annual_mean_from_monthly(historical_reference) * resampled_anomaly
+        )
+    # Provenance: the output path encodes scenario/variable/year/member only, so without
+    # this a yearly file is indistinguishable from a monthly one sitting beside it.
+    scenario_data.attrs["debias_method"] = debias_method
+    scenario_data.attrs["dry_day_rule"] = dry_day_rule
+    scenario_data.attrs["anomaly_scheme"] = anomaly_scheme
+    scenario_data.attrs["reference_years"] = reference_years
+
     if write_output is True:
         print(f"{gcm_member}: Writing output")
         cdata.save_raw_daily_results(
@@ -218,12 +624,20 @@ def generate_scenario_daily_main(
 @clio.with_year(cdc.FORECAST_YEARS)
 @clio.with_gcm_member()
 @clio.with_output_directory(cdc.MODEL_ROOT)
+@clio.with_debias_method()
+@clio.with_dry_day_rule()
+@clio.with_anomaly_scheme()
+@clio.with_reference_years()
 def generate_scenario_daily_task(
     target_variable: str,
     cmip6_experiment: str,
     year: str,
     gcm_member: str,
     output_dir: str,
+    debias_method: str,
+    dry_day_rule: str,
+    anomaly_scheme: str,
+    reference_years: str,
 ) -> None:
     generate_scenario_daily_main(
         target_variable,
@@ -232,6 +646,10 @@ def generate_scenario_daily_task(
         gcm_member,
         output_dir,
         write_output=True,
+        debias_method=debias_method,
+        dry_day_rule=dry_day_rule,
+        anomaly_scheme=anomaly_scheme,
+        reference_years=reference_years,
     )
 
 
@@ -240,6 +658,10 @@ def generate_scenario_daily_task(
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_year(cdc.FORECAST_YEARS, allow_all=True)
 @clio.with_output_directory(cdc.MODEL_ROOT)
+@clio.with_debias_method()
+@clio.with_dry_day_rule()
+@clio.with_anomaly_scheme()
+@clio.with_reference_years()
 @clio.with_queue()
 @clio.with_overwrite()
 @clio.with_dry_run()
@@ -248,11 +670,22 @@ def generate_scenario_daily(
     cmip6_experiment: list[str],
     year: list[str],
     output_dir: str,
+    debias_method: str,
+    dry_day_rule: str,
+    anomaly_scheme: str,
+    reference_years: str,
     queue: str,
     overwrite: bool,
     dry_run: bool,
 ) -> None:
+    # Fail before submitting anything: with `-t all` a de-bias request would otherwise die
+    # one job at a time, after the whole fan-out is already queued.
+    for variable in target_variable:
+        check_debias_variable(variable, debias_method, dry_day_rule)
     cdata = ClimateData(output_dir)
+    target_variable = variables_for_anomaly_scheme(
+        target_variable, anomaly_scheme, ANOMALY_TYPES
+    )
     veyg = []
     complete = []
     for v, e, y in itertools.product(target_variable, cmip6_experiment, year):
@@ -278,6 +711,10 @@ def generate_scenario_daily(
         ),
         task_args={
             "output-dir": output_dir,
+            "debias-method": debias_method,
+            "dry-day-rule": dry_day_rule,
+            "anomaly-scheme": anomaly_scheme,
+            "reference-years": reference_years,
         },
         task_resources={
             "queue": queue,
