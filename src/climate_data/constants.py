@@ -86,10 +86,49 @@ YEARLY_ANOMALY_SCHEMES = [
     ANOMALY_SCHEME_YEARLY,
     ANOMALY_SCHEME_YEARLY_DELTA,
 ]
+
+# "monthly-taper" keeps the (T + eps)/(R + eps) construction but makes eps a TAPER
+# rather than a constant: ``eps = max(0, EPS_FLOOR - R)``, so it is zero wherever the
+# reference is healthy and grows only as the reference approaches zero.
+#
+#   R >= floor : reduces to T/R          -- exact, no damping at all
+#   R <  floor : reduces to (T + e)/(R + e) with e = floor - R, so T = R still gives
+#                exactly 1 -- level-neutral, unlike a bare floor T/max(R, floor),
+#                which returns R/floor and cuts an unchanged arid cell by up to 90%
+#
+# The constant eps = 1 damps the model's fractional change everywhere by R/(R+1) --
+# only 71% survives at the global-mean R of 2.43 mm/day -- which suppresses the
+# projected trend to 0.65 of the driving models' own. The taper at EPS_FLOOR = 1.0
+# damps LESS than the constant at every reference level, and not at all above the
+# floor. Measured in the CLIMATE-34 sweeps; see the eps-floor-choice analysis.
+ANOMALY_SCHEME_MONTHLY_TAPER = "monthly-taper"
+
+# Schemes that carry an eps, and so can take --debias-method / --dry-day-rule. The
+# yearly and monthly-ratio families have no eps for those corrections to act on.
+EPS_BEARING_SCHEMES = (
+    ANOMALY_SCHEME_MONTHLY,
+    ANOMALY_SCHEME_MONTHLY_TAPER,
+)
+
+# Optional ceiling on the multiplicative anomaly, applied on the GCM grid before
+# regridding. A GCM whose reference window is near-zero in a cell can produce an anomaly
+# of several hundred -- 1209 was measured on `yearly-delta` ssp585 -- which lands as a
+# forecast a thousand times the cell's own observed climatology. That is a property of a
+# badly-behaved model in a dry cell, not of any scheme, so the ceiling is a separate axis
+# from the eps construction and applies to any multiplicative scheme. `None` disables it,
+# which is the shipped behaviour. Set with --anomaly-cap.
+DEFAULT_ANOMALY_CAP: float | None = None
+
+# Default taper floor, in mm/day. Deliberately the same value as the constant eps it
+# replaces, so the change reads as "eps becomes a taper" rather than a new tuned
+# parameter. Override per run with --eps-floor.
+DEFAULT_EPS_FLOOR = 1.0
+
 ANOMALY_SCHEMES = [
     ANOMALY_SCHEME_MONTHLY,
     ANOMALY_SCHEME_MONTHLY_RATIO,
     ANOMALY_SCHEME_MONTHLY_DELTA,
+    ANOMALY_SCHEME_MONTHLY_TAPER,
     *YEARLY_ANOMALY_SCHEMES,
 ]
 

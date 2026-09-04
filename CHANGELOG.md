@@ -22,6 +22,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   only its distribution across days moves. Cell-months the model reports dry on every day are
   left alone, which is what makes the rule exactly total-preserving. Restricted to
   `DRY_DAY_VARIABLES`. (CLIMATE-30)
+- An `--anomaly-cap` option: an optional ceiling on the multiplicative anomaly, applied on
+  the GCM grid before regridding. Off by default, so shipped behaviour is unchanged. A GCM
+  whose reference window is near-zero in a cell can produce an anomaly of several hundred --
+  1209 was measured on `yearly-delta` ssp585, landing as a forecast over a thousand times
+  that cell's own observed climatology. The ceiling is a property of badly-behaved models in
+  dry cells rather than of any scheme, so it is a separate axis and applies to any
+  multiplicative scheme; requesting it for an additive anomaly raises rather than being
+  ignored. Applied before regridding because capping afterwards would leave a blown-up cell
+  already smeared across its neighbours. The ceiling binds at the granularity each scheme
+  anchors at -- the annual multiplier for the yearly family, the per-calendar-month
+  multiplier for the monthly family -- because bounding the annual mean of a monthly scheme
+  would let one blown-up month drag the rescale factor down and crush the other eleven. It
+  rescales the daily series to meet the ceiling rather than clipping each day: an
+  elementwise clip at 20 sits inside the ordinary distribution of daily rainfall against an
+  annual denominator, and on `yearly-delta` ssp126 it altered 20.5% of land pixels in 2083,
+  82% of which had an annual anomaly at or below 2. A cell already under the ceiling comes
+  out bit-identical to uncapped. (CLIMATE-34)
+- A `monthly-taper` anomaly scheme (`--anomaly-scheme monthly-taper`, with `--eps-floor`,
+  default 1.0 mm/day). It keeps the `(T + eps)/(R + eps)` construction and the ERA5 monthly
+  anchor, but makes `eps` a taper -- `max(0, floor - R)` -- so it is zero wherever the
+  reference is at or above the floor and the model's ratio passes through undamped. The
+  constant `eps = 1` damps the model's fractional change everywhere by `R/(R + 1)`, only 71%
+  surviving at the global-mean reference of 2.43 mm/day, which suppresses the projected
+  2024-2100 trend to 0.65 of the driving models' own. The taper damps less than the constant
+  at every reference level, and unlike a bare floor `T/max(R, floor)` it stays level-neutral:
+  a cell the model reports unchanged still gets exactly 1. (CLIMATE-34)
+- `jensen_debias_factor` takes the `eps` field rather than assuming the constant 1, so the
+  de-bias composes with the taper; the shipped behaviour is the `eps = 1` special case. Where
+  `eps` is zero and the other reference years are dry a leave-one-out fold is undefined, and
+  dropping it is not a repair -- it discards the fold that makes Jensen's bound hold, so the
+  factor collapses below 1 and the correction inflates rather than shrinks. Those cell-months
+  now get factor 1.0, and a factor below its guaranteed bound of 1 raises. (CLIMATE-34)
+- `--debias-method` and `--dry-day-rule` are accepted for any scheme that carries an `eps`
+  (`monthly`, `monthly-taper`) and rejected for those that do not (the yearly and
+  monthly-ratio families), rather than being rejected for everything but `monthly`.
+  (CLIMATE-34)
 - `--concurrency-limit` on the `scenario_annual` runner, which previously handed its
   whole fan-out to the scheduler in one submission. (CLIMATE-30)
 - A `yearly` anomaly scheme for multiplicative variables in `generate scenario_daily`
@@ -42,7 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `--anomaly-scheme` / `--reference-years` into its in-memory daily builds and stamps
   both into the output attrs (raw daily and annual); the daily and annual runners
   skip additive variables under the yearly schemes instead of submitting tasks that
-  are certain to fail; `--concurrency-limit` on the annual runner (default 75).
+  are certain to fail; `--concurrency-limit` on the annual runner (default 500).
   (CLIMATE-30)
 - A `monthly-ratio` scheme family -- the yearly scheme applied per month, keeping the
   ERA5 monthly anchor: a pure per-month ratio with no `+1` stabiliser (a zero

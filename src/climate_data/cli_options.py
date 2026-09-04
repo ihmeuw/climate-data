@@ -180,8 +180,39 @@ def with_anomaly_scheme[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
             "historical per-month (target+1)/(reference+1); 'monthly-ratio' "
             "is the pure per-month ratio (no +1, zero reference month "
             "forecasts zero), with 'monthly-delta' removing each month's "
-            "Jensen bias analytically; 'yearly' uses the reference-period annual-mean "
-            "denominator, with 'yearly-delta' removing its Jensen bias."
+            "Jensen bias analytically; 'monthly-taper' keeps the (T+eps)/(R+eps) "
+            "form but tapers eps to zero above --eps-floor, so a healthy "
+            "reference is left undamped; 'yearly' uses the reference-period "
+            "annual-mean denominator, with 'yearly-delta' removing its Jensen bias."
+        ),
+    )
+
+
+def with_anomaly_cap[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--anomaly-cap",
+        type=float,
+        default=cdc.DEFAULT_ANOMALY_CAP,
+        show_default=True,
+        help=(
+            "Ceiling on the multiplicative anomaly, applied on the GCM grid before "
+            "regridding. Unset means no ceiling. Multiplicative variables only: a cap "
+            "on an additive anomaly is rejected rather than ignored."
+        ),
+    )
+
+
+def with_eps_floor[**P, T]() -> Callable[[Callable[P, T]], Callable[P, T]]:
+    return click.option(
+        "--eps-floor",
+        type=float,
+        default=cdc.DEFAULT_EPS_FLOOR,
+        show_default=True,
+        help=(
+            "Taper floor in mm/day for the 'monthly-taper' anomaly scheme. The "
+            "stabiliser is eps = max(0, floor - reference), so it is zero wherever "
+            "the reference is at or above the floor and the model's ratio passes "
+            "through exactly. Ignored by every other scheme."
         ),
     )
 
@@ -402,6 +433,7 @@ __all__ = [
     "with_agg_measure",
     "with_agg_scenario",
     "with_agg_version",
+    "with_anomaly_cap",
     "with_anomaly_scheme",
     "with_block_key",
     "with_choice",
@@ -413,6 +445,7 @@ __all__ = [
     "with_draw",
     "with_dry_day_rule",
     "with_dry_run",
+    "with_eps_floor",
     "with_era5_dataset",
     "with_era5_variable",
     "with_gcm_member",

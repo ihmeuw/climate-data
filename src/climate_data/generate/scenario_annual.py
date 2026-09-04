@@ -1,5 +1,6 @@
 import itertools
 from pathlib import Path
+from typing import Any
 
 import click
 import xarray as xr
@@ -144,6 +145,8 @@ def generate_scenario_annual_main(
     dry_day_rule: str,
     anomaly_scheme: str = cdc.ANOMALY_SCHEME_MONTHLY,
     reference_years: str = cdc.REFERENCE_YEARS_ARG,
+    eps_floor: float = cdc.DEFAULT_EPS_FLOOR,
+    anomaly_cap: float | None = cdc.DEFAULT_ANOMALY_CAP,
 ) -> None:
     # NOTE: keyword-only with NO default, on purpose -- see the note in
     # generate_scenario_daily_main. A default here would let a missed hand-off produce a
@@ -175,6 +178,8 @@ def generate_scenario_annual_main(
                     dry_day_rule=dry_day_rule,
                     anomaly_scheme=anomaly_scheme,
                     reference_years=reference_years,
+                    eps_floor=eps_floor,
+                    anomaly_cap=anomaly_cap,
                 )
                 for source_variable in transform.source_variables
             ]
@@ -211,6 +216,8 @@ def generate_scenario_annual_main(
 @clio.with_dry_day_rule()
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
+@clio.with_eps_floor()
+@clio.with_anomaly_cap()
 def generate_scenario_annual_task(
     target_variable: str,
     scenario: str,
@@ -221,6 +228,8 @@ def generate_scenario_annual_task(
     dry_day_rule: str,
     anomaly_scheme: str,
     reference_years: str,
+    eps_floor: float,
+    anomaly_cap: float | None,
 ) -> None:
     history_flags = [
         year in cdc.HISTORY_YEARS,
@@ -250,6 +259,8 @@ def generate_scenario_annual_task(
         dry_day_rule=dry_day_rule,
         anomaly_scheme=anomaly_scheme,
         reference_years=reference_years,
+        eps_floor=eps_floor,
+        anomaly_cap=anomaly_cap,
     )
 
 
@@ -311,8 +322,10 @@ def build_arg_list(
 @clio.with_dry_day_rule()
 @clio.with_anomaly_scheme()
 @clio.with_reference_years()
+@clio.with_eps_floor()
+@clio.with_anomaly_cap()
 @clio.with_queue()
-@clio.with_concurrency_limit(default=75)
+@clio.with_concurrency_limit(default=500)
 @clio.with_overwrite()
 @clio.with_dry_run()
 def generate_scenario_annual(
@@ -323,6 +336,8 @@ def generate_scenario_annual(
     dry_day_rule: str,
     anomaly_scheme: str,
     reference_years: str,
+    eps_floor: float,
+    anomaly_cap: float | None,
     queue: str,
     concurrency_limit: int | None,
     overwrite: bool,
@@ -346,6 +361,23 @@ def generate_scenario_annual(
 
     if not to_run:
         return
+    # `anomaly_cap` is None whenever no ceiling was requested, which is the default.
+    # Passing the key through with a None value renders a bare `--anomaly-cap` onto the
+    # task command line with nothing after it, and click rejects it -- so EVERY task of
+    # an uncapped run fails with "Option '--anomaly-cap' requires an argument." while the
+    # controller still exits 0. Omit the key instead, and let the task's own default
+    # stand. Every run between b25dc84 and this fix passed an explicit cap, which is why
+    # the default path went unexercised.
+    task_args: dict[str, Any] = {
+        "output-dir": output_dir,
+        "debias-method": debias_method,
+        "dry-day-rule": dry_day_rule,
+        "anomaly-scheme": anomaly_scheme,
+        "reference-years": reference_years,
+        "eps-floor": eps_floor,
+    }
+    if anomaly_cap is not None:
+        task_args["anomaly-cap"] = anomaly_cap
     run_parallel_maybe_dry_run(
         runner="cdtask",
         task_name="generate scenario_annual",
@@ -353,13 +385,7 @@ def generate_scenario_annual(
             ("target-variable", "scenario", "year", "gcm-member"),
             to_run,
         ),
-        task_args={
-            "output-dir": output_dir,
-            "debias-method": debias_method,
-            "dry-day-rule": dry_day_rule,
-            "anomaly-scheme": anomaly_scheme,
-            "reference-years": reference_years,
-        },
+        task_args=task_args,
         task_resources={
             "queue": queue,
             "cores": 1,
