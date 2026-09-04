@@ -193,6 +193,7 @@ def temperature_person_days_task(
 @clio.with_output_directory(cdc.AGGREGATE_ROOT)
 @clio.with_run_mode()
 @clio.with_queue()
+@clio.with_concurrency_limit(default=1500)
 @clio.with_dry_run()
 def temperature_person_days(
     block_key: str,
@@ -203,6 +204,7 @@ def temperature_person_days(
     output_dir: str,
     run_mode: str,
     queue: str,
+    concurrency_limit: int,
     dry_run: bool,
 ) -> None:
     climate_data_dir = clio.resolve_run_mode_root(
@@ -211,7 +213,8 @@ def temperature_person_days(
     output_dir = clio.resolve_run_mode_root(
         "output_dir", output_dir, run_mode, aggregate=True
     )
-    ca_data = ClimateAggregateData(Path(output_dir) / hierarchy)
+    # read_only under --dry-run: a preview must not create roots on shared storage
+    ca_data = ClimateAggregateData(Path(output_dir) / hierarchy, read_only=dry_run)
     cd_data = ClimateData(climate_data_dir, read_only=True)
     pm_data = PopulationModelData(population_model_dir)
 
@@ -254,5 +257,6 @@ def temperature_person_days(
         },
         log_root=ca_data.log_dir("temperature_person_days"),
         max_attempts=3,
+        concurrency_limit=concurrency_limit,
         dry_run=dry_run,
     )

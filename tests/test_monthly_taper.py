@@ -229,46 +229,118 @@ def test_eps_free_schemes_still_reject_the_debias_axis(
 # --------------------------------------------------------------------------
 
 
-def test_cap_bounds_the_anomaly(
-    reference: xr.Dataset, target_dates: pd.DatetimeIndex
-) -> None:
-    """No value survives above the cap, and values below it are untouched."""
-    target = _flat(target_dates, REFERENCE_RATES * 40.0)
-    uncapped = _taper(reference, target)["value"].to_numpy()
-    capped = compute_anomaly(
+def _capped(
+    reference: xr.Dataset,
+    target: xr.Dataset,
+    scheme: str,
+    *,
+    anomaly_cap: float | None,
+) -> xr.DataArray:
+    return compute_anomaly(
         reference,
         target,
         "multiplicative",
         debias_method="none",
         dry_day_rule="none",
-        anomaly_scheme=TAPER,
-        eps_floor=1.0,
-        anomaly_cap=TEST_CAP,
-    )["value"].to_numpy()
-    assert uncapped.max() > TEST_CAP, (
-        "fixture must exceed the cap for this to test anything"
-    )
-    assert capped.max() <= TEST_CAP + 1e-12
-    below = uncapped <= TEST_CAP
-    np.testing.assert_allclose(capped[below], uncapped[below], rtol=0, atol=1e-12)
+        anomaly_scheme=scheme,
+        anomaly_cap=anomaly_cap,
+    )["value"]
 
 
-def test_cap_applies_to_every_scheme(
+def test_cap_bounds_the_period_mean_not_each_day(
     reference: xr.Dataset, target_dates: pd.DatetimeIndex
 ) -> None:
-    """The cap is orthogonal to the eps axis, so the yearly family takes it too."""
-    target = _flat(target_dates, REFERENCE_RATES * 40.0)
+    """The ceiling is on the multiplier the scheme anchors with, not on each day.
+
+    A flat target cannot distinguish the two -- every day equals the mean -- so this
+    uses a spiky one. Bounding each day instead would clip ordinary heavy rainfall:
+    against an annual denominator, 20x sits inside the normal distribution of daily
+    values, and on real extracts an elementwise clip altered a fifth of land pixels,
+    82% of which had an annual anomaly at or below 2.
+    """
+    # the year's MEAN must clear the cap for this to test anything, so the spike has
+    # to be big enough to carry it there on its own
+    spike = np.ones(len(target_dates))
+    spike[:5] = 4000.0  # a few enormous days, most of the year calm
+    target = _flat(target_dates, REFERENCE_RATES) * xr.DataArray(
+        spike, coords={"date": target_dates}, dims="date"
+    )
+    uncapped = _capped(
+        reference, target, cdc.ANOMALY_SCHEME_YEARLY_DELTA, anomaly_cap=None
+    )
+    capped = _capped(
+        reference, target, cdc.ANOMALY_SCHEME_YEARLY_DELTA, anomaly_cap=TEST_CAP
+    )
+
+    assert float(uncapped.mean("date").max()) > TEST_CAP, (
+        "fixture must exceed the cap for this to test anything"
+    )
+    # the ANNUAL mean is brought to the ceiling ...
+    assert float(capped.mean("date").max()) <= TEST_CAP + 1e-9
+    # ... while individual days may still exceed it, which an elementwise clip forbade
+    assert float(capped.max()) > TEST_CAP, (
+        "a rescale preserves within-year shape; if no day exceeds the cap this has "
+        "silently become an elementwise clip again"
+    )
+    # and the shape is preserved exactly: one factor for the whole cell
+    ratio = (capped / uncapped).to_numpy()
+    ratio = ratio[np.isfinite(ratio)]
+    np.testing.assert_allclose(ratio, ratio[0], rtol=1e-9, atol=0)
+
+
+def test_cap_leaves_a_cell_below_the_ceiling_untouched(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    """A cell whose period mean is under the cap must be bit-identical to uncapped."""
+    target = _flat(target_dates, REFERENCE_RATES * 2.0)
+    uncapped = _capped(
+        reference, target, cdc.ANOMALY_SCHEME_YEARLY_DELTA, anomaly_cap=None
+    ).to_numpy()
+    capped = _capped(
+        reference, target, cdc.ANOMALY_SCHEME_YEARLY_DELTA, anomaly_cap=TEST_CAP
+    ).to_numpy()
+    assert np.nanmax(uncapped) < TEST_CAP, "fixture must sit below the cap"
+    np.testing.assert_allclose(capped, uncapped, rtol=0, atol=1e-12)
+
+
+def test_cap_applies_at_each_schemes_own_granularity(
+    reference: xr.Dataset, target_dates: pd.DatetimeIndex
+) -> None:
+    """The cap is orthogonal to the eps axis, and it bounds where the scheme anchors.
+
+    The monthly family anchors each calendar month to ERA5 separately, so the ceiling
+    belongs on the per-month multiplier; the yearly family anchors the annual level, so
+    it belongs on the period mean.
+
+    A flat target cannot tell those apart -- every month's mean equals the year's -- so
+    the assertion passes for either granularity and proves nothing. This uses a seasonal
+    target instead, where one wet month sits far above the annual level, which is what
+    makes the two bounds observably different.
+    """
+    seasonal = np.ones(len(target_dates))
+    seasonal[target_dates.month == 1] = 60.0
+    target = _flat(target_dates, REFERENCE_RATES * 40.0) * xr.DataArray(
+        seasonal, coords={"date": target_dates}, dims="date"
+    )
     for scheme in (cdc.ANOMALY_SCHEME_MONTHLY, TAPER, cdc.ANOMALY_SCHEME_YEARLY_DELTA):
-        capped = compute_anomaly(
-            reference,
-            target,
-            "multiplicative",
-            debias_method="none",
-            dry_day_rule="none",
-            anomaly_scheme=scheme,
-            anomaly_cap=TEST_CAP,
-        )["value"].to_numpy()
-        assert np.nanmax(capped) <= TEST_CAP + 1e-12, scheme
+        uncapped = _capped(reference, target, scheme, anomaly_cap=None)
+        capped = _capped(reference, target, scheme, anomaly_cap=TEST_CAP)
+        assert float(uncapped.mean("date").max()) > TEST_CAP, (
+            f"fixture must exceed the cap for this to test anything ({scheme})"
+        )
+        by_month = capped.groupby("date.month").mean("date")
+        if scheme in cdc.YEARLY_ANOMALY_SCHEMES:
+            # the annual multiplier is brought to the ceiling ...
+            assert float(capped.mean("date").max()) <= TEST_CAP + 1e-9, scheme
+            # ... and only that one is, so the wet month stays well above it. The margin
+            # matters: a per-month bound leaves the wet month at the ceiling to within
+            # floating-point noise (20.000000000000004 against a cap of 20.0), which a
+            # bare `> TEST_CAP` accepts. The fixture puts the true value near 10x.
+            assert float(by_month.max()) > 2 * TEST_CAP, scheme
+        else:
+            # every calendar month is bounded, which implies the annual mean is too
+            assert float(by_month.max()) <= TEST_CAP + 1e-9, scheme
+            assert float(capped.mean("date").max()) <= TEST_CAP + 1e-9, scheme
 
 
 def test_cap_is_off_by_default(

@@ -176,9 +176,9 @@ def compile_person_days(
         dry_run=dry_run,
     )
 
-    # Step 4 (symlinking the compiled per-day parquet files into the results layout) is now
-    # handled by a standalone deploy script, ~/deploy/climate-data/link_person_days_draws.py,
-    # rather than inline here (written for a production run; not yet committed to this repo).
+    # Step 4 (symlinking the compiled per-day parquet files into the results layout) is
+    # handled by scripts/link_person_days_draws.py rather than inline here; run that
+    # script once this stage has finished (it takes --results-version and --dry-run).
     # The original inline implementation is kept below for reference.
     # results_version = "2026_01_12"  # noqa: ERA001
     # draw_map = {}  # noqa: ERA001

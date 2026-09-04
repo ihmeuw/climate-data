@@ -575,10 +575,32 @@ def compute_anomaly(
     Applied on the GCM grid, BEFORE `interpolate_to_target_latlon`. Capping afterwards
     would leave a blown-up cell already smeared across its neighbours by the regrid.
 
-    The cap only removes precipitation -- it cannot conserve, and whatever it clips is
-    gone from the total. That is intended: the values it removes are ones no cell's
-    observed climatology supports. But it means a cap moves the level, so it must be
-    chosen on evidence rather than set defensively.
+    The cap bounds each cell's multiplier at the granularity the scheme anchors at --
+    annual for the yearly family, per calendar month for the monthly family -- and
+    rescales the daily series to meet it.
+
+    It cannot be an elementwise clip. `anomaly` carries the target's daily date
+    dimension, because the denominator is a reference-window mean with no date dim and
+    the division broadcasts. Clipping elementwise bounds every *day* at `anomaly_cap`
+    times the cell's reference mean, and against an annual denominator that ceiling sits
+    inside the ordinary distribution of daily rainfall: a cell averaging 2 mm/day is cut
+    at 40 mm/day, an unremarkable tropical wet day. The daily-over-annual ratio also
+    carries the seasonal cycle, so such a clip bites hardest where seasonality is
+    strongest rather than where the pathology is.
+
+    Measured on `yearly-delta` ssp126 before this change, an elementwise clip at 20
+    altered 20.5% of land pixels in 2083 and 15.5% in 2050; 82% of those had an annual
+    anomaly at or below 2 -- cells projecting essentially no change -- and the global
+    total moved -19.1% and -1.1% respectively.
+
+    Rescaling instead leaves any cell at or below the ceiling bit-identical to uncapped,
+    brings a cell above it exactly to the ceiling, and preserves within-period shape so
+    a wet day stays proportionally a wet day.
+
+    The cap still only removes precipitation -- it cannot conserve, and whatever it
+    removes is gone from the total. That is intended: the values it removes are ones no
+    cell's observed climatology supports. But it means a cap moves the level, so it must
+    be chosen on evidence rather than set defensively.
     """
     anomaly = _compute_anomaly_uncapped(
         reference,
@@ -601,7 +623,18 @@ def compute_anomaly(
     if anomaly_cap <= 0:
         msg = f"anomaly_cap must be positive, got {anomaly_cap!r}."
         raise ValueError(msg)
-    return anomaly.clip(max=anomaly_cap)
+    if anomaly_scheme in cdc.YEARLY_ANOMALY_SCHEMES:
+        # anchored to the annual level, so bound the annual multiplier
+        over = anomaly.mean("date")
+        factor = (anomaly_cap / over).where(over > anomaly_cap, 1.0)
+        return anomaly * factor
+
+    # the monthly family anchors each calendar month to ERA5 separately, so the ceiling
+    # belongs per month. Bounding the annual mean instead would let one blown-up month
+    # drag the rescale factor down and crush the other eleven, which are fine.
+    over = anomaly.groupby("date.month").mean("date")
+    factor = (anomaly_cap / over).where(over > anomaly_cap, 1.0)
+    return anomaly.groupby("date.month") * factor
 
 
 def _compute_anomaly_uncapped(

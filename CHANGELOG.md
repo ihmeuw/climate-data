@@ -30,7 +30,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   dry cells rather than of any scheme, so it is a separate axis and applies to any
   multiplicative scheme; requesting it for an additive anomaly raises rather than being
   ignored. Applied before regridding because capping afterwards would leave a blown-up cell
-  already smeared across its neighbours. (CLIMATE-34)
+  already smeared across its neighbours. The ceiling binds at the granularity each scheme
+  anchors at -- the annual multiplier for the yearly family, the per-calendar-month
+  multiplier for the monthly family -- because bounding the annual mean of a monthly scheme
+  would let one blown-up month drag the rescale factor down and crush the other eleven. It
+  rescales the daily series to meet the ceiling rather than clipping each day: an
+  elementwise clip at 20 sits inside the ordinary distribution of daily rainfall against an
+  annual denominator, and on `yearly-delta` ssp126 it altered 20.5% of land pixels in 2083,
+  82% of which had an annual anomaly at or below 2. A cell already under the ceiling comes
+  out bit-identical to uncapped. (CLIMATE-34)
 - A `monthly-taper` anomaly scheme (`--anomaly-scheme monthly-taper`, with `--eps-floor`,
   default 1.0 mm/day). It keeps the `(T + eps)/(R + eps)` construction and the ERA5 monthly
   anchor, but makes `eps` a taper -- `max(0, floor - R)` -- so it is zero wherever the
@@ -84,6 +92,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   instead of silently skipping the correction; `--reference-years` requires
   four-digit years; `annual_mean_from_monthly` binds day weights by month label and
   rejects anything but a full 1..12 coordinate. (CLIMATE-30)
+- aggregate: skip modeling-frame blocks that don't intersect the hierarchy's raking
+  shapes — they contribute only empty results, so the `pixel` and `hierarchy` stages
+  skip them (fewer jobs; e.g. `lsae_1285` 52,800 vs 78,400). Fails loudly if the
+  filter would drop every block. (#37)
 - Dry-run preview for cluster runners: `jobmon_utils.run_parallel_maybe_dry_run`
   and a `--dry-run/--no-dry-run` option (`clio.with_dry_run`) threaded through the
   runners; prints sbatch-like job previews instead of submitting. (CLIMATE-21)
@@ -95,6 +107,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `reanalysis` + `ensemble_spread` 2m-temperature files (2024/2025) from CDS,
   matching Katrin Burkart's `era5_{product_type}_{variable}_{year}.nc` layout, to
   fill the GBD temperature-uncertainty gap. (CLIMATE-22)
+- `scripts/link_person_days_draws.py`: the person-days "step 4" draw symlinker, which
+  links the compiled per-draw parquets into the results layout. It previously lived only
+  in a personal `~/deploy` clone, so the forecast person-days product could not be
+  reproduced from a clean checkout. `--results-version` is required and must already
+  exist, `--dry-run` previews without writing, and every degenerate case (missing
+  compiled source, an existing output pointing at a different GCM, an unresolvable
+  annual draw, a draw map that disagrees between scenarios) aborts or exits non-zero
+  rather than reporting a healthy-looking run. (CLIMATE-25)
+- `--concurrency-limit` option (`clio.with_concurrency_limit`) on the
+  `temperature_person_days` runner, capping how many tasks jobmon runs at once to keep
+  write latency on shared storage manageable. (CLIMATE-25)
+- `ClimateAggregateData(..., read_only=True)`, mirroring `ClimateData`, so building a
+  manager purely to construct paths no longer creates directories. (CLIMATE-25)
 - docs: a `Running the pipeline` page (`docs/running.md`) for the operational side the
   methodology page does not cover — stage order and the two dependencies that are easy to
   miss, the three non-obvious `scenario_inclusion` behaviours (it surveys *all* CMIP6
@@ -132,6 +157,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `GITHUB_TOKEN`. Auto dependency-bump PRs no longer trigger CI, and the cookiecutter
   template-sync workflow is retired (daily schedule removed); reviving it needs a
   non-personal token. (CLIMATE-24)
+- `cdrun special temperature_person_days` now caps concurrency at 1500 by default
+  instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
+  production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
 - `total_precipitation` was inflated ~1.5-1.6x across the whole historical record.
   ERA5 stamps an accumulation window by its **end**, so day D's window (forecast steps
@@ -259,6 +287,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   The stale wording appears to come from `interpolate_to_target_latlon`'s default, which
   both call sites override. Also documented that ocean pixels are therefore supplied entirely by the
   upsampled 0.25° field, so the product's effective resolution is 0.1° only over land.
+- `cdrun special temperature_person_days --dry-run` no longer creates
+  `<output-dir>/<hierarchy>/` and a `logs/` child on shared storage: the aggregate-data
+  manager was constructed before `dry_run` was consulted, so a preview wrote. (CLIMATE-25)
 - person-days: zero-fill gridded-population nodata (NaN) before `compute_person_days`,
   so NaN pixels no longer poison output cells and zero out small/coastal locations
   (e.g. American Samoa). Latent bug exposed by a population-model nodata-encoding
