@@ -159,6 +159,7 @@ The forecast daily variables are produced through a dynamical downscaling approa
 
 1. **Compute anomalies**:
    - Calculate the difference between daily CMIP6 values and the model's monthly mean during the reference period (2019-2023 for FHS-2023, 2021-2025 for FHS-2025)
+   - Relative humidity is value-bounded: the raw CMIP6 daily values of both the reference window and the target year are first clipped to 1–100 %, the anomaly is the plain per-month ratio (`monthly-ratio`, no +1 stabiliser), and the downscaled product is clipped to 0–100 %. The floor keeps the model's reference mean away from zero, where a ratio is unstable; the output clip removes the 1.2 % of population-months that the unclipped product placed above 100 %. The clipped multiplicative form was evaluated against two mean-matched odds (logit-shift) alternatives on every populated cell-month of 34 members and three scenarios and retained (see `VALUE_BOUNDS` in `constants.py` for the summary of that evidence).
    - For additive variables (e.g., temperature), compute absolute differences
    - For multiplicative variables (e.g., precipitation), compute relative differences
 
