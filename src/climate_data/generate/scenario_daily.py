@@ -401,7 +401,7 @@ def _report_zeroed(n_zeroed: int, unit: str) -> None:
         # Downstream bilinear regridding spreads a zeroed native cell into
         # its whole 0.1 degree neighbourhood, so make the extent visible.
         print(
-            f"Zero-reference guard: {n_zeroed} {unit} have no rain in the "
+            f"Zero-reference guard: {n_zeroed} {unit} are zero over the "
             f"reference window and will forecast zero; regridding spreads "
             f"these zeros into neighbouring target pixels."
         )

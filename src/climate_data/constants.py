@@ -136,16 +136,16 @@ ANOMALY_SCHEMES = [
 # anomaly on it needs two clips that the other multiplicative variables do not:
 #
 #   input   the raw GCM daily values (reference window and target year alike) are clipped
-#           to VALUE_BOUNDS[v]["input"] BEFORE the per-month ratio is formed. The floor
-#           guards the ratio's denominator, the model's own reference-window mean. In the
-#           34 members x 3 scenarios evaluated that mean never fell below 2.2 % anywhere on
-#           land, so the floor is a guard rather than a correction; forecast months do go
-#           negative (down to -53 %) in a vanishing share of cell-months, and a future
-#           member could put a reference near zero. Between a floor of 0.1 % and one of 5 %
-#           the multiplier's tail is unchanged (largest T/R = 25 either way), so the level
-#           is not a tuning knob; 1 % is the setting the decision was evaluated at. The cap
-#           at 100 % is the physical bound; raw monthly means exceed it in 5.7 % of land
-#           cell-months but 0.09 % of population-months.
+#           to VALUE_BOUNDS[v]["input"], the physical range, BEFORE the per-month ratio is
+#           formed. The floor at 0 removes the forecast months a model reports below zero
+#           (down to -53 %, in a vanishing share of cell-months); the denominator is safe
+#           because the monthly-ratio scheme maps a zero reference month to a zero forecast
+#           rather than dividing by it. In the 34 members x 3 scenarios evaluated the
+#           reference-window mean never fell below 2.2 % anywhere on land, and between an
+#           input floor of 0.1 % and one of 5 % the multiplier's tail was unchanged (largest
+#           T/R = 25 either way), so the floor level is not a tuning knob. The cap at 100 %
+#           is bitten by raw monthly means in 5.7 % of land cell-months but 0.09 % of
+#           population-months.
 #   output  the product ERA5 reference x anomaly is clipped to VALUE_BOUNDS[v]["output"].
 #           Without it 1.2 % of population-months land above 100 % -- Nepal, Bhutan,
 #           Pakistan, Uganda, India, Bangladesh -- and pixel annual means reach 132 %.
@@ -162,7 +162,7 @@ ANOMALY_SCHEMES = [
 # multiplicative form equals the GCMs' own. Decision to keep the clipped multiplicative
 # form: Bobby Reiner, 2026-09-11.
 VALUE_BOUNDS: dict[str, dict[str, tuple[float, float]]] = {
-    "relative_humidity": {"input": (1.0, 100.0), "output": (0.0, 100.0)},
+    "relative_humidity": {"input": (0.0, 100.0), "output": (0.0, 100.0)},
 }
 BOUNDED_VARIABLE_SCHEMES = (ANOMALY_SCHEME_MONTHLY_RATIO,)
 

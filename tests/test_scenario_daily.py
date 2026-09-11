@@ -589,7 +589,7 @@ def _percent_ds(start: str, end: str, seed: int) -> xr.Dataset:
 
 def test_relative_humidity_is_value_bounded_in_percent() -> None:
     bounds = cdc.VALUE_BOUNDS["relative_humidity"]
-    assert bounds["input"] == (1.0, 100.0)
+    assert bounds["input"] == (0.0, 100.0)
     assert bounds["output"] == (0.0, 100.0)
     assert cdc.BOUNDED_VARIABLE_SCHEMES == (cdc.ANOMALY_SCHEME_MONTHLY_RATIO,)
 
@@ -624,8 +624,8 @@ def test_bounded_ratio_is_the_ratio_of_clipped_inputs() -> None:
     tgt_c = target.clip(*bounds)
     expected = (tgt_c.groupby("date.month") / ref_c).drop_vars("month")
     xr.testing.assert_allclose(got, expected)
-    # The floor did its job: every reference month is at least 1 %, so no ratio blew up.
-    assert float(ref_c["value"].min()) >= 1.0
+    # Nothing below the floor survives, and no reference month is zero here, so every ratio is finite.
+    assert float(ref_c["value"].min()) >= 0.0
     assert np.isfinite(got["value"]).all()
 
 
