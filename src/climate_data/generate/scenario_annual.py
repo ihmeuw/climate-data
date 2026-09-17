@@ -97,6 +97,24 @@ for _variable, _transform in TRANSFORM_MAP.items():
     )
 
 
+def bounded_source_variables(target_variable: str, anomaly_scheme: str) -> list[str]:
+    """Source variables of `target_variable` that `anomaly_scheme` cannot bias-correct.
+
+    Value-bounded variables are floored and clipped to `cdc.VALUE_BOUNDS` instead of being
+    stabilised, so they run under `cdc.BOUNDED_VARIABLE_SCHEMES` only; see
+    `check_bounded_variable_scheme` for why the other schemes are refused. The bounds are
+    keyed on the daily variable, so the annual target has to be resolved through its
+    sources the same way the de-bias check is.
+    """
+    if anomaly_scheme in cdc.BOUNDED_VARIABLE_SCHEMES:
+        return []
+    bounded = []
+    for source_variable in TRANSFORM_MAP[target_variable].source_variables:
+        if source_variable in cdc.VALUE_BOUNDS:
+            bounded.append(source_variable)
+    return bounded
+
+
 def forecast_jobs_for_anomaly_scheme(
     to_run: list[tuple[str, str, str, str]],
     anomaly_scheme: str,
@@ -107,29 +125,64 @@ def forecast_jobs_for_anomaly_scheme(
     reaches `generate_scenario_daily_main` -- it reads the daily results off disk -- so
     the scheme does not constrain it, and an additive variable is perfectly runnable
     there. Only the forecast scenarios pass through `compute_anomaly`.
-    """
-    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
-        return to_run
 
+    Two classes are dropped, and they are not mirror images. Additive variables run under
+    the stabilised `monthly` scheme and no other. Value-bounded variables are the reverse:
+    they run under `cdc.BOUNDED_VARIABLE_SCHEMES` only, which means they have to be dropped
+    under the default scheme too -- this stage calls `generate_scenario_daily_main` in
+    memory, so a bounded forecast job reaches `check_bounded_variable_scheme` and raises in
+    the worker after being scheduled. That is the failure the daily launcher's filter
+    already prevents.
+
+    A filter that removed every job is a usage error rather than an empty run, because the
+    caller asked for work that cannot be done and an empty fan-out looks like success.
+    """
     keep = []
-    skipped_variables = set()
+    skipped_additive = set()
+    skipped_bounded = set()
+    dropped_additive = 0
+    dropped_bounded = 0
     for job in to_run:
         variable, scenario = job[0], job[1]
-        blocked = (
-            scenario != "historical" and ANOMALY_TYPES[variable] != "multiplicative"
-        )
-        if blocked:
-            skipped_variables.add(variable)
+        forecast = scenario != "historical"
+        if forecast and bounded_source_variables(variable, anomaly_scheme):
+            skipped_bounded.add(variable)
+            dropped_bounded += 1
+        elif (
+            forecast
+            and anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY
+            and ANOMALY_TYPES[variable] != "multiplicative"
+        ):
+            skipped_additive.add(variable)
+            dropped_additive += 1
         else:
             keep.append(job)
 
-    dropped = len(to_run) - len(keep)
-    if dropped:
+    if skipped_additive:
         print(
             f"Anomaly scheme '{anomaly_scheme}' applies to multiplicative variables only;"
-            f" skipping {dropped} forecast tasks for:"
-            f" {', '.join(sorted(skipped_variables))}."
+            f" skipping {dropped_additive} forecast tasks for:"
+            f" {', '.join(sorted(skipped_additive))}."
         )
+    if skipped_bounded:
+        print(
+            f"Anomaly scheme '{anomaly_scheme}' does not apply to value-bounded variables,"
+            f" which run under {', '.join(cdc.BOUNDED_VARIABLE_SCHEMES)} only;"
+            f" skipping {dropped_bounded} forecast tasks for:"
+            f" {', '.join(sorted(skipped_bounded))}."
+        )
+    if to_run and not keep:
+        msg = (
+            f"Anomaly scheme '{anomaly_scheme}' can run none of the selected variables, so"
+            f" there is nothing to submit. Skipped:"
+            f" {', '.join(sorted(skipped_additive | skipped_bounded))}."
+        )
+        if skipped_bounded:
+            msg += (
+                f" Value-bounded variables need"
+                f" --anomaly-scheme {cdc.BOUNDED_VARIABLE_SCHEMES[0]}."
+            )
+        raise click.UsageError(msg)
     return keep
 
 

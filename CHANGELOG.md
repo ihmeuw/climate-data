@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- Value bounds for physically bounded multiplicative variables: `cdc.VALUE_BOUNDS`,
+  `cdc.BOUNDED_VARIABLE_SCHEMES` and `scenario_daily.check_bounded_variable_scheme`, with
+  `relative_humidity` clipped to `(0, 100)` % both on the inputs to the per-month ratio and
+  on the product of ERA5 reference and anomaly. Without the output clip 1.2 % of
+  population-months land above 100 % -- Nepal, Bhutan, Pakistan, Uganda, India, Bangladesh --
+  and pixel annual means reach 132 %. The input floor at 0 replaces the `+1` stabiliser of the
+  `monthly` scheme rather than adding to it, so a bounded variable runs under the plain
+  per-month ratio only; asking for a stabilised or yearly scheme is refused rather than
+  silently double-stabilised. Both launchers enforce that: `scenario_daily` drops bounded
+  variables under any other scheme and `scenario_annual` drops their forecast jobs, naming
+  what was skipped, because the annual stage builds the daily series in memory and would
+  otherwise queue tasks that raise in the worker after the whole fan-out was scheduled. An
+  invocation the filter leaves with nothing to run is a usage error rather than an empty run.
+  (CLIMATE-39)
 - Jensen de-bias for the multiplicative anomaly: `scenario_daily.jensen_debias_factor`
   and a `--debias-method` option (`clio.with_debias_method`, default `none`) threaded
   through the `scenario_daily` and `scenario_annual` runners and tasks. The forecast
