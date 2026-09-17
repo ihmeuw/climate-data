@@ -109,21 +109,35 @@ def variables_for_anomaly_scheme(
     Skipped variables are named rather than dropped quietly, and selecting nothing but
     additive variables is an error rather than an empty run.
     """
-    if anomaly_scheme == cdc.ANOMALY_SCHEME_MONTHLY:
-        return target_variables
-
     keep = []
     skip = []
+    skip_bounded = []
     for variable in target_variables:
-        if anomaly_types[variable] == "multiplicative":
-            keep.append(variable)
-        else:
+        if (
+            variable in cdc.VALUE_BOUNDS
+            and anomaly_scheme not in cdc.BOUNDED_VARIABLE_SCHEMES
+        ):
+            # Value-bounded variables are floored explicitly; see
+            # check_bounded_variable_scheme for why the other schemes are refused.
+            skip_bounded.append(variable)
+        elif (
+            anomaly_scheme != cdc.ANOMALY_SCHEME_MONTHLY
+            and anomaly_types[variable] != "multiplicative"
+        ):
             skip.append(variable)
+        else:
+            keep.append(variable)
 
     if skip:
         print(
             f"Anomaly scheme '{anomaly_scheme}' applies to multiplicative variables only;"
             f" skipping {len(skip)}: {', '.join(skip)}."
+        )
+    if skip_bounded:
+        print(
+            f"Anomaly scheme '{anomaly_scheme}' does not apply to value-bounded variables,"
+            f" which run under {', '.join(cdc.BOUNDED_VARIABLE_SCHEMES)} only;"
+            f" skipping {len(skip_bounded)}: {', '.join(skip_bounded)}."
         )
     if not keep:
         msg = (
@@ -387,7 +401,7 @@ def _report_zeroed(n_zeroed: int, unit: str) -> None:
         # Downstream bilinear regridding spreads a zeroed native cell into
         # its whole 0.1 degree neighbourhood, so make the extent visible.
         print(
-            f"Zero-reference guard: {n_zeroed} {unit} have no rain in the "
+            f"Zero-reference guard: {n_zeroed} {unit} are zero over the "
             f"reference window and will forecast zero; regridding spreads "
             f"these zeros into neighbouring target pixels."
         )
@@ -734,6 +748,38 @@ def check_debias_variable(
         raise ValueError(msg)
 
 
+def check_bounded_variable_scheme(target_variable: str, anomaly_scheme: str) -> None:
+    """Refuse a stabilised or yearly anomaly scheme for a value-bounded variable.
+
+    A bounded variable (relative humidity) has its raw inputs clipped to
+    ``cdc.VALUE_BOUNDS`` before the ratio is formed, so the floor already does the job of
+    the +1 / tapered eps in the eps-bearing schemes -- applying both would stabilise twice
+    and shift the ratio away from the construction that was evaluated. The yearly family
+    drops the monthly anchor that evaluation was made on. Called from the worker and, via
+    ``variables_for_anomaly_scheme``, from the launcher, so ``--target-variable all`` under
+    the default scheme skips the variable with a message instead of queueing doomed jobs.
+    """
+    bounds = cdc.VALUE_BOUNDS.get(target_variable)
+    if bounds is None or anomaly_scheme in cdc.BOUNDED_VARIABLE_SCHEMES:
+        return
+    msg = (
+        f"{target_variable!r} is value-bounded (inputs clipped to {bounds['input']}, output "
+        f"to {bounds['output']}) and runs under {list(cdc.BOUNDED_VARIABLE_SCHEMES)} only; "
+        f"got anomaly_scheme={anomaly_scheme!r}. Pass --anomaly-scheme "
+        f"{cdc.BOUNDED_VARIABLE_SCHEMES[0]} for this variable."
+    )
+    raise ValueError(msg)
+
+
+def apply_value_bounds(ds: xr.Dataset, bounds: tuple[float, float]) -> xr.Dataset:
+    """Clip every data variable to ``bounds`` (inclusive); NaN stays NaN."""
+    lo, hi = bounds
+    if not lo < hi:
+        msg = f"value bounds must satisfy lo < hi, got {bounds!r}."
+        raise ValueError(msg)
+    return ds.clip(lo, hi)
+
+
 def generate_scenario_daily_main(
     target_variable: str,
     cmip6_experiment: str,
@@ -754,6 +800,8 @@ def generate_scenario_daily_main(
     # produces a silently undebiased run that reports success. Let mypy catch the call site.
     cdata = ClimateData(output_dir)
     check_debias_variable(target_variable, debias_method, dry_day_rule)
+    check_bounded_variable_scheme(target_variable, anomaly_scheme)
+    value_bounds = cdc.VALUE_BOUNDS.get(target_variable)
     reference_period = utils.parse_reference_years(reference_years)
 
     transform, anomaly_type = TRANSFORM_MAP[target_variable]
@@ -777,6 +825,14 @@ def generate_scenario_daily_main(
 
     print(f"{gcm_member}: Loading target")
     target = transform(*[load_variable(vp, year) for vp in source_paths])
+
+    if value_bounds is not None:
+        # Clip the raw GCM values, reference window and target year alike, before the
+        # ratio: the floor keeps the per-month reference mean away from zero, the cap is
+        # the physical bound. See cdc.VALUE_BOUNDS for the evidence behind the levels.
+        print(f"{gcm_member}: clipping inputs to {value_bounds['input']}")
+        sref = apply_value_bounds(sref, value_bounds["input"])
+        target = apply_value_bounds(target, value_bounds["input"])
 
     print(f"{gcm_member}: computing anomaly")
     v_anomaly = compute_anomaly(
@@ -804,6 +860,10 @@ def generate_scenario_daily_main(
         scenario_data = (
             utils.annual_mean_from_monthly(historical_reference) * resampled_anomaly
         )
+    if value_bounds is not None:
+        # The product of an ERA5 anchor near saturation and a ratio above one can exceed
+        # the physical bound; clip it here, after the regrid and the multiply.
+        scenario_data = apply_value_bounds(scenario_data, value_bounds["output"])
     # Provenance: the output path encodes scenario/variable/year/member only, so without
     # this a yearly file is indistinguishable from a monthly one sitting beside it.
     scenario_data.attrs["debias_method"] = debias_method
@@ -812,6 +872,11 @@ def generate_scenario_daily_main(
     scenario_data.attrs["reference_years"] = reference_years
     scenario_data.attrs["eps_floor"] = eps_floor
     scenario_data.attrs["anomaly_cap"] = "none" if anomaly_cap is None else anomaly_cap
+    scenario_data.attrs["value_bounds"] = (
+        "none"
+        if value_bounds is None
+        else f"input {value_bounds['input']}, output {value_bounds['output']}"
+    )
 
     if write_output is True:
         print(f"{gcm_member}: Writing output")

@@ -132,6 +132,40 @@ ANOMALY_SCHEMES = [
     *YEARLY_ANOMALY_SCHEMES,
 ]
 
+# Value-bounded variables. Relative humidity is a percentage, and the multiplicative
+# anomaly on it needs two clips that the other multiplicative variables do not:
+#
+#   input   the raw GCM daily values (reference window and target year alike) are clipped
+#           to VALUE_BOUNDS[v]["input"], the physical range, BEFORE the per-month ratio is
+#           formed. The floor at 0 removes the forecast months a model reports below zero
+#           (down to -53 %, in a vanishing share of cell-months); the denominator is safe
+#           because the monthly-ratio scheme maps a zero reference month to a zero forecast
+#           rather than dividing by it. In the 34 members x 3 scenarios evaluated the
+#           reference-window mean never fell below 2.2 % anywhere on land, and between an
+#           input floor of 0.1 % and one of 5 % the multiplier's tail was unchanged (largest
+#           T/R = 25 either way), so the floor level is not a tuning knob. The cap at 100 %
+#           is bitten by raw monthly means in 5.7 % of land cell-months but 0.09 % of
+#           population-months.
+#   output  the product ERA5 reference x anomaly is clipped to VALUE_BOUNDS[v]["output"].
+#           Without it 1.2 % of population-months land above 100 % -- Nepal, Bhutan,
+#           Pakistan, Uganda, India, Bangladesh -- and pixel annual means reach 132 %.
+#
+# The floor replaces the +1 stabiliser of the "monthly" scheme, so a bounded variable runs
+# under the plain per-month ratio (BOUNDED_VARIABLE_SCHEMES); asking for a stabilised or
+# yearly scheme is rejected rather than silently double-stabilised or un-anchored.
+#
+# Evaluated against the two mean-matched odds (logit-shift) forms in idd-aedes-spread's
+# rhwind vignette on every populated native cell-month of 34 members x 3 scenarios,
+# 2024-2099, population-weighted: the country annual means agree to within 1.5 RH points,
+# the multiplicative form saturates 1.2 % of person-months and moves 2 % of them more than
+# 10 points away from the plain anomaly, the odds form 0.3 %; the member spread of the
+# multiplicative form equals the GCMs' own. Decision to keep the clipped multiplicative
+# form: Bobby Reiner, 2026-09-11.
+VALUE_BOUNDS: dict[str, dict[str, tuple[float, float]]] = {
+    "relative_humidity": {"input": (0.0, 100.0), "output": (0.0, 100.0)},
+}
+BOUNDED_VARIABLE_SCHEMES = (ANOMALY_SCHEME_MONTHLY_RATIO,)
+
 DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 FORECAST_YEARS = [str(y) for y in range(2024, 2101)]
 ALL_YEARS = HISTORY_YEARS + FORECAST_YEARS

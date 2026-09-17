@@ -571,3 +571,105 @@ def test_relabelling_2099_as_2100_refuses_a_mismatched_day_count(
 
     with pytest.raises(ValueError, match="conflicting sizes"):
         load_variable(path, 2100)
+
+
+# ---- value-bounded variables (relative humidity) -------------------------------------
+
+
+def _percent_ds(start: str, end: str, seed: int) -> xr.Dataset:
+    """Daily 'humidity' in percent that strays below 1 and above 100, as raw GCM output does."""
+    dates = pd.date_range(start, end, freq="D")
+    rng = np.random.default_rng(seed)
+    values = rng.uniform(-5.0, 110.0, size=(dates.size, 2, 2))
+    return xr.Dataset(
+        {"value": (("date", "latitude", "longitude"), values)},
+        coords={"date": dates, "latitude": [0.0, 1.0], "longitude": [10.0, 11.0]},
+    )
+
+
+def test_relative_humidity_is_value_bounded_in_percent() -> None:
+    bounds = cdc.VALUE_BOUNDS["relative_humidity"]
+    assert bounds["input"] == (0.0, 100.0)
+    assert bounds["output"] == (0.0, 100.0)
+    assert cdc.BOUNDED_VARIABLE_SCHEMES == (cdc.ANOMALY_SCHEME_MONTHLY_RATIO,)
+
+
+def test_apply_value_bounds_clips_inclusive_and_keeps_nan() -> None:
+    ds = xr.Dataset({"value": ("x", [-2.0, 0.5, 1.0, 50.0, 100.0, 130.0, np.nan])})
+    got = scenario_daily.apply_value_bounds(ds, (1.0, 100.0))["value"].to_numpy()
+    np.testing.assert_allclose(got[:-1], [1.0, 1.0, 1.0, 50.0, 100.0, 100.0])
+    assert np.isnan(got[-1])
+
+
+def test_apply_value_bounds_rejects_inverted_bounds() -> None:
+    ds = xr.Dataset({"value": ("x", [1.0])})
+    with pytest.raises(ValueError, match="lo < hi"):
+        scenario_daily.apply_value_bounds(ds, (100.0, 1.0))
+
+
+def test_bounded_ratio_is_the_ratio_of_clipped_inputs() -> None:
+    """Clip, then the plain per-month ratio: clip(T) / mean_month(clip(R)), no +1."""
+    reference = _percent_ds("2019-01-01", "2023-12-31", seed=7)
+    target = _percent_ds("2050-01-01", "2050-12-31", seed=8)
+    bounds = cdc.VALUE_BOUNDS["relative_humidity"]["input"]
+    got = compute_anomaly(
+        scenario_daily.apply_value_bounds(reference, bounds),
+        scenario_daily.apply_value_bounds(target, bounds),
+        "multiplicative",
+        debias_method="none",
+        dry_day_rule="none",
+        anomaly_scheme=cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
+    )
+    ref_c = reference.clip(*bounds).groupby("date.month").mean("date")
+    tgt_c = target.clip(*bounds)
+    expected = (tgt_c.groupby("date.month") / ref_c).drop_vars("month")
+    xr.testing.assert_allclose(got, expected)
+    # Nothing below the floor survives, and no reference month is zero here, so every ratio is finite.
+    assert float(ref_c["value"].min()) >= 0.0
+    assert np.isfinite(got["value"]).all()
+
+
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        cdc.ANOMALY_SCHEME_MONTHLY,
+        cdc.ANOMALY_SCHEME_MONTHLY_TAPER,
+        cdc.ANOMALY_SCHEME_MONTHLY_DELTA,
+        cdc.ANOMALY_SCHEME_YEARLY,
+        cdc.ANOMALY_SCHEME_YEARLY_DELTA,
+    ],
+)
+def test_bounded_variable_rejects_every_other_scheme(scheme: str) -> None:
+    with pytest.raises(ValueError, match="value-bounded"):
+        scenario_daily.check_bounded_variable_scheme("relative_humidity", scheme)
+
+
+def test_bounded_variable_accepts_the_plain_ratio() -> None:
+    scenario_daily.check_bounded_variable_scheme(
+        "relative_humidity", cdc.ANOMALY_SCHEME_MONTHLY_RATIO
+    )
+
+
+def test_unbounded_variables_are_not_checked() -> None:
+    for variable in ("total_precipitation", "wind_speed", "mean_temperature"):
+        scenario_daily.check_bounded_variable_scheme(
+            variable, cdc.ANOMALY_SCHEME_MONTHLY
+        )
+
+
+def test_variables_filter_drops_bounded_under_the_default_scheme() -> None:
+    got = variables_for_anomaly_scheme(
+        ["relative_humidity", "total_precipitation", "mean_temperature"],
+        cdc.ANOMALY_SCHEME_MONTHLY,
+        ANOMALY_TYPES,
+    )
+    assert got == ["total_precipitation", "mean_temperature"]
+
+
+def test_variables_filter_keeps_bounded_under_the_plain_ratio() -> None:
+    got = variables_for_anomaly_scheme(
+        ["relative_humidity", "total_precipitation", "mean_temperature"],
+        cdc.ANOMALY_SCHEME_MONTHLY_RATIO,
+        ANOMALY_TYPES,
+    )
+    assert got == ["relative_humidity", "total_precipitation"]
