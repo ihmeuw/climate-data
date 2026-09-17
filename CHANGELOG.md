@@ -164,6 +164,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
   fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
+- `cdrun extract era5` no longer refills the extracts ERF deleted. Two guards, both
+  overridable. A year floor (`cdc.EXTRACT_YEAR_FLOOR`, 1980) refuses a run reaching below
+  it unless `--allow-pre-1980` is passed: `--year` defaults to ALL over `HISTORY_YEARS`,
+  which starts in 1950, and `build_task_lists` treats a missing output file as work to do,
+  so after ERF's Sep2026 reclamation the bare invocation saw 3,238 deleted files as gaps
+  and would have re-downloaded them -- days of Copernicus queue. Guarding the resolved
+  year list rather than the option default also catches an explicitly typed `--year ALL`.
+  And `--era5-variable ALL` now expands to the variables the pipeline actually reads,
+  dropping `cdc.EXTRACT_UNUSED_VARIABLES`: `surface_pressure` has no `TRANSFORM_MAP`
+  source entry and is not an `AGGREGATION_MEASURES` member, yet was downloaded and stored
+  every month of every year, roughly 3.1 TB never opened. Naming a variable explicitly
+  still extracts it, so a deliberate backfill of either kind is one flag away. (CLIMATE-27)
 - `aggregate pixel` task memory raised 6G -> 12G. Observed MaxRSS on the 17Aug run was
   6.0G against a 6G request on *every* sampled task, and the LSAE hierarchies carry more
   locations per block, so 6G would OOM there with `max_attempts=3` masking it as a retry.

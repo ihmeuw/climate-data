@@ -283,6 +283,55 @@ def build_task_lists(
     return to_download, to_compress, complete
 
 
+def check_extract_year_floor(years: Sequence[str], *, allow_pre_floor: bool) -> None:
+    """Refuse a run that reaches below `cdc.EXTRACT_YEAR_FLOOR` unless asked to.
+
+    `build_task_lists` treats a missing output file as work to do, so after ERF's Sep2026
+    deletion every pre-1980 extract looks like a gap. The runner's `--year` defaults to
+    ALL, which means the bare invocation would refill 3,238 files and silently undo the
+    reclamation -- days of Copernicus queue to recover from. Guarding the outcome rather
+    than the default also catches an explicitly typed `--year ALL`.
+    """
+    below = [year for year in years if int(year) < int(cdc.EXTRACT_YEAR_FLOOR)]
+    if not below or allow_pre_floor:
+        return
+    msg = (
+        f"{len(below)} requested years fall below {cdc.EXTRACT_YEAR_FLOOR}"
+        f" ({below[0]}-{below[-1]}). ERF deleted those extracts in Sep2026 and this step"
+        f" would re-download them. The historical daily layer they feed is already built."
+        f" Pass --allow-pre-1980 if a backfill is what you want."
+    )
+    raise click.UsageError(msg)
+
+
+def variables_for_full_expansion(era5_variables: Sequence[str]) -> list[str]:
+    """Drop never-read variables when the whole variable set was requested.
+
+    `--era5-variable ALL` resolves to every declared variable, so the default invocation
+    downloads and stores `surface_pressure` for every month of every year although no
+    stage opens it. Naming a variable explicitly still extracts it; this only narrows the
+    meaning of "all" to "all the ones we use".
+    """
+    if set(era5_variables) != set(cdc.ERA5_VARIABLES):
+        return list(era5_variables)
+
+    keep = []
+    skipped = []
+    for variable in era5_variables:
+        if variable in cdc.EXTRACT_UNUSED_VARIABLES:
+            skipped.append(variable)
+        else:
+            keep.append(variable)
+
+    if skipped:
+        print(
+            f"Skipping {', '.join(skipped)}: no pipeline stage reads"
+            f" {'them' if len(skipped) > 1 else 'it'}."
+            f" Name the variable explicitly to extract it anyway."
+        )
+    return keep
+
+
 @click.command()
 @clio.with_era5_dataset(allow_all=True)
 @clio.with_era5_variable(allow_all=True)
@@ -291,6 +340,15 @@ def build_task_lists(
 @clio.with_output_directory(cdc.MODEL_ROOT)
 @clio.with_queue()
 @clio.with_dry_run()
+@click.option(
+    "--allow-pre-1980",
+    is_flag=True,
+    default=False,
+    help=(
+        "Permit years below the extract year floor. Off by default so the bare"
+        " invocation cannot refill the extracts ERF deleted."
+    ),
+)
 def extract_era5(
     era5_dataset: list[str],
     era5_variable: list[str],
@@ -299,7 +357,11 @@ def extract_era5(
     output_dir: str,
     queue: str,
     dry_run: bool,
+    allow_pre_1980: bool,
 ) -> None:
+    check_extract_year_floor(year, allow_pre_floor=allow_pre_1980)
+    era5_variable = variables_for_full_expansion(era5_variable)
+
     cdata = ClimateData(output_dir)
     cred_path = cdata.credentials_root / "copernicus.yaml"
     credentials = yaml.safe_load(cred_path.read_text())

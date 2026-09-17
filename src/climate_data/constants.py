@@ -251,6 +251,21 @@ class _ERA5Variables(NamedTuple):
 
 ERA5_VARIABLES = _ERA5Variables()
 
+# ERF reclaimed disk in Sep2026 by deleting every pre-1980 ERA5 extract except
+# `2m_temperature` and `total_precipitation` -- 3,238 files. `build_task_lists` decides
+# what to download purely by whether the output file exists, and the extract runner's
+# `--year` defaults to ALL over `HISTORY_YEARS`, so an unguarded run would read those
+# deletions as gaps and refill them. The historical daily layer they feed is already
+# built for 1950-2023, and person-days cannot reach earlier than 1981, so nothing needs
+# them without an explicit backfill. (CLIMATE-27)
+EXTRACT_YEAR_FLOOR = "1980"
+
+# Variables no stage of this pipeline reads: nothing lists them as a `TRANSFORM_MAP`
+# source variable and they are not `AGGREGATION_MEASURES` members. They are dropped from
+# the `--era5-variable ALL` expansion -- roughly 3.1 TB of downloads that are never
+# opened -- and remain extractable by naming them. (CLIMATE-27)
+EXTRACT_UNUSED_VARIABLES = (ERA5_VARIABLES.surface_pressure,)
+
 CMIP6_SOURCES = [
     "ACCESS-CM2",
     "AWI-CM-1-1-MR",
