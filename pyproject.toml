@@ -30,7 +30,7 @@ dependencies = [
     "pydantic>=2.10.4",
     "numba (>=0.62.0)",
     "contextily (>=1.6.2,<2.0.0)",
-    "pypdf (>=5.4.0,<6.0.0)",
+    "pypdf (>=6.21.2,<7.0.0)",
 ]
 
 [project.urls]
@@ -59,7 +59,7 @@ python = ">=3.12, <4.0"
 mypy = "^1.15.0"
 mkdocs-material = "^9.6.0"
 pre-commit = "^4.0.0"
-pytest = "^8.3.0"
+pytest = "^9.0.3"
 ruff = "^0.9.7"
 # Things we don't care about the version
 mkdocstrings = {extras = ["python"], version = "*"}
