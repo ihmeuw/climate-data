@@ -30,7 +30,6 @@ dependencies = [
     "pydantic>=2.10.4",
     "numba (>=0.62.0)",
     "contextily (>=1.6.2,<2.0.0)",
-    "pypdf (>=6.21.2,<7.0.0)",
 ]
 
 [project.urls]
