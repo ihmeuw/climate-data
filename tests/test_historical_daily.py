@@ -72,8 +72,14 @@ def test_trim_keeps_only_the_target_month_and_closes_its_last_day() -> None:
     collapsed = utils.daily_accumulation_last(_month_with_lookahead())
     trimmed = hd.trim_to_month(collapsed, YEAR, MONTH)
 
-    # One bin for the previous month's last day, one empty bin for the next month.
-    assert collapsed.sizes["date"] == DAYS_IN_MONTH + 2
+    # One bin for the previous month's last day. pandas < 3.1 also appends an empty bin
+    # for the next month; pandas >= 3.1 does not. The trim must cope with either.
+    collapsed_dates = collapsed.date.to_index()
+    assert collapsed_dates[0] == pd.Timestamp(f"{YEAR}-{MONTH - 1:02d}-31")
+    assert collapsed.sizes["date"] in (DAYS_IN_MONTH + 1, DAYS_IN_MONTH + 2)
+    if collapsed.sizes["date"] == DAYS_IN_MONTH + 2:
+        assert collapsed_dates[-1] == pd.Timestamp(f"{YEAR}-{MONTH + 1:02d}-01")
+        assert np.isnan(collapsed.value.isel(date=-1).to_numpy()).all()
     assert trimmed.sizes["date"] == DAYS_IN_MONTH
 
     dates = trimmed.date.to_index()
