@@ -14,12 +14,17 @@ from climate_data.special.temperature_zone import (
     generate_temperature_zone,
     generate_temperature_zone_task,
 )
+from climate_data.special.weight_table import (
+    build_weight_table_task,
+    build_weight_tables,
+)
 
 RUNNERS = {
     "temperature_zone": generate_temperature_zone,
     "temperature_person_days": temperature_person_days,
     "compile_person_days": compile_person_days,
     "download_era5_uncertainty": download_era5_uncertainty,
+    "weight_table": build_weight_tables,
 }
 
 TASK_RUNNERS = {
@@ -27,4 +32,5 @@ TASK_RUNNERS = {
     "temperature_person_days": temperature_person_days_task,
     "compile_person_days": compile_person_days_task,
     "download_era5_uncertainty": download_era5_uncertainty_task,
+    "weight_table": build_weight_table_task,
 }

@@ -12,17 +12,22 @@ Cells are numbered on the global grid of the daily files: row-major, latitude de
 ``cell = row * 3600 + col``.
 """
 
+import resource
+import time
 from pathlib import Path
 from typing import Any
 
+import click
 import numba
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import xarray as xr
 
+from climate_data import cli_options as clio
 from climate_data import constants as cdc
 from climate_data.data import PopulationModelData, save_parquet
+from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import utils
 
 # The daily files store latitude descending; the constant is ascending.
@@ -30,6 +35,49 @@ GLOBAL_LATITUDE = cdc.TARGET_LATITUDE.to_numpy()[::-1]
 GLOBAL_LONGITUDE = cdc.TARGET_LONGITUDE.to_numpy()
 
 WEIGHT_TABLE_COLUMNS = ["year_id", "location_id", "cell", "population"]
+WEIGHT_TABLE_YEARS = [int(y) for y in [*cdc.HISTORY_YEARS, *cdc.FORECAST_YEARS]]
+POPULATION_RTOL = 1e-12
+
+
+def weight_table_path(
+    output_root: str | Path,
+    hierarchy: str,
+    block_key: str,
+) -> Path:
+    """Where one block's weight table lives: ``<root>/weights/<hierarchy>/<block>.parquet``."""
+    return Path(output_root) / "weights" / hierarchy / f"{block_key}.parquet"
+
+
+def missing_blocks(
+    block_keys: list[str],
+    output_root: str | Path,
+    hierarchy: str,
+) -> list[str]:
+    """The blocks whose weight table has not been written yet, in input order."""
+    missing = []
+    for block_key in block_keys:
+        if not weight_table_path(output_root, hierarchy, block_key).exists():
+            missing.append(block_key)
+    return missing
+
+
+def check_population(
+    table_total: float,
+    raster_total: float,
+    year: int,
+    block_key: str,
+) -> None:
+    """Fail if a year's weight table does not hold the raster's population.
+
+    ``raster_total`` is the float64 sum of the block's population inside locations, with
+    nodata as zero. The table should equal it up to summation order.
+    """
+    if not np.isclose(table_total, raster_total, rtol=POPULATION_RTOL, atol=0.0):
+        msg = (
+            f"Weight table for {block_key} {year} holds {table_total} people, "
+            f"but the raster has {raster_total} inside locations."
+        )
+        raise ValueError(msg)
 
 
 def _window_offset(
@@ -177,12 +225,15 @@ def build_block_weight_table(
     cells = global_cell_ids(local_cells, block_lat, block_lon)
     location_id_arr = np.asarray(location_ids, dtype=np.int32)
 
+    inside = location_idx >= 0
     frames = []
     for year in years:
         population = pm_data.load_results(f"{year}q1", block_key)._ndarray.flatten()  # noqa: SLF001
         pair_loc, pair_cell, pair_pop = aggregate_weights(
             location_idx, cells, population
         )
+        raster_total = float(np.nansum(population[inside].astype(np.float64)))
+        check_population(float(pair_pop.sum()), raster_total, year, block_key)
         frames.append(
             pd.DataFrame(
                 {
@@ -218,3 +269,95 @@ def build_block_weight_table_main(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     save_parquet(table, output_path)
     return table
+
+
+@click.command()
+@clio.with_block_key()
+@clio.with_hierarchy(default="lsae_1285")
+@clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    help="Root for weights/<hierarchy>/<block>.parquet. No default, by design.",
+)
+@clio.with_overwrite()
+def build_weight_table_task(
+    block_key: str,
+    hierarchy: str,
+    population_model_dir: str,
+    output_dir: str,
+    *,
+    overwrite: bool,
+) -> None:
+    """Build one block's population weight table for 1950-2100."""
+    start = time.time()
+    output_path = weight_table_path(output_dir, hierarchy, block_key)
+    table = build_block_weight_table_main(
+        block_key,
+        hierarchy,
+        WEIGHT_TABLE_YEARS,
+        population_model_dir,
+        output_path,
+        overwrite=overwrite,
+    )
+    peak_gb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024**2
+    print(
+        f"weight_table {block_key}: {len(table)} rows, "
+        f"{table.location_id.nunique()} locations, "
+        f"{time.time() - start:.1f} s, peak RSS {peak_gb:.2f} GB"
+    )
+
+
+@click.command()
+@clio.with_block_key(allow_all=True)
+@clio.with_hierarchy(default="lsae_1285")
+@clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    required=True,
+    help="Root for weights/<hierarchy>/<block>.parquet. No default, by design.",
+)
+@clio.with_queue()
+@clio.with_concurrency_limit(default=200)
+@clio.with_dry_run()
+def build_weight_tables(
+    block_key: str,
+    hierarchy: str,
+    population_model_dir: str,
+    output_dir: str,
+    queue: str,
+    concurrency_limit: int,
+    dry_run: bool,
+) -> None:
+    """Build population weight tables for every block that does not have one yet."""
+    pm_data = PopulationModelData(population_model_dir)
+    all_blocks = pm_data.load_modeling_frame()["block_key"].unique().tolist()
+    block_keys = clio.convert_choice(block_key, all_blocks)
+    jobs = missing_blocks(block_keys, output_dir, hierarchy)
+    print(f"Running {len(jobs)} of {len(block_keys)} blocks")
+
+    run_parallel_maybe_dry_run(
+        runner="cdtask special",
+        task_name="weight_table",
+        node_args={"block-key": jobs},
+        task_args={
+            "hierarchy": hierarchy,
+            "population-model-dir": population_model_dir,
+            "output-dir": output_dir,
+        },
+        task_resources={
+            "queue": queue,
+            "cores": 1,
+            "memory": "20G",
+            "runtime": "60m",
+            "project": "proj_rapidresponse",
+        },
+        log_root=Path(output_dir) / "logs" / "weight_table",
+        max_attempts=3,
+        concurrency_limit=concurrency_limit,
+        dry_run=dry_run,
+    )
