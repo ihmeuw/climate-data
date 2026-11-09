@@ -6,6 +6,10 @@ from climate_data.special.download_era5_uncertainty import (
     download_era5_uncertainty,
     download_era5_uncertainty_task,
 )
+from climate_data.special.forecast_person_days import (
+    build_forecast_person_days,
+    build_forecast_person_days_task,
+)
 from climate_data.special.history_person_days import (
     build_history_person_days,
     build_history_person_days_task,
@@ -30,6 +34,7 @@ RUNNERS = {
     "download_era5_uncertainty": download_era5_uncertainty,
     "weight_table": build_weight_tables,
     "history_person_days": build_history_person_days,
+    "forecast_person_days": build_forecast_person_days,
 }
 
 TASK_RUNNERS = {
@@ -39,4 +44,5 @@ TASK_RUNNERS = {
     "download_era5_uncertainty": download_era5_uncertainty_task,
     "weight_table": build_weight_table_task,
     "history_person_days": build_history_person_days_task,
+    "forecast_person_days": build_forecast_person_days_task,
 }
