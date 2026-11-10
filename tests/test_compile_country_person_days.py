@@ -14,7 +14,9 @@ import pytest
 
 from climate_data.data import PopulationModelData
 from climate_data.special.compile_country_person_days import (
+    BIN_LABELS,
     compile_country_person_days,
+    compile_country_person_days_main,
     compiled_country_path,
     country_admin2_ids,
     country_locations,
@@ -157,16 +159,16 @@ def test_compile_sums_counties_to_states_and_the_country(tmp_path: Path) -> None
     result = _compile(tmp_path, [2023, 2024])
 
     by_key = result.set_index(["location_id", "year_id", "temperature_zone"])
-    bin_400 = TEMPERATURE_COLUMNS[400]
+    bin_400 = BIN_LABELS[400]
     assert by_key.loc[(523, 2023, 10), bin_400] == 2023.0 + 2.0
     assert by_key.loc[(US, 2024, 10), bin_400] == 2024.0 + 2.0
-    assert by_key.loc[(US, 2024, 11), TEMPERATURE_COLUMNS[401]] == 3.0  # noqa: PLR2004
+    assert by_key.loc[(US, 2024, 11), BIN_LABELS[401]] == 3.0  # noqa: PLR2004
     # Every year: the country equals the sum of its counties.
     counties = result[result["level"] == "county"]
     country = result[result["location_id"] == US]
     np.testing.assert_allclose(
-        country.groupby("year_id")[list(TEMPERATURE_COLUMNS)].sum().to_numpy(),
-        counties.groupby("year_id")[list(TEMPERATURE_COLUMNS)].sum().to_numpy(),
+        country.groupby("year_id")[BIN_LABELS].sum().to_numpy(),
+        counties.groupby("year_id")[BIN_LABELS].sum().to_numpy(),
     )
 
 
@@ -198,7 +200,7 @@ def test_compile_drops_rows_with_no_person_days(tmp_path: Path) -> None:
     result = _compile(tmp_path, [2023])
 
     assert 13 not in set(result["temperature_zone"])  # noqa: PLR2004
-    assert (result[list(TEMPERATURE_COLUMNS)].sum(axis=1) > 0).all()
+    assert (result[BIN_LABELS].sum(axis=1) > 0).all()
 
 
 def test_compile_fails_when_a_year_file_is_missing(tmp_path: Path) -> None:
@@ -220,8 +222,11 @@ def test_compile_layout(tmp_path: Path) -> None:
         "year_id",
         "temperature_zone",
     ]
-    assert list(result.columns[5:]) == list(TEMPERATURE_COLUMNS)
-    assert isinstance(result.columns[5], float)
+    assert list(result.columns[5:]) == BIN_LABELS
+    assert BIN_LABELS[0] == "-35.0"
+    assert BIN_LABELS[1] == "-34.9"
+    assert BIN_LABELS[-1] == "44.9"
+    assert len(set(BIN_LABELS)) == len(TEMPERATURE_COLUMNS)
     keys = result[["location_id", "year_id", "temperature_zone"]]
     assert keys.equals(keys.sort_values(list(keys.columns)))
     assert not keys.duplicated().any()
@@ -342,6 +347,73 @@ def test_insert_geoid_follows_location_id_and_leaves_the_nation_null(
     assert result.loc[result["location_id"] == US, "geoid"].isna().all()
     assert (result.loc[result["location_id"] == 1002, "geoid"] == "01003").all()  # noqa: PLR2004
     assert result.loc[result["location_id"] != US, "geoid"].notna().all()
+
+
+# --- The written file ---
+
+
+def test_written_file_has_string_bin_labels_and_round_trips(tmp_path: Path) -> None:
+    """The file as written by the task's main reads back unchanged."""
+    _write_years(tmp_path, [2023, 2024])
+    pm_data = PopulationModelData(tmp_path / "population-model")
+    hierarchy_path = pm_data.raking_data / "gbd-inputs" / "hierarchy_lsae_1578.parquet"
+    hierarchy_path.parent.mkdir(parents=True)
+    _hierarchy().to_parquet(hierarchy_path)
+    crosswalk = _crosswalk(tmp_path / "locations.csv", GOOD_ROWS)
+    output_path = compiled_country_path(tmp_path, "lsae_1578", US, SCENARIO, MEMBER)
+
+    written = compile_country_person_days_main(
+        US,
+        SCENARIO,
+        MEMBER,
+        "lsae_1578",
+        WEIGHTS_HIERARCHY,
+        tmp_path,
+        tmp_path / "population-model",
+        output_path,
+        years=[2023, 2024],
+        crosswalk_path=crosswalk,
+    )
+    read_back = pd.read_parquet(output_path)
+
+    assert written is not None
+    assert list(read_back.columns) == [
+        "location_id",
+        "geoid",
+        "level",
+        "location_name",
+        "year_id",
+        "temperature_zone",
+        *BIN_LABELS,
+    ]
+    expected = written.copy()
+    # Text columns come back in pandas' string dtype (null as NaN); values unchanged.
+    for column in ("geoid", "level", "location_name"):
+        assert read_back[column].dtype == "str"
+        expected[column] = expected[column].astype(read_back[column].dtype)
+    pd.testing.assert_frame_equal(read_back, expected)
+    assert read_back.loc[read_back["location_id"] == US, "geoid"].isna().all()
+    assert (read_back.loc[read_back["location_id"] == 1001, "geoid"] == "01001").all()  # noqa: PLR2004
+
+
+def test_main_skips_an_existing_file(tmp_path: Path) -> None:
+    output_path = tmp_path / "exists.parquet"
+    output_path.write_text("not parquet")
+
+    result = compile_country_person_days_main(
+        US,
+        SCENARIO,
+        MEMBER,
+        "lsae_1578",
+        WEIGHTS_HIERARCHY,
+        tmp_path,
+        tmp_path,
+        output_path,
+        years=[2023],
+    )
+
+    assert result is None
+    assert output_path.read_text() == "not parquet"
 
 
 # --- CLI ---

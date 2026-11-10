@@ -7,6 +7,11 @@ and writes one file with the location's level and name on every row. Rows with n
 person-days are dropped. For the US it adds Census GEOIDs (a zero-padded string, 2 digits
 for a state and 5 for a county) from USHD's crosswalk; the national row has none.
 
+The 800 bin columns are labelled by strings (``'-35.0'`` ... ``'44.9'``), as in the
+Delaware pilot, both in memory and on disk. Parquet column names are strings, and with the
+keys as ordinary columns pandas would write float labels as strings anyway; production's
+files read back with float labels only because their keys are the index.
+
 One country at a time keeps the memory to one country's rows: all 47,855 admin2 units over
 151 years do not fit in one job.
 """
@@ -36,6 +41,10 @@ from climate_data.special.history_person_days import (
 )
 
 COMPILE_YEARS = HISTORY_PERSON_DAYS_YEARS + FORECAST_PERSON_DAYS_YEARS
+# The bin labels of the compiled file: the bins' left edges, to one decimal.
+BIN_LABELS = []
+for _edge in TEMPERATURE_COLUMNS:
+    BIN_LABELS.append(f"{_edge:.1f}")
 KEY_COLUMNS = ["location_id", "year_id", "temperature_zone"]
 
 US_LOCATION_ID = 102
@@ -133,8 +142,8 @@ def compile_country_person_days(
     """One country's person-days at every level, for ``years``.
 
     Columns: ``location_id``, [``geoid``,] ``level``, ``location_name``, ``year_id``,
-    ``temperature_zone``, then the 800 bins. One row per (location, year, zone) with
-    person-days; sorted by those keys.
+    ``temperature_zone``, then the 800 bins labelled by ``BIN_LABELS``. One row per
+    (location, year, zone) with person-days; sorted by those keys.
     """
     missing = []
     for year in years:
@@ -164,6 +173,7 @@ def compile_country_person_days(
     labels = level_names(locations, country_id)
     result.insert(1, "level", labels.loc[result["location_id"]].to_numpy())
     result.insert(2, "location_name", names.loc[result["location_id"]].to_numpy())
+    result = result.rename(columns=dict(zip(bins, BIN_LABELS, strict=True)))
     if geoids is not None:
         result = insert_geoid(result, geoids)
     return result
@@ -342,7 +352,7 @@ def compile_country_person_days_task(
     if result is None:
         return
     peak_gb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024**2
-    total = float(np.sum(result[list(TEMPERATURE_COLUMNS)].to_numpy()))
+    total = float(np.sum(result[BIN_LABELS].to_numpy()))
     print(
         f"compile_country_person_days {country_id} {cmip6_experiment} {gcm_member}: "
         f"{len(result)} rows, {result['location_id'].nunique()} locations, "
