@@ -274,6 +274,9 @@ def run_forecast_chain(
             packed[year] = _read_packed_annual(ann_path)
             continue
 
+        # Weights first: the first call may load every remaining year at once, and
+        # doing that before the dailies exist keeps it out of the chain's peak RAM.
+        weights = load_weights(year)
         daily = generate(year)
         rounded_annual = annual_mean_rounded(daily)
         if rounded_annual.size != n_cells:
@@ -282,7 +285,6 @@ def run_forecast_chain(
         _write_annual(rounded_annual, daily, year, ann_path)
         packed[year] = pack_int16(rounded_annual)
 
-        weights = load_weights(year)
         cells = hpd.used_cells(weights)
         values = _date_first(daily).to_numpy()
         temperature = round_daily_storage(values.reshape(values.shape[0], -1)[:, cells])
@@ -356,6 +358,36 @@ def load_era5_annual_flat(cd_data: ClimateData) -> xr.DataArray:
     )
 
 
+def chain_weight_loader(
+    weights_root: str | Path,
+    hierarchy: str,
+    years: list[int],
+    block_keys: list[str],
+) -> Callable[[int], pd.DataFrame]:
+    """A ``load_weights`` for `run_forecast_chain` that reads each weight table once.
+
+    The first call loads every chain year from that one on, in one pass over the
+    tables; a restart that skips finished years therefore loads only the rest, and a
+    chain with nothing left to do loads nothing. Each year's weights are dropped once
+    handed out (about 15 MB per year).
+    """
+    cache: dict[int, pd.DataFrame] = {}
+
+    def load_weights(year: int) -> pd.DataFrame:
+        if year not in cache:
+            remaining = []
+            for chain_year in years:
+                if chain_year >= year:
+                    remaining.append(chain_year)
+            cache.clear()
+            cache.update(
+                hpd.load_weights_by_year(weights_root, hierarchy, remaining, block_keys)
+            )
+        return cache.pop(year)
+
+    return load_weights
+
+
 def forecast_person_days_main(
     scenario: str,
     gcm_member: str,
@@ -378,8 +410,7 @@ def forecast_person_days_main(
             scenario, gcm_member, year, climate_data_root
         )
 
-    def load_weights(year: int) -> pd.DataFrame:
-        return hpd.load_year_weights(weights_root, hierarchy, year, block_keys)
+    load_weights = chain_weight_loader(weights_root, hierarchy, years, block_keys)
 
     def output_path(year: int) -> Path:
         return forecast_person_days_path(

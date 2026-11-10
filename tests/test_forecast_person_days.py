@@ -20,6 +20,7 @@ from climate_data.special.forecast_person_days import (
     DAILY_FILL,
     annual_mean_path,
     annual_mean_rounded,
+    chain_weight_loader,
     forecast_person_days_path,
     forecast_zone,
     missing_chains,
@@ -30,6 +31,7 @@ from climate_data.special.forecast_person_days import (
 from climate_data.special.history_person_days import (
     decode_int16,
     history_person_days,
+    load_year_weights,
     trailing_zone,
     used_cells,
 )
@@ -314,6 +316,119 @@ def test_chain_decodes_only_the_zone_window_years(
         weights, zone, temperature[:, used_cells(weights)], last
     )
     pd.testing.assert_frame_equal(pd.read_parquet(chain.output_path(last)), expected)
+
+
+def _write_weight_block(
+    root: Path, block_key: str, rows: list[tuple[int, int, int, float]]
+) -> None:
+    from climate_data.special.weight_table import (
+        WEIGHT_TABLE_COLUMNS,
+        weight_table_path,
+    )
+
+    table = pd.DataFrame(rows, columns=WEIGHT_TABLE_COLUMNS).astype(
+        {"year_id": np.int16, "location_id": np.int32, "cell": np.int32}
+    )
+    path = weight_table_path(root, "lsae_1285", block_key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_parquet(path)
+
+
+def test_chain_weight_loader_reads_each_table_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocks = ["B-0000X-0000Y", "B-0001X-0000Y"]
+    years = [2024, 2025, 2026]
+    rows_a = []
+    rows_b = []
+    for year in years:
+        rows_a.append((year, 11, 0, 1.0 + year))
+        rows_a.append((year, 12, 4, 2.0 * year))
+        rows_b.append((year, 11, 0, 0.5))
+    _write_weight_block(tmp_path, blocks[0], rows_a)
+    _write_weight_block(tmp_path, blocks[1], rows_b)
+    expected = {}
+    for year in years:
+        expected[year] = load_year_weights(tmp_path, "lsae_1285", year, blocks)
+
+    reads = []
+    real_read_parquet = pd.read_parquet
+
+    def counting_read_parquet(path: Path, *args: object, **kwargs: object) -> object:
+        reads.append(Path(path).name)
+        return real_read_parquet(path, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(pd, "read_parquet", counting_read_parquet)
+    load_weights = chain_weight_loader(tmp_path, "lsae_1285", years, blocks)
+    assert reads == []  # nothing is read until the chain asks for a year
+
+    for year in years:
+        pd.testing.assert_frame_equal(load_weights(year), expected[year])
+
+    assert sorted(reads) == ["B-0000X-0000Y.parquet", "B-0001X-0000Y.parquet"]
+
+
+def test_chain_weight_loader_starts_at_the_first_year_asked_for(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocks = ["B-0000X-0000Y"]
+    years = [2024, 2025, 2026]
+    rows = []
+    for year in years:
+        rows.append((year, 11, 0, float(year)))
+    _write_weight_block(tmp_path, blocks[0], rows)
+
+    loaded_years = []
+    from climate_data.special import history_person_days as hpd
+
+    real = hpd.load_weights_by_year
+
+    def recording(
+        root: Path, hierarchy: str, wanted: list[int], keys: list[str]
+    ) -> dict[int, pd.DataFrame]:
+        loaded_years.append(list(wanted))
+        return real(root, hierarchy, wanted, keys)
+
+    monkeypatch.setattr(hpd, "load_weights_by_year", recording)
+    load_weights = chain_weight_loader(tmp_path, "lsae_1285", years, blocks)
+
+    # A restart: 2024 is done, so the chain asks for 2025 first.
+    assert load_weights(2025)["population"].tolist() == [2025.0]
+    assert load_weights(2026)["population"].tolist() == [2026.0]
+    assert loaded_years == [[2025, 2026]]
+
+
+def test_chain_loads_each_year_weights_before_generating_it(tmp_path: Path) -> None:
+    # The first load reads every year's weights at once; doing it before the first
+    # year's dailies exist keeps it out of the chain's peak RAM.
+    chain = _Chain(tmp_path)
+    events = []
+
+    def generate(year: int) -> xr.Dataset:
+        events.append(("generate", year))
+        return chain.generate(year)
+
+    def load_weights(year: int) -> pd.DataFrame:
+        events.append(("weights", year))
+        return _toy_weights(year)
+
+    run_forecast_chain(
+        [2024, 2025],
+        chain.era5,
+        generate,
+        load_weights,
+        chain.output_path,
+        chain.annual_path,
+    )
+
+    assert events == [
+        ("weights", 2024),
+        ("generate", 2024),
+        ("weights", 2025),
+        ("generate", 2025),
+    ]
 
 
 def test_chain_starting_late_needs_the_earlier_annual_means(tmp_path: Path) -> None:

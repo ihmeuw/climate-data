@@ -20,7 +20,7 @@ on a bin edge bin one 0.1 degree bin low, exactly as in production (CLIMATE-40, 
 import resource
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 import numba
@@ -171,22 +171,12 @@ def decode_int16(
     return out
 
 
-def load_year_weights(
+def _frame_table_paths(
     weights_root: str | Path,
     hierarchy: str,
-    year: int,
     block_keys: list[str],
-) -> pd.DataFrame:
-    """One year's population per (location, global cell), from each block's table.
-
-    Reads the table of every block in ``block_keys`` (the modeling frame's blocks) and
-    nothing else, so a stray file in the directory is never counted. Fails if any of
-    those tables is missing.
-
-    A (location, cell) pair can appear in two blocks when a location crosses a block
-    edge, so the pairs are summed again.
-    """
-    directory = weight_table_path(weights_root, hierarchy, "any").parent
+) -> list[Path]:
+    """The weight table of every block in ``block_keys``; fails if any is missing."""
     paths = []
     absent = []
     for block_key in block_keys:
@@ -196,30 +186,81 @@ def load_year_weights(
         else:
             absent.append(block_key)
     if absent or not paths:
+        directory = weight_table_path(weights_root, hierarchy, "any").parent
         msg = (
             f"{len(absent)} of {len(block_keys)} blocks have no weight table in "
             f"{directory}, e.g. {absent[:3]}."
         )
         raise FileNotFoundError(msg)
+    return paths
+
+
+def load_weights_by_year(
+    weights_root: str | Path,
+    hierarchy: str,
+    years: list[int],
+    block_keys: list[str],
+) -> dict[int, pd.DataFrame]:
+    """Population per (location, global cell) for each of ``years``, in one pass.
+
+    Reads the table of every block in ``block_keys`` (the modeling frame's blocks) once,
+    and nothing else, so a stray file in the directory is never counted. Fails if any
+    of those tables is missing, or if a year has no rows in any of them.
+
+    A (location, cell) pair can appear in two blocks when a location crosses a block
+    edge, so the pairs are summed again.
+
+    Returns
+    -------
+    dict[int, pd.DataFrame]
+        Year -> ``location_id``, ``cell``, ``population``, sorted by location and cell.
+    """
+    directory = weight_table_path(weights_root, hierarchy, "any").parent
+    paths = _frame_table_paths(weights_root, hierarchy, block_keys)
+    wanted = []
+    for year in years:
+        wanted.append(int(year))
     frames = []
     for path in paths:
         table = pd.read_parquet(
             path,
-            columns=["location_id", "cell", "population"],
-            filters=[("year_id", "==", year)],
+            columns=["year_id", "location_id", "cell", "population"],
+            filters=[("year_id", "in", wanted)],
         )
         if len(table):
             frames.append(table)
-    if not frames:
-        msg = f"No weight table in {directory} has rows for {year}."
+    summed = pd.DataFrame(columns=["year_id", "location_id", "cell", "population"])
+    if frames:
+        summed = (
+            pd.concat(frames, ignore_index=True)
+            .groupby(["year_id", "location_id", "cell"], sort=True)["population"]
+            .sum()
+            .reset_index()
+        )
+    del frames
+    by_year = {}
+    for year_id, group in summed.groupby("year_id", sort=True):
+        by_year[int(cast("int", year_id))] = group[
+            ["location_id", "cell", "population"]
+        ].reset_index(drop=True)
+    empty = []
+    for year in wanted:
+        if year not in by_year:
+            empty.append(year)
+    if empty:
+        msg = f"No weight table in {directory} has rows for {empty}."
         raise ValueError(msg)
-    weights = (
-        pd.concat(frames, ignore_index=True)
-        .groupby(["location_id", "cell"], sort=True)["population"]
-        .sum()
-        .reset_index()
-    )
-    return weights[["location_id", "cell", "population"]]
+    return by_year
+
+
+def load_year_weights(
+    weights_root: str | Path,
+    hierarchy: str,
+    year: int,
+    block_keys: list[str],
+) -> pd.DataFrame:
+    """One year's population per (location, global cell): see `load_weights_by_year`."""
+    return load_weights_by_year(weights_root, hierarchy, [year], block_keys)[int(year)]
 
 
 def used_cells(weights: pd.DataFrame) -> npt.NDArray[np.int64]:

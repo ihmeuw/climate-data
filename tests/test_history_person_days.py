@@ -21,6 +21,7 @@ from climate_data.special.history_person_days import (
     decode_int16,
     history_person_days,
     history_person_days_path,
+    load_weights_by_year,
     load_year_weights,
     missing_years,
     round_zone_storage,
@@ -246,6 +247,39 @@ def test_load_year_weights_fails_on_a_missing_frame_block(tmp_path: Path) -> Non
         load_year_weights(
             tmp_path, "lsae_1285", 2000, ["B-0000X-0000Y", "B-0001X-0000Y"]
         )
+
+
+def test_load_weights_by_year_equals_one_year_at_a_time(tmp_path: Path) -> None:
+    _write_block(
+        tmp_path,
+        "B-0000X-0000Y",
+        [(2000, 7, 100, 1.5), (2001, 7, 100, 50.0), (2002, 8, 102, 3.0)],
+    )
+    _write_block(
+        tmp_path,
+        "B-0001X-0000Y",
+        [(2000, 7, 100, 0.5), (2001, 8, 101, 4.0), (2002, 7, 100, 9.0)],
+    )
+    _write_block(tmp_path, "B-0002X-0000Y", [])
+
+    by_year = load_weights_by_year(tmp_path, "lsae_1285", [2000, 2002], BLOCKS)
+
+    assert sorted(by_year) == [2000, 2002]
+    for year in (2000, 2002):
+        pd.testing.assert_frame_equal(
+            by_year[year], load_year_weights(tmp_path, "lsae_1285", year, BLOCKS)
+        )
+    got = by_year[2002].set_index(["location_id", "cell"])["population"].to_dict()
+    assert got == {(7, 100): 9.0, (8, 102): 3.0}
+
+
+def test_load_weights_by_year_fails_on_a_year_with_no_rows(tmp_path: Path) -> None:
+    _write_block(tmp_path, "B-0000X-0000Y", [(2000, 7, 100, 1.5)])
+    _write_block(tmp_path, "B-0001X-0000Y", [])
+    _write_block(tmp_path, "B-0002X-0000Y", [])
+
+    with pytest.raises(ValueError, match="2001"):
+        load_weights_by_year(tmp_path, "lsae_1285", [2000, 2001], BLOCKS)
 
 
 def test_load_year_weights_fails_without_tables(tmp_path: Path) -> None:
