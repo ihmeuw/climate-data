@@ -31,12 +31,13 @@ import xarray as xr
 
 from climate_data import cli_options as clio
 from climate_data import constants as cdc
-from climate_data.data import ClimateData, PopulationModelData, save_parquet
+from climate_data.data import ClimateData, save_parquet
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import utils
 from climate_data.special.weight_table import (
     GLOBAL_LATITUDE,
     GLOBAL_LONGITUDE,
+    frame_block_keys,
     missing_blocks,
     weight_table_path,
 )
@@ -52,7 +53,9 @@ ZONE_WINDOW = 10
 # The compiled temperature_zone files store the zone as int16 with this scale.
 ZONE_SCALE = 0.01
 
-HISTORY_PERSON_DAYS_YEARS = [int(y) for y in cdc.HISTORY_YEARS]
+HISTORY_PERSON_DAYS_YEARS = []
+for _year in cdc.HISTORY_YEARS:
+    HISTORY_PERSON_DAYS_YEARS.append(int(_year))
 
 
 def history_person_days_path(
@@ -172,16 +175,31 @@ def load_year_weights(
     weights_root: str | Path,
     hierarchy: str,
     year: int,
+    block_keys: list[str],
 ) -> pd.DataFrame:
-    """One year's population per (location, global cell), from every block's table.
+    """One year's population per (location, global cell), from each block's table.
+
+    Reads the table of every block in ``block_keys`` (the modeling frame's blocks) and
+    nothing else, so a stray file in the directory is never counted. Fails if any of
+    those tables is missing.
 
     A (location, cell) pair can appear in two blocks when a location crosses a block
     edge, so the pairs are summed again.
     """
     directory = weight_table_path(weights_root, hierarchy, "any").parent
-    paths = sorted(directory.glob("*.parquet"))
-    if not paths:
-        msg = f"No weight tables in {directory}."
+    paths = []
+    absent = []
+    for block_key in block_keys:
+        path = weight_table_path(weights_root, hierarchy, block_key)
+        if path.exists():
+            paths.append(path)
+        else:
+            absent.append(block_key)
+    if absent or not paths:
+        msg = (
+            f"{len(absent)} of {len(block_keys)} blocks have no weight table in "
+            f"{directory}, e.g. {absent[:3]}."
+        )
         raise FileNotFoundError(msg)
     frames = []
     for path in paths:
@@ -337,6 +355,7 @@ def history_person_days_main(
     hierarchy: str,
     climate_data_root: str | Path,
     weights_root: str | Path,
+    population_model_root: str | Path,
     output_path: str | Path,
     *,
     overwrite: bool = False,
@@ -351,7 +370,8 @@ def history_person_days_main(
         raise FileExistsError(msg)
     cd_data = ClimateData(climate_data_root, read_only=True)
 
-    weights = load_year_weights(weights_root, hierarchy, year)
+    block_keys = frame_block_keys(population_model_root)
+    weights = load_year_weights(weights_root, hierarchy, year, block_keys)
 
     annual = cd_data.load_raw_annual_mfdataset("historical", "mean_temperature")
     check_global_grid(annual, "ERA5 annual mean temperature")
@@ -370,6 +390,7 @@ def history_person_days_main(
 @clio.with_year(cdc.HISTORY_YEARS)
 @clio.with_hierarchy(default="lsae_1285")
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
+@clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @click.option(
     "--weights-dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -388,6 +409,7 @@ def build_history_person_days_task(
     year: str,
     hierarchy: str,
     climate_data_dir: str,
+    population_model_dir: str,
     weights_dir: str | None,
     output_dir: str,
     *,
@@ -401,6 +423,7 @@ def build_history_person_days_task(
         hierarchy,
         climate_data_dir,
         weights_dir or output_dir,
+        population_model_dir,
         output_path,
         overwrite=overwrite,
     )
@@ -417,6 +440,7 @@ def build_history_person_days_task(
 @clio.with_year(cdc.HISTORY_YEARS, allow_all=True)
 @clio.with_hierarchy(default="lsae_1285")
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
+@clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @click.option(
     "--weights-dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -437,6 +461,7 @@ def build_history_person_days(
     year: list[str],
     hierarchy: str,
     climate_data_dir: str,
+    population_model_dir: str,
     weights_dir: str | None,
     output_dir: str,
     queue: str,
@@ -446,8 +471,7 @@ def build_history_person_days(
     """Build history person-days for every year that does not have a file yet."""
     weights_root = weights_dir or output_dir
     # Every block must have its weight table, or a year would silently miss people.
-    pm_data = PopulationModelData(cdc.POPULATION_MODEL_ROOT)
-    all_blocks = pm_data.load_modeling_frame()["block_key"].unique().tolist()
+    all_blocks = frame_block_keys(population_model_dir)
     absent = missing_blocks(all_blocks, weights_root, hierarchy)
     if absent:
         msg = f"{len(absent)} blocks have no weight table, e.g. {absent[:3]}."
@@ -466,6 +490,7 @@ def build_history_person_days(
         task_args={
             "hierarchy": hierarchy,
             "climate-data-dir": climate_data_dir,
+            "population-model-dir": population_model_dir,
             "weights-dir": weights_root,
             "output-dir": output_dir,
         },

@@ -108,7 +108,10 @@ def country_admin2_ids(hierarchy_df: pd.DataFrame, country_id: int) -> list[int]
     """The country's most-detailed locations: the admin2 units the stages wrote."""
     locations = country_locations(hierarchy_df, country_id)
     ids = locations.loc[locations["most_detailed"] == 1, "location_id"]
-    return sorted(int(i) for i in ids)
+    admin2_ids = []
+    for location_id in ids:
+        admin2_ids.append(int(location_id))
+    return sorted(admin2_ids)
 
 
 def level_names(locations: pd.DataFrame, country_id: int) -> pd.Series:

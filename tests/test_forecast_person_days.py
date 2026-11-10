@@ -271,6 +271,51 @@ def test_chain_resumes_from_annual_means_on_disk(tmp_path: Path) -> None:
     pd.testing.assert_frame_equal(pd.read_parquet(resumed.output_path(2026)), full)
 
 
+def test_chain_decodes_only_the_zone_window_years(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from climate_data.special import history_person_days as hpd
+
+    years = list(range(2024, 2037))  # 13 years; the window is 10
+    decoded = []
+
+    def counting_decode(
+        raw: np.ndarray, scale_factor: float, add_offset: float, fill_value: int
+    ) -> np.ndarray:
+        decoded.append(raw.size)
+        return decode_int16(raw, scale_factor, add_offset, fill_value)
+
+    monkeypatch.setattr(hpd, "decode_int16", counting_decode)
+    chain = _Chain(tmp_path)
+    chain.run(years)
+
+    expected_decodes = 0
+    for i in range(1, len(years) + 1):
+        expected_decodes += min(i, hpd.ZONE_WINDOW)
+    assert len(decoded) == expected_decodes
+
+    # The last year still bins against the zone from the whole member series.
+    member_values = []
+    for year in years:
+        with xr.open_dataset(chain.annual_path(year)) as ds:
+            member_values.append(ds["value"].to_numpy().reshape(-1))
+    member = xr.DataArray(
+        np.stack(member_values), dims=("year", "flat"), coords={"year": years}
+    )
+    last = years[-1]
+    zone = forecast_zone(chain.era5, member, last)
+    daily = _toy_daily(last, last, ("date", "latitude", "longitude"))
+    weights = _toy_weights(last)
+    temperature = round_daily_storage(
+        daily["value"].to_numpy().reshape(len(daily["date"]), -1)
+    )
+    expected = history_person_days(
+        weights, zone, temperature[:, used_cells(weights)], last
+    )
+    pd.testing.assert_frame_equal(pd.read_parquet(chain.output_path(last)), expected)
+
+
 def test_chain_starting_late_needs_the_earlier_annual_means(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="annual mean for 2024"):
         _Chain(tmp_path).run([2026, 2027])
@@ -329,3 +374,30 @@ def test_cli_commands_are_registered_and_require_output_dir() -> None:
     )
     assert result.exit_code != 0
     assert "--output-dir" in result.output
+
+
+def test_runner_checks_blocks_in_the_population_model_dir_it_is_given(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from click.testing import CliRunner
+
+    from climate_data.special import RUNNERS
+    from climate_data.special import forecast_person_days as fpd
+
+    seen = []
+
+    def fake_frame_block_keys(population_model_root: str) -> list[str]:
+        seen.append(population_model_root)
+        return ["B-0000X-0000Y"]  # no weight table exists, so the runner stops
+
+    monkeypatch.setattr(fpd, "frame_block_keys", fake_frame_block_keys)
+    pm_dir = tmp_path / "population-model"
+    pm_dir.mkdir()
+    result = CliRunner().invoke(
+        RUNNERS["forecast_person_days"],
+        ["--population-model-dir", str(pm_dir), "-o", str(tmp_path), "--dry-run"],
+    )
+
+    assert seen == [str(pm_dir)]
+    assert "1 blocks have no weight table" in result.output

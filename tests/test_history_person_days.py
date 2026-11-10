@@ -196,6 +196,8 @@ def test_decode_int16_matches_xarray(tmp_path: Path) -> None:
 
 # --- The weight tables ---
 
+BLOCKS = ["B-0000X-0000Y", "B-0001X-0000Y", "B-0002X-0000Y"]
+
 
 def _write_block(
     root: Path, block_key: str, rows: list[tuple[int, int, int, float]]
@@ -217,16 +219,38 @@ def test_load_year_weights_sums_a_pair_split_across_blocks(tmp_path: Path) -> No
     _write_block(tmp_path, "B-0001X-0000Y", [(2000, 7, 100, 0.5), (2000, 8, 101, 4.0)])
     _write_block(tmp_path, "B-0002X-0000Y", [])  # an ocean block: an empty table
 
-    weights = load_year_weights(tmp_path, "lsae_1285", 2000)
+    weights = load_year_weights(tmp_path, "lsae_1285", 2000, BLOCKS)
 
     assert list(weights.columns) == ["location_id", "cell", "population"]
     got = weights.set_index(["location_id", "cell"])["population"].to_dict()
     assert got == {(7, 100): 2.0, (7, 101): 2.0, (8, 101): 4.0}
 
 
+def test_load_year_weights_reads_only_the_frame_blocks(tmp_path: Path) -> None:
+    _write_block(tmp_path, "B-0000X-0000Y", [(2000, 7, 100, 1.5)])
+    _write_block(tmp_path, "B-0001X-0000Y", [(2000, 7, 100, 0.5)])
+    # A table for a block not in the frame (a stray file, or an old block layout).
+    _write_block(tmp_path, "B-0009X-0009Y", [(2000, 7, 100, 1000.0)])
+
+    weights = load_year_weights(
+        tmp_path, "lsae_1285", 2000, ["B-0000X-0000Y", "B-0001X-0000Y"]
+    )
+
+    assert weights["population"].tolist() == [2.0]
+
+
+def test_load_year_weights_fails_on_a_missing_frame_block(tmp_path: Path) -> None:
+    _write_block(tmp_path, "B-0000X-0000Y", [(2000, 7, 100, 1.5)])
+
+    with pytest.raises(FileNotFoundError, match="B-0001X-0000Y"):
+        load_year_weights(
+            tmp_path, "lsae_1285", 2000, ["B-0000X-0000Y", "B-0001X-0000Y"]
+        )
+
+
 def test_load_year_weights_fails_without_tables(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        load_year_weights(tmp_path, "lsae_1285", 2000)
+        load_year_weights(tmp_path, "lsae_1285", 2000, BLOCKS)
 
 
 # --- The person-days ---
@@ -373,3 +397,30 @@ def test_cli_commands_are_registered_and_require_output_dir() -> None:
     result = runner.invoke(TASK_RUNNERS["history_person_days"], ["--year", "1990"])
     assert result.exit_code != 0
     assert "--output-dir" in result.output
+
+
+def test_runner_checks_blocks_in_the_population_model_dir_it_is_given(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from click.testing import CliRunner
+
+    from climate_data.special import RUNNERS
+    from climate_data.special import history_person_days as hpd
+
+    seen = []
+
+    def fake_frame_block_keys(population_model_root: str) -> list[str]:
+        seen.append(population_model_root)
+        return ["B-0000X-0000Y"]  # no weight table exists, so the runner stops
+
+    monkeypatch.setattr(hpd, "frame_block_keys", fake_frame_block_keys)
+    pm_dir = tmp_path / "population-model"
+    pm_dir.mkdir()
+    result = CliRunner().invoke(
+        RUNNERS["history_person_days"],
+        ["--population-model-dir", str(pm_dir), "-o", str(tmp_path), "--dry-run"],
+    )
+
+    assert seen == [str(pm_dir)]
+    assert "1 blocks have no weight table" in result.output

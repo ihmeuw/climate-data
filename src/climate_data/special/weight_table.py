@@ -35,7 +35,9 @@ GLOBAL_LATITUDE = cdc.TARGET_LATITUDE.to_numpy()[::-1]
 GLOBAL_LONGITUDE = cdc.TARGET_LONGITUDE.to_numpy()
 
 WEIGHT_TABLE_COLUMNS = ["year_id", "location_id", "cell", "population"]
-WEIGHT_TABLE_YEARS = [int(y) for y in [*cdc.HISTORY_YEARS, *cdc.FORECAST_YEARS]]
+WEIGHT_TABLE_YEARS = []
+for _year in [*cdc.HISTORY_YEARS, *cdc.FORECAST_YEARS]:
+    WEIGHT_TABLE_YEARS.append(int(_year))
 POPULATION_RTOL = 1e-12
 
 
@@ -46,6 +48,12 @@ def weight_table_path(
 ) -> Path:
     """Where one block's weight table lives: ``<root>/weights/<hierarchy>/<block>.parquet``."""
     return Path(output_root) / "weights" / hierarchy / f"{block_key}.parquet"
+
+
+def frame_block_keys(population_model_root: str | Path) -> list[str]:
+    """Every block of the population model's modeling frame, sorted."""
+    pm_data = PopulationModelData(population_model_root)
+    return sorted(pm_data.load_modeling_frame()["block_key"].unique().tolist())
 
 
 def missing_blocks(
@@ -334,8 +342,7 @@ def build_weight_tables(
     dry_run: bool,
 ) -> None:
     """Build population weight tables for every block that does not have one yet."""
-    pm_data = PopulationModelData(population_model_dir)
-    all_blocks = pm_data.load_modeling_frame()["block_key"].unique().tolist()
+    all_blocks = frame_block_keys(population_model_dir)
     block_keys = clio.convert_choice(block_key, all_blocks)
     jobs = missing_blocks(block_keys, output_dir, hierarchy)
     print(f"Running {len(jobs)} of {len(block_keys)} blocks")

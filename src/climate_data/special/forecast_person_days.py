@@ -35,7 +35,6 @@ from climate_data import cli_options as clio
 from climate_data import constants as cdc
 from climate_data.data import (
     ClimateData,
-    PopulationModelData,
     save_parquet,
     save_xarray,
 )
@@ -43,7 +42,7 @@ from climate_data.generate import utils as gutils
 from climate_data.generate.scenario_daily import generate_scenario_daily_main
 from climate_data.jobmon_utils import run_parallel_maybe_dry_run
 from climate_data.special import history_person_days as hpd
-from climate_data.special.weight_table import missing_blocks
+from climate_data.special.weight_table import frame_block_keys, missing_blocks
 
 # How the July forecast dailies and every annual file were stored.
 DAILY_SCALE = 0.01
@@ -51,7 +50,9 @@ DAILY_FILL = -32767
 STORAGE_ENCODING = {"scale_factor": DAILY_SCALE, "add_offset": 0.0}
 
 FORECAST_START_YEAR = int(cdc.FORECAST_YEARS[0])
-FORECAST_PERSON_DAYS_YEARS = [int(y) for y in cdc.FORECAST_YEARS]
+FORECAST_PERSON_DAYS_YEARS = []
+for _year in cdc.FORECAST_YEARS:
+    FORECAST_PERSON_DAYS_YEARS.append(int(_year))
 
 
 def forecast_person_days_path(
@@ -287,7 +288,11 @@ def run_forecast_chain(
         temperature = round_daily_storage(values.reshape(values.shape[0], -1)[:, cells])
         del daily, values
 
-        member_years = sorted(packed)
+        # Only the zone window's member years; forecast_zone uses no others.
+        member_years = []
+        for member_year in sorted(packed):
+            if member_year > year - hpd.ZONE_WINDOW:
+                member_years.append(member_year)
         member_cells = []
         for member_year in member_years:
             member_cells.append(
@@ -358,12 +363,14 @@ def forecast_person_days_main(
     hierarchy: str,
     climate_data_root: str | Path,
     weights_root: str | Path,
+    population_model_root: str | Path,
     output_root: str | Path,
     *,
     overwrite: bool = False,
 ) -> list[int]:
     """Run one member-scenario chain over ``years``. Returns the years computed."""
     cd_data = ClimateData(climate_data_root, read_only=True)
+    block_keys = frame_block_keys(population_model_root)
     era5_annual = load_era5_annual_flat(cd_data)
 
     def generate(year: int) -> xr.Dataset:
@@ -372,7 +379,7 @@ def forecast_person_days_main(
         )
 
     def load_weights(year: int) -> pd.DataFrame:
-        return hpd.load_year_weights(weights_root, hierarchy, year)
+        return hpd.load_year_weights(weights_root, hierarchy, year, block_keys)
 
     def output_path(year: int) -> Path:
         return forecast_person_days_path(
@@ -405,6 +412,7 @@ def forecast_person_days_main(
 )
 @clio.with_hierarchy(default="lsae_1285")
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
+@clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @click.option(
     "--weights-dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -426,6 +434,7 @@ def build_forecast_person_days_task(
     year_end: int,
     hierarchy: str,
     climate_data_dir: str,
+    population_model_dir: str,
     weights_dir: str | None,
     output_dir: str,
     *,
@@ -441,6 +450,7 @@ def build_forecast_person_days_task(
         hierarchy,
         climate_data_dir,
         weights_dir or output_dir,
+        population_model_dir,
         output_dir,
         overwrite=overwrite,
     )
@@ -456,6 +466,7 @@ def build_forecast_person_days_task(
 @clio.with_cmip6_experiment(allow_all=True)
 @clio.with_hierarchy(default="lsae_1285")
 @clio.with_input_directory("climate-data", cdc.MODEL_ROOT)
+@clio.with_input_directory("population-model", cdc.POPULATION_MODEL_ROOT)
 @click.option(
     "--weights-dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -476,6 +487,7 @@ def build_forecast_person_days(
     cmip6_experiment: list[str],
     hierarchy: str,
     climate_data_dir: str,
+    population_model_dir: str,
     weights_dir: str | None,
     output_dir: str,
     queue: str,
@@ -484,8 +496,7 @@ def build_forecast_person_days(
 ) -> None:
     """Run every member-scenario chain that has a forecast year not yet written."""
     weights_root = weights_dir or output_dir
-    pm_data = PopulationModelData(cdc.POPULATION_MODEL_ROOT)
-    all_blocks = pm_data.load_modeling_frame()["block_key"].unique().tolist()
+    all_blocks = frame_block_keys(population_model_dir)
     absent = missing_blocks(all_blocks, weights_root, hierarchy)
     if absent:
         msg = f"{len(absent)} blocks have no weight table, e.g. {absent[:3]}."
@@ -506,6 +517,7 @@ def build_forecast_person_days(
         task_args={
             "hierarchy": hierarchy,
             "climate-data-dir": climate_data_dir,
+            "population-model-dir": population_model_dir,
             "weights-dir": weights_root,
             "output-dir": output_dir,
         },
