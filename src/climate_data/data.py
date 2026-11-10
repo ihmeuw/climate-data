@@ -241,6 +241,9 @@ class PopulationModelData:
             "fhs_2023",
             "lsae_1209",
             "lsae_1285",
+            # Aggregation only: lsae_1578 has lsae_1285's admin2 units (one parent
+            # differs), so it is not a pixel hierarchy and not in HIERARCHY_MAP.
+            "lsae_1578",
         ]
         if subset_hierarchy not in allowed_hierarchies:
             msg = f"Unknown admin hierarchy: {subset_hierarchy}"
