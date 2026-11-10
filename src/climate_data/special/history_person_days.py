@@ -362,7 +362,7 @@ def history_person_days_main(
     result = history_person_days(weights, zone, temperature, year)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    save_parquet(result, output_path)
+    save_parquet(result, output_path, atomic=True)
     return result
 
 

@@ -284,7 +284,7 @@ def compile_country_person_days_main(
         hierarchy_df, country_id, years or COMPILE_YEARS, year_path, geoids
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    save_parquet(result, output_path)
+    save_parquet(result, output_path, atomic=True)
     return result
 
 

@@ -267,7 +267,7 @@ def build_block_weight_table_main(
     pm_data = PopulationModelData(population_model_root)
     table = build_block_weight_table(block_key, hierarchy, years, pm_data)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    save_parquet(table, output_path)
+    save_parquet(table, output_path, atomic=True)
     return table
 
 

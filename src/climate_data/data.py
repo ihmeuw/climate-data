@@ -24,7 +24,7 @@ The main classes are:
     read and write access to the data.
 """
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Any, cast
 
@@ -1204,9 +1204,40 @@ class ClimateAggregateData:
         return path
 
 
+def _write_file(
+    output_path: str | Path,
+    write: Callable[[Path], None],
+    *,
+    atomic: bool,
+) -> None:
+    """Create `output_path` with mode 0o664 and fill it with `write`.
+
+    With `atomic=False` the target is touched and then written in place, so a write
+    that fails part way leaves a partial file at the target. With `atomic=True` the
+    data go to `<name>.tmp` in the same directory, which is renamed onto the target
+    only once `write` returns; on failure the temporary file is removed and any
+    existing target is left as it was.
+    """
+    output_path = Path(output_path)
+    if not atomic:
+        touch(output_path, clobber=True)
+        write(output_path)
+        return
+    tmp_path = output_path.with_name(f"{output_path.name}.tmp")
+    touch(tmp_path, clobber=True)
+    try:
+        write(tmp_path)
+        tmp_path.replace(output_path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def save_parquet(
     df: pd.DataFrame,
     output_path: str | Path,
+    *,
+    atomic: bool = False,
 ) -> None:
     """Save a pandas DataFrame to a file with standard parameters.
 
@@ -1216,15 +1247,23 @@ def save_parquet(
         The DataFrame to save.
     output_path
         The path to save the DataFrame to.
+    atomic
+        If True, write to a temporary file and rename it onto `output_path`, so the
+        target exists only once it is complete. See `_write_file`.
     """
-    touch(output_path, clobber=True)
-    df.to_parquet(output_path)
+
+    def write(path: Path) -> None:
+        df.to_parquet(path)
+
+    _write_file(output_path, write, atomic=atomic)
 
 
 def save_xarray(
     ds: xr.Dataset,
     output_path: str | Path,
     encoding_kwargs: dict[str, Any],
+    *,
+    atomic: bool = False,
 ) -> None:
     """Save an xarray dataset to a file with standard parameters.
 
@@ -1236,8 +1275,10 @@ def save_xarray(
         The path to save the dataset to.
     encoding_kwargs
         The encoding parameters to use when saving the dataset.
+    atomic
+        If True, write to a temporary file and rename it onto `output_path`, so the
+        target exists only once it is complete. See `_write_file`.
     """
-    touch(output_path, clobber=True)
     encoding = {
         "dtype": "int16",
         "_FillValue": -32767,
@@ -1245,7 +1286,11 @@ def save_xarray(
         "complevel": 1,
     }
     encoding.update(encoding_kwargs)
-    ds.to_netcdf(output_path, encoding={"value": encoding})
+
+    def write(path: Path) -> None:
+        ds.to_netcdf(path, encoding={"value": encoding})
+
+    _write_file(output_path, write, atomic=atomic)
 
 
 def save_raster(

@@ -216,7 +216,7 @@ def _write_annual(
         },
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    save_xarray(ds, path, STORAGE_ENCODING)
+    save_xarray(ds, path, STORAGE_ENCODING, atomic=True)
 
 
 def run_forecast_chain(
@@ -305,7 +305,7 @@ def run_forecast_chain(
 
         result = hpd.history_person_days(weights, zone, temperature, year)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        save_parquet(result, out_path)
+        save_parquet(result, out_path, atomic=True)
         done.append(year)
     return done
 
