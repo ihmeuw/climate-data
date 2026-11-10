@@ -77,6 +77,54 @@ def test_trailing_zone_is_rounded_ten_year_mean() -> None:
     assert zone.shape == (2, 3)
 
 
+def _stored_like_annual(n_years: int, n_cells: int) -> xr.Dataset:
+    """Annual means as the stored files hold them: multiples of 0.01, dims (year, cell)."""
+    rng = np.random.default_rng(RNG_SEED)
+    values = np.round(rng.normal(15.0, 8.0, size=(n_years, n_cells)) / 0.01) * 0.01
+    return xr.Dataset(
+        {"value": (("year", "cell"), values)},
+        coords={"year": np.arange(2000, 2000 + n_years)},
+    )
+
+
+def test_trailing_zone_sums_the_window_left_to_right() -> None:
+    # Production's zone is xarray's rolling mean on a C-ordered global grid, which sums each
+    # window from its first year to its last (checked 09Nov2026: equal to the stored zone
+    # at every cell). On a column-major array, which is what selecting cells with
+    # ``values[:, cells]`` returns, xarray sums pairwise instead, and that rounds
+    # differently at the 0.005 halfway points. The zone must not depend on memory layout.
+    annual = _stored_like_annual(12, 60_000)
+    window = annual["value"].sel(year=slice(2002, 2011)).to_numpy()
+    left_to_right = window[0].copy()
+    for row in window[1:]:
+        left_to_right += row
+    pairwise = np.sum(np.ascontiguousarray(window.T), axis=1)
+    # The data must be able to tell the two orders apart.
+    assert (
+        round_zone_storage(left_to_right / 10) != round_zone_storage(pairwise / 10)
+    ).any()
+    expected = round_zone_storage(left_to_right / 10)
+
+    np.testing.assert_array_equal(trailing_zone(annual, 2011), expected)
+    cells = np.arange(0, 60_000, 7)
+    column_major = xr.Dataset(
+        {"value": (("year", "cell"), annual["value"].to_numpy()[:, cells])},
+        coords={"year": annual["year"]},
+    )
+    assert column_major["value"].to_numpy().flags["F_CONTIGUOUS"]
+    np.testing.assert_array_equal(trailing_zone(column_major, 2011), expected[cells])
+
+
+def test_trailing_zone_is_nan_when_the_window_has_a_nan() -> None:
+    annual = _stored_like_annual(12, 4)
+    annual["value"][5, 1] = np.nan
+
+    zone = trailing_zone(annual, 2011)
+
+    assert np.isnan(zone[1])
+    assert np.isfinite(zone[[0, 2, 3]]).all()
+
+
 def test_trailing_zone_holds_first_full_window_for_early_years() -> None:
     annual = _toy_annual(1950, 20)
 

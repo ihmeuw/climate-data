@@ -131,11 +131,23 @@ def trailing_zone(annual: xr.Dataset, year: int) -> npt.NDArray[np.float64]:
     if year < first or year > last:
         msg = f"Year {year} is outside the annual mean temperature, {first}-{last}."
         raise ValueError(msg)
-    # The rolling mean over the whole series, as temperature_zone.py computes it, so the
-    # floating-point sums (and so the rounding) match the compiled zone.
-    rolled = annual["value"].sortby("year").rolling(year=ZONE_WINDOW).mean()
     zone_year = max(year, first + ZONE_WINDOW - 1)
-    return round_zone_storage(rolled.sel(year=zone_year).to_numpy())
+    window = (
+        annual["value"]
+        .sortby("year")
+        .sel(year=slice(zone_year - ZONE_WINDOW + 1, zone_year))
+        .to_numpy()
+    )
+    # Sum the window from its first year to its last, then divide. temperature_zone.py's
+    # rolling mean on the C-ordered global grid does exactly this (checked 09Nov2026:
+    # equal to the stored zone at every cell, before and after rounding). xarray's own
+    # rolling mean does not always: on other memory layouts it sums pairwise, which
+    # rounds differently at the 0.005 halfway points. A NaN in the window gives NaN, as
+    # the rolling mean does.
+    total = np.array(window[0], dtype=np.float64, copy=True)
+    for row in window[1:]:
+        total += row
+    return round_zone_storage(total / ZONE_WINDOW)
 
 
 def decode_int16(

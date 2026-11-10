@@ -172,8 +172,15 @@ def forecast_zone(
     year
         The forecast year.
     """
-    member = member_annual.sel(year=member_annual["year"] <= year)
-    era5 = era5_annual.sel(year=era5_annual["year"] < FORECAST_START_YEAR)
+    # Only the window's years: trailing_zone sums them in a fixed order, so the rest of
+    # the series does not change the result.
+    first = year - hpd.ZONE_WINDOW + 1
+    member_years = member_annual["year"]
+    member = member_annual.sel(year=(member_years >= first) & (member_years <= year))
+    era5_years = era5_annual["year"]
+    era5 = era5_annual.sel(
+        year=(era5_years >= first) & (era5_years < FORECAST_START_YEAR)
+    )
     series = xr.concat([era5, member], dim="year")
     return hpd.trailing_zone(xr.Dataset({"value": series}), year)
 
