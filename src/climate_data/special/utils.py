@@ -53,22 +53,48 @@ def to_idx(ds: xr.Dataset, bins: npt.NDArray[Any]) -> npt.NDArray[Any]:
     return idx.reshape(arr.shape[0], -1)
 
 
+# Half the width of a climate cell: the grids are 0.1 degree, given by cell centres.
+HALF_CELL = 0.05
+
+
+def _cell_index(
+    values: npt.NDArray[Any],
+    centres: npt.NDArray[Any],
+) -> npt.NDArray[np.intp]:
+    """Index into ``centres`` of the cell (centre +/- HALF_CELL) holding each value.
+
+    ``centres`` may ascend or descend; the daily files store latitude descending.
+    Values beyond the grid take the nearest edge cell, as ``_to_idx`` does.
+    """
+    if centres[0] <= centres[-1]:
+        return _to_idx(values, centres - HALF_CELL)
+    ascending_idx = _to_idx(values, centres[::-1] - HALF_CELL)
+    return len(centres) - 1 - ascending_idx
+
+
 def get_temperature_coordinates(
     block_key: str,
     pm_data: PopulationModelData,
     temperature: xr.Dataset,
 ) -> npt.NDArray[Any]:
+    """The climate cell holding each population pixel's centre, flat in raster order.
+
+    Returns ``col + row * len(longitude)`` on ``temperature``'s grid, in its own
+    latitude order. Before 10Nov2026 this used pixel corners and binned latitude as if
+    it ascended, which put about 99% of pixels one row (0.1 degree) north.
+    """
     pop = pm_data.load_results("2020q1", block_key)
     transformer = Transformer.from_crs(pop.crs, "EPSG:4326", always_xy=True)
     longitude = temperature["longitude"].to_numpy()
     latitude = temperature["latitude"].to_numpy()
 
-    xcoords_pop, ycoords_pop = pop.x_coordinates(), pop.y_coordinates()[::-1]
+    xcoords_pop = pop.x_coordinates(center=True)
+    ycoords_pop = pop.y_coordinates(center=True)[::-1]
     xx_pop, yy_pop = np.meshgrid(xcoords_pop, ycoords_pop)
     xx_pop_wgs84, yy_pop_wgs84 = transformer.transform(xx_pop, yy_pop)
 
-    xidx = _to_idx(xx_pop_wgs84, longitude - 0.05)
-    yidx = _to_idx(yy_pop_wgs84, latitude - 0.05)
+    xidx = _cell_index(xx_pop_wgs84, longitude)
+    yidx = _cell_index(yy_pop_wgs84, latitude)
     temp_coords = xidx.flatten() + yidx.flatten() * len(longitude)
     return temp_coords
 
