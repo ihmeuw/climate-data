@@ -1,6 +1,9 @@
 from climate_data.special.compile_country_person_days import (
     compile_country_person_days_task,
 )
+from climate_data.special.compile_member_person_days import (
+    compile_member_person_days_task,
+)
 from climate_data.special.compile_person_days import (
     compile_person_days,
     compile_person_days_task,
@@ -49,4 +52,5 @@ TASK_RUNNERS = {
     "history_person_days": build_history_person_days_task,
     "forecast_person_days": build_forecast_person_days_task,
     "compile_country_person_days": compile_country_person_days_task,
+    "compile_member_person_days": compile_member_person_days_task,
 }
