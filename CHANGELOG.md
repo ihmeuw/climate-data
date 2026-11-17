@@ -208,6 +208,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
   production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
+- Raking shapes with a vertex a hair past the antimeridian were wrapped across the whole
+  projected map. `shapes_lsae_1578_a2.parquet` stores some vertices at 180.0000000001°, which
+  PROJ maps to the far edge of ESRI:54034, so a polygon 0.1° wide became a band 40,075 km wide.
+  Rasterized with `MergeAlg.replace`, the bands overwrote neighbouring units: 3,490 people
+  moved from Bua to Cakaudrove (Fiji) and 85 from Anadyrskiy to Iyul'tinskiy (Chukotka), and
+  the block filter took 33 blocks no shape touches. `build_location_masks` and
+  `blocks_with_shapefile_intersections` now clip geographic coordinates into
+  [-180, 180] x [-90, 90] (`aggregate.utils.clip_to_lon_lat_range`) before reprojecting.
+  (CLIMATE-36)
 - `utils.to_raster` put the first cell **centre** on the raster's corner, so `aggregate pixel`
   read the 0.1° climate grid half a cell (0.05°) east and north of where it belongs, and the
   nearest-neighbour resample took a neighbouring cell for about 75% of population pixels. The
