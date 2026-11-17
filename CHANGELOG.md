@@ -169,6 +169,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
   fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
+- `aggregate pixel` tasks request 16G instead of 12G. An all-measure task on a dense block reached
+  a sacct MaxRSS of 12.0G against 12G in a 16Nov2026 timing run. (CLIMATE-36)
 - `cdrun extract era5` no longer refills the extracts ERF deleted. Two guards, both
   overridable. A year floor (`cdc.EXTRACT_YEAR_FLOOR`, 1980) refuses a run reaching below
   it unless `--allow-pre-1980` is passed: `--year` defaults to ALL over `HISTORY_YEARS`,
