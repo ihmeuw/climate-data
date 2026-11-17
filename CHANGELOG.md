@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- A weight-table pipeline for temperature person-days, alongside production's
+  `temperature_person_days`. `special weight_table` builds, per block and year, a table of
+  (location, 0.1° climate cell, population) on the global grid; `special history_person_days`
+  (ERA5, 1950-2023) and `special forecast_person_days` (downscaled CMIP6, 2024-2100,
+  generated in memory) sum daily temperatures over those pairs into most-detailed
+  person-days per year. Two compile steps sum them up a hierarchy:
+  `special compile_country_person_days` writes one country's levels with US Census GEOIDs
+  (CLIMATE-45's US-county files), and `special compile_member_person_days` writes one
+  member's `gbd_2023` and `fhs_2023` files in the July 2026 production layout (the CLIMATE-48
+  rebuild). None of the new steps has an `--output-dir` default. `lsae_1578` is added as an
+  aggregation-only hierarchy. (CLIMATE-45, CLIMATE-48)
+- `data.save_parquet` and `data.save_xarray` take `atomic=True`: the data go to `<name>.tmp`
+  and are renamed onto the target only once written, so a failed write leaves no partial
+  file. The default is unchanged. (CLIMATE-45)
 - Value bounds for physically bounded multiplicative variables: `cdc.VALUE_BOUNDS`,
   `cdc.BOUNDED_VARIABLE_SCHEMES` and `scenario_daily.check_bounded_variable_scheme`, with
   `relative_humidity` clipped to `(0, 100)` % both on the inputs to the per-month ratio and
@@ -211,6 +225,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   estimate for (Aland, Svalbard, Norfolk, Christmas, Cocos, Pitcairn), which ~400 LSAE
   level-3 units inherit. Measured on `2026_08_21_PRECIP_TEST`, draw 000, ssp245:
   `gbd_2023` 2,718 of 138,618 rows NaN (1.96%), 0 inf.
+- Temperature person-days put about 99% of population in the climate cell one row (0.1°)
+  north. `special.utils.get_temperature_coordinates` binned latitude with lower cell edges,
+  which is right only for ascending latitude, and the daily files store latitude descending;
+  it also used pixel corners rather than centres. The new `_cell_index` finds the cell holding
+  each pixel's centre for either order. Production's `temperature_person_days` uses the same
+  function, so its output moves too: about +0.12 °C in the US and +0.09 °C globally, up to
+  2 °C for some countries (Bhutan, Monaco). Person-days built before this fix, including the
+  July 2026 production files, carry the defect until rebuilt. (CLIMATE-48)
 - `total_precipitation` was inflated ~1.5-1.6x across the whole historical record.
   ERA5 stamps an accumulation window by its **end**, so day D's window (forecast steps
   01-24) has its closing sample timestamped `00:00` of day D+1 — these are interval
