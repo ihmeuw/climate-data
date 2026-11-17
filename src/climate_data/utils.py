@@ -46,10 +46,10 @@ def to_raster(
     transform = Affine(
         a=dlon,
         b=0.0,
-        c=lon[0],
+        c=lon[0] - dlon / 2,
         d=0.0,
         e=-dlat,
-        f=lat[-1],
+        f=lat[-1] + dlat / 2,
     )
     return rt.RasterArray(
         data=ds.data[::-1],
