@@ -86,6 +86,13 @@ def _write_years(root: Path, years: list[int]) -> None:
         df.to_parquet(path)
 
 
+def _write_frame(root: Path, year: int, df: pd.DataFrame) -> None:
+    """Write ``df`` as the stage file for ``year``, whatever years it holds."""
+    path = person_days_year_path(root, HIERARCHY, SCENARIO, MEMBER, year)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path)
+
+
 def _compile(root: Path, years: list[int]) -> pd.DataFrame:
     def year_path(year: int) -> Path:
         return person_days_year_path(root, HIERARCHY, SCENARIO, MEMBER, year)
@@ -178,6 +185,46 @@ def test_compile_fails_when_a_year_file_is_missing(tmp_path: Path) -> None:
         _compile(tmp_path, [2023, 2024])
 
 
+def test_compile_keeps_a_location_with_no_person_days_in_a_year(tmp_path: Path) -> None:
+    # Location 20 has person-days in 2023 but none in 2024 (no population, for example),
+    # so the 2024 stage file has no rows for it. It still gets 60 rows of zeros in 2024.
+    _write_years(tmp_path, [2023])
+    df = _year_frame(2024, [(11, 10, 400, 1.0), (12, 10, 400, 2.0)])
+    _write_frame(tmp_path, 2024, df)
+
+    result = _compile(tmp_path, [2023, 2024])
+
+    assert len(result) == 5 * 2 * N_ZONES
+    assert len(result.xs((20, 2024), level=["location_id", "year_id"])) == N_ZONES
+    assert (
+        float(result.xs((20, 2024), level=["location_id", "year_id"]).to_numpy().sum())
+        == 0.0
+    )
+
+
+def test_compile_fails_when_a_year_file_holds_another_year(tmp_path: Path) -> None:
+    _write_years(tmp_path, [2023])
+    df = _year_frame(2023, [(11, 10, 400, 1.0)])
+    _write_frame(tmp_path, 2024, df)
+
+    with pytest.raises(ValueError, match="2024"):
+        _compile(tmp_path, [2023, 2024])
+
+
+def test_compile_fails_when_a_year_file_is_empty(tmp_path: Path) -> None:
+    _write_years(tmp_path, [2023])
+    df = _year_frame(2024, [])
+    _write_frame(tmp_path, 2024, df)
+
+    with pytest.raises(ValueError, match="2024"):
+        _compile(tmp_path, [2023, 2024])
+
+
+def test_compile_fails_when_no_years_are_given(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="years"):
+        _compile(tmp_path, [])
+
+
 def test_subset_keeps_only_the_subset_locations(tmp_path: Path) -> None:
     _write_years(tmp_path, [2023])
     result = _compile(tmp_path, [2023])
@@ -241,6 +288,54 @@ def test_main_skips_when_both_files_exist(tmp_path: Path) -> None:
     assert written == {}
     path = compiled_member_path(tmp_path, "gbd_2023", SCENARIO, MEMBER)
     assert path.read_text() == "not parquet"
+
+
+def test_main_writes_only_the_missing_file(tmp_path: Path) -> None:
+    _write_years(tmp_path, [2023])
+    pm_root = _population_model(tmp_path)
+    existing = compiled_member_path(tmp_path, "gbd_2023", SCENARIO, MEMBER)
+    existing.parent.mkdir(parents=True)
+    existing.write_text("not parquet")
+
+    written = compile_member_person_days_main(
+        SCENARIO, MEMBER, HIERARCHY, tmp_path, pm_root, tmp_path, years=[2023]
+    )
+
+    assert sorted(written) == ["fhs_2023"]
+    assert existing.read_text() == "not parquet"
+    assert compiled_member_path(tmp_path, "fhs_2023", SCENARIO, MEMBER).exists()
+
+
+def test_main_overwrite_rewrites_existing_files(tmp_path: Path) -> None:
+    _write_years(tmp_path, [2023])
+    pm_root = _population_model(tmp_path)
+    existing = compiled_member_path(tmp_path, "gbd_2023", SCENARIO, MEMBER)
+    existing.parent.mkdir(parents=True)
+    existing.write_text("not parquet")
+
+    written = compile_member_person_days_main(
+        SCENARIO,
+        MEMBER,
+        HIERARCHY,
+        tmp_path,
+        pm_root,
+        tmp_path,
+        years=[2023],
+        overwrite=True,
+    )
+
+    assert sorted(written) == ["fhs_2023", "gbd_2023"]
+    pd.testing.assert_frame_equal(pd.read_parquet(existing), written["gbd_2023"])
+
+
+def test_main_rejects_an_empty_year_list(tmp_path: Path) -> None:
+    _write_years(tmp_path, [2023])
+    pm_root = _population_model(tmp_path)
+
+    with pytest.raises(ValueError, match="years"):
+        compile_member_person_days_main(
+            SCENARIO, MEMBER, HIERARCHY, tmp_path, pm_root, tmp_path, years=[]
+        )
 
 
 # --- CLI ---

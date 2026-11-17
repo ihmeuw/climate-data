@@ -26,6 +26,7 @@ from pathlib import Path
 
 import click
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from climate_data import cli_options as clio
@@ -57,14 +58,27 @@ def compiled_member_path(
     )
 
 
-def _load_year(path: Path) -> pd.DataFrame:
-    df = pd.read_parquet(path)
-    return df.reset_index().rename(columns={"year": "year_id"})
+def _load_year(path: Path, year: int) -> pd.DataFrame:
+    """One year's stage file, checked to hold that year and only that year."""
+    df = pd.read_parquet(path).reset_index().rename(columns={"year": "year_id"})
+    if df.empty:
+        msg = f"The person-days file for {year} has no rows: {path}."
+        raise ValueError(msg)
+    found = sorted(set(df["year_id"].astype(int)))
+    if found != [year]:
+        msg = f"The person-days file for {year} holds years {found}: {path}."
+        raise ValueError(msg)
+    return df
 
 
-def _all_zones(aggregated: pd.DataFrame, year: int) -> pd.DataFrame:
-    """One year's rows on the full (location, zone) grid, absent rows as zeros."""
-    locations = np.sort(aggregated["location_id"].unique()).astype(np.int64)
+def _all_zones(
+    aggregated: pd.DataFrame, year: int, locations: npt.NDArray[np.int64]
+) -> pd.DataFrame:
+    """One year's rows on the full (location, zone) grid, absent rows as zeros.
+
+    ``locations`` are every location of the hierarchy, so a location with no person-days
+    in this year (no population, for example) still gets its zero rows.
+    """
     full_index = pd.MultiIndex.from_product(
         [
             locations,
@@ -73,8 +87,9 @@ def _all_zones(aggregated: pd.DataFrame, year: int) -> pd.DataFrame:
         ],
         names=KEY_COLUMNS,
     )
-    keyed = aggregated.astype({"location_id": np.int64, "temperature_zone": np.int64})
-    keyed["year_id"] = np.int64(year)
+    keyed = aggregated.astype(
+        {"location_id": np.int64, "year_id": np.int64, "temperature_zone": np.int64}
+    )
     keyed = keyed.set_index(KEY_COLUMNS)[list(TEMPERATURE_COLUMNS)]
     return keyed.reindex(full_index, fill_value=0.0)
 
@@ -89,6 +104,9 @@ def compile_member_person_days(
     Indexed by ``KEY_COLUMNS`` (int64), sorted; every zone in ``TEMPERATURE_ZONE_BINS`` on
     every location-year; the 800 bins as float64 columns labelled by ``TEMPERATURE_COLUMNS``.
     """
+    if not years:
+        msg = "No years to compile: years is empty."
+        raise ValueError(msg)
     missing = []
     for year in years:
         if not year_path(year).exists():
@@ -97,11 +115,12 @@ def compile_member_person_days(
         msg = f"No person-days file for {len(missing)} years: {missing}."
         raise FileNotFoundError(msg)
 
+    locations = np.sort(hierarchy_df["location_id"].unique()).astype(np.int64)
     frames = []
     for year in years:
-        detailed = _load_year(year_path(year))
+        detailed = _load_year(year_path(year), year)
         aggregated = utils.aggregate_to_hierarchy(detailed, hierarchy_df)
-        frames.append(_all_zones(aggregated, year))
+        frames.append(_all_zones(aggregated, year, locations))
     result = pd.concat(frames).sort_index()
     result.columns = pd.Index(TEMPERATURE_COLUMNS, dtype=np.float64)
     return result.astype(np.float64)
@@ -128,20 +147,22 @@ def compile_member_person_days_main(
     years: list[int] | None = None,
     overwrite: bool = False,
 ) -> dict[str, pd.DataFrame]:
-    """Compile and write one member's subset files. Returns them by subset hierarchy.
+    """Compile and write one member's subset files. Returns the written ones by subset.
 
-    Returns an empty dict, writing nothing, when every subset file exists already.
+    Without ``overwrite``, writes only the subset files that don't exist yet, and returns an
+    empty dict, writing nothing, when they all exist.
     """
+    if years is not None and not years:
+        msg = "No years to compile: years is empty."
+        raise ValueError(msg)
     subsets = cdc.HIERARCHY_MAP[hierarchy]
     paths = {}
     for subset in subsets:
-        paths[subset] = compiled_member_path(output_root, subset, scenario, gcm_member)
-    all_exist = True
-    for path in paths.values():
-        if not path.exists():
-            all_exist = False
-    if all_exist and not overwrite:
-        print(f"All {len(paths)} compiled files exist; skipping.")
+        path = compiled_member_path(output_root, subset, scenario, gcm_member)
+        if overwrite or not path.exists():
+            paths[subset] = path
+    if not paths:
+        print(f"All {len(subsets)} compiled files exist; skipping.")
         return {}
 
     pm_data = PopulationModelData(population_model_root)
@@ -153,7 +174,7 @@ def compile_member_person_days_main(
         )
 
     compiled = compile_member_person_days(
-        hierarchy_df, years or PRODUCTION_YEARS, year_path
+        hierarchy_df, PRODUCTION_YEARS if years is None else years, year_path
     )
     written = {}
     for subset, path in paths.items():
