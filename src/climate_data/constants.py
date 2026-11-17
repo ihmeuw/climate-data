@@ -486,6 +486,11 @@ HIERARCHY_MAP = {
     ],  # No fhs_2025 raking files yet; GBD-only view for now.
     "lsae_1209": ["lsae_1209"],  # LSAE pixel hierarchy maps to LSAE locations
     "lsae_1285": ["lsae_1285"],  # LSAE pixel hierarchy maps to LSAE locations
+    # Supersedes lsae_1285 (2026-08-11: Tamarugal re-parented in Chile). lsae_1285 is
+    # kept so older results stay reproducible, so `all` now covers both vintages.
+    "lsae_1578": ["lsae_1578"],
 }
 # GBD pixel hierarchies -- the version axis for the special stage.
 GBD_HIERARCHIES = ["gbd_2021", "gbd_2023", "gbd_2025"]
+# LSAE hierarchies: a2 geometries only, so every location is most detailed.
+LSAE_HIERARCHIES = ["lsae_1209", "lsae_1285", "lsae_1578"]

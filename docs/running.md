@@ -127,6 +127,11 @@ filtered run its own `agg_version`, following the existing `YYYY_MM_DD_<PURPOSE>
 existing version later — a run of `gbd_2023` today and `lsae_1209` next week write to
 different paths and will not skip each other.
 
+**Name the hierarchy explicitly.** `--hierarchy ALL` expands to every key of
+`HIERARCHY_MAP`, which holds both `lsae_1285` and its replacement `lsae_1578` (CLIMATE-36) as
+well as the older GBD rounds. A production run should pass `--hierarchy gbd_2023 --hierarchy
+lsae_1578` (or whichever set it means), never `ALL`.
+
 ## Measured output sizes
 
 | product | per file | notes |

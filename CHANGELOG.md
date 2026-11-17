@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- The `lsae_1578` hierarchy, which supersedes `lsae_1285` (2026-08-11: Tamarugal, 95635,
+  re-parented from De Valparaíso to De Tarapacá in Chile). It loads the 1578 a2 shapes; their
+  only material change, three Manu'a polygons in American Samoa, was measured at zero population
+  difference. `lsae_1285` stays loadable, so `--hierarchy ALL` now runs both LSAE vintages: name
+  `lsae_1578` explicitly. The LSAE names live in one list, `cdc.LSAE_HIERARCHIES`. (CLIMATE-36)
 - Value bounds for physically bounded multiplicative variables: `cdc.VALUE_BOUNDS`,
   `cdc.BOUNDED_VARIABLE_SCHEMES` and `scenario_daily.check_bounded_variable_scheme`, with
   `relative_humidity` clipped to `(0, 100)` % both on the inputs to the per-month ratio and
