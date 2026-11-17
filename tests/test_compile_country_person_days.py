@@ -419,7 +419,8 @@ def test_main_skips_an_existing_file(tmp_path: Path) -> None:
 # --- CLI ---
 
 
-def test_cli_task_is_registered_and_requires_output_dir() -> None:
+def test_cli_task_is_registered_and_requires_output_dir(tmp_path: Path) -> None:
+    """Off the cluster the production default roots don't exist, so pass existing dirs."""
     from click.testing import CliRunner
 
     from climate_data.special import TASK_RUNNERS
@@ -429,7 +430,14 @@ def test_cli_task_is_registered_and_requires_output_dir() -> None:
     assert runner.invoke(command, ["--help"]).exit_code == 0
     result = runner.invoke(
         command,
-        ["--cmip6-experiment", "ssp245", "--gcm-member", "CNRM-CM6-1_r4i1p1f2"],
+        [
+            "--cmip6-experiment",
+            "ssp245",
+            "--gcm-member",
+            "CNRM-CM6-1_r4i1p1f2",
+            "--population-model-dir",
+            str(tmp_path),
+        ],
     )
     assert result.exit_code != 0
     assert "--output-dir" in result.output

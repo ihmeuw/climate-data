@@ -244,7 +244,8 @@ def test_build_block_weight_table_with_stubs(monkeypatch: pytest.MonkeyPatch) ->
     assert got == {(1950, 101, cell_0): 3.0, (1951, 101, cell_0): 6.0}
 
 
-def test_cli_commands_are_registered_and_require_output_dir() -> None:
+def test_cli_commands_are_registered_and_require_output_dir(tmp_path: Path) -> None:
+    """Off the cluster the production default roots don't exist, so pass existing dirs."""
     from click.testing import CliRunner
 
     from climate_data.special import RUNNERS, TASK_RUNNERS
@@ -253,7 +254,8 @@ def test_cli_commands_are_registered_and_require_output_dir() -> None:
     for command in (RUNNERS["weight_table"], TASK_RUNNERS["weight_table"]):
         assert runner.invoke(command, ["--help"]).exit_code == 0
     result = runner.invoke(
-        TASK_RUNNERS["weight_table"], ["--block-key", "B-0001X-0001Y"]
+        TASK_RUNNERS["weight_table"],
+        ["--block-key", "B-0001X-0001Y", "--population-model-dir", str(tmp_path)],
     )
     assert result.exit_code != 0
     assert "--output-dir" in result.output

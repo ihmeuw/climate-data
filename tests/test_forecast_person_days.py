@@ -472,7 +472,8 @@ def test_missing_chains_skips_finished_chains(tmp_path: Path) -> None:
     assert chains == [("ssp245", "B"), ("ssp126", "A")]
 
 
-def test_cli_commands_are_registered_and_require_output_dir() -> None:
+def test_cli_commands_are_registered_and_require_output_dir(tmp_path: Path) -> None:
+    """Off the cluster the production default roots don't exist, so pass existing dirs."""
     from click.testing import CliRunner
 
     from climate_data.special import RUNNERS, TASK_RUNNERS
@@ -485,7 +486,16 @@ def test_cli_commands_are_registered_and_require_output_dir() -> None:
         assert runner.invoke(command, ["--help"]).exit_code == 0
     result = runner.invoke(
         TASK_RUNNERS["forecast_person_days"],
-        ["--cmip6-experiment", "ssp245", "--gcm-member", "CNRM-CM6-1_r4i1p1f2"],
+        [
+            "--cmip6-experiment",
+            "ssp245",
+            "--gcm-member",
+            "CNRM-CM6-1_r4i1p1f2",
+            "--climate-data-dir",
+            str(tmp_path),
+            "--population-model-dir",
+            str(tmp_path),
+        ],
     )
     assert result.exit_code != 0
     assert "--output-dir" in result.output
@@ -511,7 +521,15 @@ def test_runner_checks_blocks_in_the_population_model_dir_it_is_given(
     pm_dir.mkdir()
     result = CliRunner().invoke(
         RUNNERS["forecast_person_days"],
-        ["--population-model-dir", str(pm_dir), "-o", str(tmp_path), "--dry-run"],
+        [
+            "--climate-data-dir",
+            str(tmp_path),
+            "--population-model-dir",
+            str(pm_dir),
+            "-o",
+            str(tmp_path),
+            "--dry-run",
+        ],
     )
 
     assert seen == [str(pm_dir)]

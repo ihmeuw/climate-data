@@ -417,7 +417,8 @@ def test_missing_years_skips_written_years(tmp_path: Path) -> None:
     assert missing_years([1950, 1951, 1952], tmp_path, "lsae_1285") == [1950, 1952]
 
 
-def test_cli_commands_are_registered_and_require_output_dir() -> None:
+def test_cli_commands_are_registered_and_require_output_dir(tmp_path: Path) -> None:
+    """Off the cluster the production default roots don't exist, so pass existing dirs."""
     from click.testing import CliRunner
 
     from climate_data.special import RUNNERS, TASK_RUNNERS
@@ -428,7 +429,17 @@ def test_cli_commands_are_registered_and_require_output_dir() -> None:
         TASK_RUNNERS["history_person_days"],
     ):
         assert runner.invoke(command, ["--help"]).exit_code == 0
-    result = runner.invoke(TASK_RUNNERS["history_person_days"], ["--year", "1990"])
+    result = runner.invoke(
+        TASK_RUNNERS["history_person_days"],
+        [
+            "--year",
+            "1990",
+            "--climate-data-dir",
+            str(tmp_path),
+            "--population-model-dir",
+            str(tmp_path),
+        ],
+    )
     assert result.exit_code != 0
     assert "--output-dir" in result.output
 
@@ -453,7 +464,15 @@ def test_runner_checks_blocks_in_the_population_model_dir_it_is_given(
     pm_dir.mkdir()
     result = CliRunner().invoke(
         RUNNERS["history_person_days"],
-        ["--population-model-dir", str(pm_dir), "-o", str(tmp_path), "--dry-run"],
+        [
+            "--climate-data-dir",
+            str(tmp_path),
+            "--population-model-dir",
+            str(pm_dir),
+            "-o",
+            str(tmp_path),
+            "--dry-run",
+        ],
     )
 
     assert seen == [str(pm_dir)]
