@@ -18,6 +18,38 @@ MAX_BOUNDS = {
 }
 
 
+def _clip_lon_lat(coords: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """Internal helper. Used by ``clip_to_lon_lat_range``."""
+    return np.clip(coords, [-180.0, -90.0], [180.0, 90.0])
+
+
+def clip_to_lon_lat_range(shapes: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Clip geographic coordinates into [-180, 180] x [-90, 90] before reprojecting.
+
+    A vertex even a hair past the antimeridian (``shapes_lsae_1578_a2.parquet`` stores
+    180.0000000001) is wrapped by PROJ to the far side of the map, so a polygon a tenth of
+    a degree wide projects to a band spanning the whole projected width. Rasterized with
+    ``MergeAlg.replace``, that band overwrites other locations' pixels (CLIMATE-36). Shapes
+    in a projected CRS are returned unchanged.
+
+    Parameters
+    ----------
+    shapes
+        Raking shapes.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        A copy of ``shapes`` with every coordinate inside the valid lon/lat range.
+    """
+    if shapes.crs is None or not shapes.crs.is_geographic:
+        return shapes
+    clipped = shapely.transform(shapes.geometry.to_numpy(), _clip_lon_lat)
+    return shapes.set_geometry(
+        gpd.GeoSeries(clipped, index=shapes.index, crs=shapes.crs)
+    )
+
+
 def build_location_masks(
     hierarchy: str,
     block_key: str,
@@ -53,7 +85,9 @@ def build_location_masks(
     template = pm_data.load_results("2020q1", block_key)
     template_bbox = get_bbox(template, "EPSG:4326")
     bounds = template_bbox.bounds
-    raking_shapes = pm_data.load_raking_shapes(hierarchy, bounds=bounds)
+    raking_shapes = clip_to_lon_lat_range(
+        pm_data.load_raking_shapes(hierarchy, bounds=bounds)
+    )
     raking_shapes = raking_shapes[raking_shapes.intersects(template_bbox)].to_crs(
         template.crs
     )
@@ -295,7 +329,7 @@ def blocks_with_shapefile_intersections(
     blocks_gdf = (
         modeling_frame[["block_key", "geometry"]].dissolve(by="block_key").reset_index()
     )
-    shapes = pm_data.load_raking_shapes(hierarchy)
+    shapes = clip_to_lon_lat_range(pm_data.load_raking_shapes(hierarchy))
     if shapes.crs != blocks_gdf.crs:
         shapes = shapes.to_crs(blocks_gdf.crs)
     joined = gpd.sjoin(blocks_gdf, shapes, how="inner", predicate="intersects")

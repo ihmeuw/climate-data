@@ -14,11 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `special compile_country_person_days` writes one country's levels with US Census GEOIDs
   (CLIMATE-45's US-county files), and `special compile_member_person_days` writes one
   member's `gbd_2023` and `fhs_2023` files in the July 2026 production layout (the CLIMATE-48
-  rebuild). None of the new steps has an `--output-dir` default. `lsae_1578` is added as an
-  aggregation-only hierarchy. (CLIMATE-45, CLIMATE-48)
+  rebuild). None of the new steps has an `--output-dir` default. `lsae_1578` is added as a
+  hierarchy for the compile step. (CLIMATE-45, CLIMATE-48)
 - `data.save_parquet` and `data.save_xarray` take `atomic=True`: the data go to `<name>.tmp`
   and are renamed onto the target only once written, so a failed write leaves no partial
   file. The default is unchanged. (CLIMATE-45)
+- The `lsae_1578` hierarchy, which supersedes `lsae_1285` (2026-08-11: Tamarugal, 95635,
+  re-parented from De Valparaíso to De Tarapacá in Chile). It loads the 1578 a2 shapes; their
+  only material change, three Manu'a polygons in American Samoa, was measured at zero population
+  difference. `lsae_1285` stays loadable, so `--hierarchy ALL` now runs both LSAE vintages: name
+  `lsae_1578` explicitly. The LSAE names live in one list, `cdc.LSAE_HIERARCHIES`. (CLIMATE-36)
 - Value bounds for physically bounded multiplicative variables: `cdc.VALUE_BOUNDS`,
   `cdc.BOUNDED_VARIABLE_SCHEMES` and `scenario_daily.check_bounded_variable_scheme`, with
   `relative_humidity` clipped to `(0, 100)` % both on the inputs to the per-month ratio and
@@ -178,6 +183,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   locations so naive summation multiply-counts, and that the 100-draw axis resolves onto
   fewer distinct model members than draws. (CLIMATE-17)
 ### Changed
+- `aggregate pixel` tasks request 16G instead of 12G. An all-measure task on a dense block reached
+  a sacct MaxRSS of 12.0G against 12G in a 16Nov2026 timing run. (CLIMATE-36)
 - `cdrun extract era5` no longer refills the extracts ERF deleted. Two guards, both
   overridable. A year floor (`cdc.EXTRACT_YEAR_FLOOR`, 1980) refuses a run reaching below
   it unless `--allow-pre-1980` is passed: `--year` defaults to ALL over `HISTORY_YEARS`,
@@ -215,6 +222,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
   production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
+- Raking shapes with a vertex a hair past the antimeridian were wrapped across the whole
+  projected map. `shapes_lsae_1578_a2.parquet` stores some vertices at 180.0000000001°, which
+  PROJ maps to the far edge of ESRI:54034, so a polygon 0.1° wide became a band 40,075 km wide.
+  Rasterized with `MergeAlg.replace`, the bands overwrote neighbouring units: 3,490 people
+  moved from Bua to Cakaudrove (Fiji) and 85 from Anadyrskiy to Iyul'tinskiy (Chukotka), and
+  the block filter took 33 blocks no shape touches. `build_location_masks` and
+  `blocks_with_shapefile_intersections` now clip geographic coordinates into
+  [-180, 180] x [-90, 90] (`aggregate.utils.clip_to_lon_lat_range`) before reprojecting.
+  (CLIMATE-36)
 - `utils.to_raster` put the first cell **centre** on the raster's corner, so `aggregate pixel`
   read the 0.1° climate grid half a cell (0.05°) east and north of where it belongs, and the
   nearest-neighbour resample took a neighbouring cell for about 75% of population pixels. The

@@ -307,8 +307,10 @@ def pixel(
             "cores": 1,
             # Observed MaxRSS on the 17Aug run was 6.0G against a 6G request on every
             # sampled task. The LSAE hierarchies carry more locations per block, so 6G
-            # would OOM there and max_attempts would mask it as a retry.
-            "memory": "12G",
+            # would OOM there and max_attempts would mask it as a retry. A 16Nov2026
+            # timing run of all 10 measures (CLIMATE-36) reached a sacct MaxRSS of
+            # 12.0G against 12G on a dense block, so 16G leaves real headroom.
+            "memory": "16G",
             "runtime": "480m",
             "project": "proj_rapidresponse",
         },

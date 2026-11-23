@@ -178,7 +178,7 @@ class PopulationModelData:
                 & (pop.most_detailed == 1)
             )
             out = gdf.merge(pop.loc[keep_mask, keep_cols], on="location_id", how="left")
-        elif full_aggregation_hierarchy in ["lsae_1209", "lsae_1285"]:
+        elif full_aggregation_hierarchy in cdc.LSAE_HIERARCHIES:
             # This is only a2 geoms, so already most detailed
             shape_path = (
                 self.raking_data
@@ -239,11 +239,7 @@ class PopulationModelData:
             *cdc.GBD_HIERARCHIES,
             "fhs_2021",
             "fhs_2023",
-            "lsae_1209",
-            "lsae_1285",
-            # Aggregation only: lsae_1578 has lsae_1285's admin2 units (one parent
-            # differs), so it is not a pixel hierarchy and not in HIERARCHY_MAP.
-            "lsae_1578",
+            *cdc.LSAE_HIERARCHIES,
         ]
         if subset_hierarchy not in allowed_hierarchies:
             msg = f"Unknown admin hierarchy: {subset_hierarchy}"
