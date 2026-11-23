@@ -98,6 +98,74 @@ def load_and_shift_longitude(ds_path: str | Path) -> xr.Dataset:
     return ds
 
 
+# Decimals the raw ERA5-Land coordinates are rounded to before they are wrapped and checked.
+# Enough to remove float noise (new-format longitudes are off by ~6e-12, old-format float32
+# latitudes by ~3e-6) and nothing else: a genuinely misaligned file still fails the check.
+# Coarser rounding would snap real offsets onto the grid before the check could see them.
+ERA5_LAND_COORD_DECIMALS = 4
+# How far a rounded coordinate may sit from the canonical ERA5-Land axis.
+ERA5_LAND_COORD_TOLERANCE = 1e-6
+
+
+def _check_axis(actual: np.ndarray, expected: np.ndarray, name: str) -> None:
+    """Raise unless ``actual`` matches ``expected`` element-wise within the tolerance."""
+    if actual.shape != expected.shape:
+        msg = (
+            f"ERA5-Land {name} has {actual.size} values; the canonical grid has"
+            f" {expected.size}."
+        )
+        raise ValueError(msg)
+    miss = np.abs(actual - expected)
+    if np.any(miss > ERA5_LAND_COORD_TOLERANCE):
+        first = int(np.argmax(miss > ERA5_LAND_COORD_TOLERANCE))
+        msg = (
+            f"ERA5-Land {name} is off the canonical 0.1 degree grid: index {first} is"
+            f" {actual[first]!r}, expected {expected[first]!r} (largest miss"
+            f" {miss.max():.3g} degrees)."
+        )
+        raise ValueError(msg)
+
+
+def align_era5_land_grid(ds: xr.Dataset) -> xr.Dataset:
+    """Put an ERA5-Land extract on the canonical grid by coordinate, not by position.
+
+    The extracts store longitude as 0 ... 359.9. Older CDS downloads (float32) store index
+    1800 as exactly 180.0, which wraps to -180.0. Newer ones (float64, `valid_time`) store
+    it as 179.99999999999406, which does not wrap, so after the sort every column sat one
+    place over and the positional overwrite this replaces labelled the data 0.1 degrees
+    west (CLIMATE-51). Rounding first makes both formats wrap alike; the check then
+    refuses any file still off the grid, instead of relabelling it; and only then are the
+    canonical axes assigned, so later `join="exact"` concatenations see identical
+    coordinates.
+    """
+    longitude = np.round(
+        ds["longitude"].to_numpy().astype(np.float64), ERA5_LAND_COORD_DECIMALS
+    )
+    longitude = (longitude + 180) % 360 - 180
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):  # type: ignore[arg-type]
+        ds = ds.assign_coords(longitude=longitude).sortby("longitude")
+    latitude = np.round(
+        ds["latitude"].to_numpy().astype(np.float64), ERA5_LAND_COORD_DECIMALS
+    )
+    expected_longitude = cdc.ERA5_LAND_LONGITUDE.to_numpy()
+    expected_latitude = cdc.ERA5_LAND_LATITUDE.to_numpy()[::-1]
+    _check_axis(ds["longitude"].to_numpy(), expected_longitude, "longitude")
+    _check_axis(latitude, expected_latitude, "latitude")
+    return ds.assign_coords(
+        latitude=cdc.ERA5_LAND_LATITUDE[::-1],
+        longitude=cdc.ERA5_LAND_LONGITUDE,
+    )
+
+
+def load_era5_land(ds_path: str | Path) -> xr.Dataset:
+    """Open an ERA5-Land extract on the canonical grid (see `align_era5_land_grid`)."""
+    ds = xr.open_dataset(ds_path)
+    if "valid_time" in ds.coords:
+        ds = ds.rename({"valid_time": "time"})
+    ds = ds.chunk(time=24)
+    return align_era5_land_grid(ds)
+
+
 def load_variable(
     cdata: ClimateData,
     variable: str,
@@ -107,14 +175,7 @@ def load_variable(
 ) -> xr.Dataset:
     path = cdata.extracted_era5_path(dataset, variable, year, month)
     if dataset == cdc.ERA5_DATASETS.reanalysis_era5_land:
-        ds = load_and_shift_longitude(path)
-        # There are some slight numerical differences in the lat/long for some of
-        # the land datasets. They are gridded consistently, so just tweak the
-        # coordinates so things align.
-        ds = ds.assign_coords(
-            latitude=cdc.ERA5_LAND_LATITUDE[::-1],
-            longitude=cdc.ERA5_LAND_LONGITUDE,
-        )
+        ds = load_era5_land(path)
     else:
         ds = load_and_shift_longitude(path)
     conversion = CONVERT_MAP[variable]
@@ -215,11 +276,10 @@ def load_variable_with_lookahead(
         raise ValueError(msg)
 
     # `join="exact"` rather than the default `"outer"`: a look-ahead on a different grid
-    # should fail here, not silently NaN-pad both months onto a union grid. Note this
-    # guards the single-level datasets only -- `load_variable` overwrites ERA5-Land's
-    # coordinates from `cdc.ERA5_LAND_*`, so a genuine land-grid change would be relabelled
-    # before reaching this point. The real land files differ across the CDS format change
-    # by ~1e-5 degrees, which is why that overwrite exists.
+    # should fail here, not silently NaN-pad both months onto a union grid. ERA5-Land
+    # arrives here already on the canonical axes: `align_era5_land_grid` rounds away the
+    # float noise that differs across the CDS format change, refuses a file that is
+    # genuinely off the grid, and only then assigns `cdc.ERA5_LAND_*`.
     return xr.concat([ds, lookahead], dim="time", join="exact")
 
 

@@ -224,3 +224,106 @@ def test_lookahead_on_a_matching_grid_joins(tmp_path: Path) -> None:
 
     assert joined.sizes["time"] == 3 + 1
     assert pd.Timestamp(joined.time.to_index()[-1]) == pd.Timestamp("2020-02-01T00:00")
+
+
+LAND = cdc.ERA5_DATASETS.reanalysis_era5_land
+TEMPERATURE = cdc.ERA5_VARIABLES.temperature
+# New-format CDS extracts store raw longitude index 1800 as this, not 180.0 (CLIMATE-51).
+NEW_FORMAT_LON_1800 = 179.99999999999406
+N_LON = 3600
+N_LAT = 1801
+
+
+def _write_land_month(
+    cdata: ClimateData,
+    year: str,
+    month: str,
+    *,
+    new_format: bool,
+    lon_offset: float = 0.0,
+) -> None:
+    """Write one hour of an ERA5-Land 2 m temperature extract on the full raw grid.
+
+    Each column holds its own raw index (in kelvin, offset by 273.15 so the conversion
+    gives the index back), so after loading, the value at a longitude says which raw
+    column landed there. ``new_format`` mimics the December 2024 CDS files: float64
+    coordinates with float noise, `valid_time`, and index 1800 just below 180.
+    """
+    raw_lon = np.arange(N_LON, dtype=np.float64) * 0.1 + lon_offset
+    raw_lat = np.linspace(90.0, -90.0, N_LAT)
+    if new_format:
+        raw_lon[1800] = NEW_FORMAT_LON_1800 + lon_offset
+        raw_lat = raw_lat + 2e-12
+        time_name = "valid_time"
+    else:
+        raw_lon = raw_lon.astype(np.float32)
+        raw_lat = raw_lat.astype(np.float32)
+        time_name = "time"
+    values = np.broadcast_to(
+        np.arange(N_LON, dtype=np.float64) + 273.15, (1, N_LAT, N_LON)
+    ).copy()
+    ds = xr.Dataset(
+        {"t2m": ((time_name, "latitude", "longitude"), values)},
+        coords={
+            time_name: [pd.Timestamp(f"{year}-{month}-01T00:00")],
+            "latitude": raw_lat,
+            "longitude": raw_lon,
+        },
+    )
+    ds.to_netcdf(cdata.extracted_era5_path(LAND, TEMPERATURE, year, month))
+
+
+def _expected_raw_column(longitude: np.ndarray) -> np.ndarray:
+    """The raw 0 ... 359.9 column that truly sits at each canonical longitude."""
+    return np.round((longitude % 360) / 0.1).astype(np.int64) % N_LON
+
+
+@pytest.mark.parametrize("new_format", [True, False])
+def test_era5_land_values_stay_at_their_longitude(
+    tmp_path: Path, *, new_format: bool
+) -> None:
+    """Every ERA5-Land column must keep its own longitude, in both CDS formats.
+
+    Before CLIMATE-51 the new format's index 1800 (179.99999999999406) did not wrap to
+    -180, so after the sort column 0 held raw index 1801 and the positional overwrite
+    labelled all the data 0.1 degrees west: the value shown at L came from L + 0.1.
+    """
+    cdata = ClimateData(tmp_path)
+    _write_land_month(cdata, "1989", "12", new_format=new_format)
+
+    ds = hd.load_variable(cdata, TEMPERATURE, "1989", "12", LAND)
+
+    longitude = ds["longitude"].to_numpy()
+    shown = np.round(ds["value"].isel(time=0, latitude=0).to_numpy()).astype(np.int64)
+    np.testing.assert_array_equal(shown, _expected_raw_column(longitude))
+    np.testing.assert_array_equal(longitude, cdc.ERA5_LAND_LONGITUDE.to_numpy())
+    np.testing.assert_array_equal(
+        ds["latitude"].to_numpy(), cdc.ERA5_LAND_LATITUDE.to_numpy()[::-1]
+    )
+
+
+def test_era5_land_off_the_grid_raises(tmp_path: Path) -> None:
+    """A file genuinely off the 0.1 degree grid must fail, not be relabelled onto it."""
+    cdata = ClimateData(tmp_path)
+    _write_land_month(cdata, "1989", "12", new_format=True, lon_offset=0.05)
+
+    with pytest.raises(ValueError, match="off the canonical"):
+        hd.load_variable(cdata, TEMPERATURE, "1989", "12", LAND)
+
+
+def test_era5_land_formats_concatenate_exactly(tmp_path: Path) -> None:
+    """A new-format month and its old-format look-ahead share identical coordinates.
+
+    1989-12 (new format) is closed by 1990-01 (old format). The look-ahead joins with
+    `join="exact"`, so both must come out on bit-identical axes.
+    """
+    cdata = ClimateData(tmp_path)
+    _write_land_month(cdata, "1989", "12", new_format=True)
+    _write_land_month(cdata, "1990", "01", new_format=False)
+
+    joined = hd.load_variable_with_lookahead(cdata, TEMPERATURE, "1989", "12", LAND)
+
+    assert joined.sizes["time"] == 2  # noqa: PLR2004
+    first = joined["value"].isel(time=0).to_numpy()
+    second = joined["value"].isel(time=1).to_numpy()
+    np.testing.assert_array_equal(first, second)

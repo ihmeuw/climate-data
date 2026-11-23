@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 ### Added
+- A weight-table pipeline for temperature person-days, alongside production's
+  `temperature_person_days`. `special weight_table` builds, per block and year, a table of
+  (location, 0.1° climate cell, population) on the global grid; `special history_person_days`
+  (ERA5, 1950-2023) and `special forecast_person_days` (downscaled CMIP6, 2024-2100,
+  generated in memory) sum daily temperatures over those pairs into most-detailed
+  person-days per year. Two compile steps sum them up a hierarchy:
+  `special compile_country_person_days` writes one country's levels with US Census GEOIDs
+  (CLIMATE-45's US-county files), and `special compile_member_person_days` writes one
+  member's `gbd_2023` and `fhs_2023` files in the July 2026 production layout (the CLIMATE-48
+  rebuild). None of the new steps has an `--output-dir` default. `lsae_1578` is added as an
+  aggregation-only hierarchy. (CLIMATE-45, CLIMATE-48)
+- `data.save_parquet` and `data.save_xarray` take `atomic=True`: the data go to `<name>.tmp`
+  and are renamed onto the target only once written, so a failed write leaves no partial
+  file. The default is unchanged. (CLIMATE-45)
 - The `lsae_1578` hierarchy, which supersedes `lsae_1285` (2026-08-11: Tamarugal, 95635,
   re-parented from De Valparaíso to De Tarapacá in Chile). It loads the 1578 a2 shapes; their
   only material change, three Manu'a polygons in American Samoa, was measured at zero population
@@ -224,6 +238,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   Measured on a full `gbd_2023` forecast run: mean temperature moves by a median of 0.07 °C
   (95th percentile 0.59, max 2.24) at most-detailed locations; days over 30 °C by up to 34
   days a year under ssp585. Existing aggregates carry the bias until rebuilt. (CLIMATE-49)
+- ERA5-Land history from new-format CDS extracts was placed one 0.1 degree cell west.
+  `historical_daily.load_variable` wrapped the raw 0 ... 359.9 longitudes and then
+  overwrote them by position. New-format files (float64, `valid_time`; 1950-1989 for
+  2 m temperature and precipitation, 1980-1989 for dewpoint, wind and pressure, plus
+  1996-03 and 2024 precipitation) store index 1800 as `179.99999999999406`, which did not
+  wrap to -180, so every column was labelled 0.1 degrees west of its data. Up to ~6 C in
+  steep cells; it also reaches 1990-1998 through the 10-year temperature zone.
+  `align_era5_land_grid` now rounds the raw coordinates to 4 decimals before wrapping,
+  checks both axes against `cdc.ERA5_LAND_*` and raises on a miss, and only then assigns
+  them. All 3,889 ERA5-Land extracts pass the check. The affected history needs
+  regenerating. (CLIMATE-51)
 - `aggregate hierarchy` failed every job with `ZeroDivisionError`.
   `aggregate_climate_to_hierarchy` divided `weighted_climate` by `population` with no
   zero guard, and because block-level results carry object dtype the division raised from
@@ -234,6 +259,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   estimate for (Aland, Svalbard, Norfolk, Christmas, Cocos, Pitcairn), which ~400 LSAE
   level-3 units inherit. Measured on `2026_08_21_PRECIP_TEST`, draw 000, ssp245:
   `gbd_2023` 2,718 of 138,618 rows NaN (1.96%), 0 inf.
+- Temperature person-days put about 99% of population in the climate cell one row (0.1°)
+  north. `special.utils.get_temperature_coordinates` binned latitude with lower cell edges,
+  which is right only for ascending latitude, and the daily files store latitude descending;
+  it also used pixel corners rather than centres. The new `_cell_index` finds the cell holding
+  each pixel's centre for either order. Production's `temperature_person_days` uses the same
+  function, so its output moves too: about +0.12 °C in the US and +0.09 °C globally, up to
+  2 °C for some countries (Bhutan, Monaco). Person-days built before this fix, including the
+  July 2026 production files, carry the defect until rebuilt. (CLIMATE-48)
 - `total_precipitation` was inflated ~1.5-1.6x across the whole historical record.
   ERA5 stamps an accumulation window by its **end**, so day D's window (forecast steps
   01-24) has its closing sample timestamped `00:00` of day D+1 — these are interval
