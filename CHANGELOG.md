@@ -222,6 +222,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   Measured on a full `gbd_2023` forecast run: mean temperature moves by a median of 0.07 °C
   (95th percentile 0.59, max 2.24) at most-detailed locations; days over 30 °C by up to 34
   days a year under ssp585. Existing aggregates carry the bias until rebuilt. (CLIMATE-49)
+- ERA5-Land history from new-format CDS extracts was placed one 0.1 degree cell west.
+  `historical_daily.load_variable` wrapped the raw 0 ... 359.9 longitudes and then
+  overwrote them by position. New-format files (float64, `valid_time`; 1950-1989 for
+  2 m temperature and precipitation, 1980-1989 for dewpoint, wind and pressure, plus
+  1996-03 and 2024 precipitation) store index 1800 as `179.99999999999406`, which did not
+  wrap to -180, so every column was labelled 0.1 degrees west of its data. Up to ~6 C in
+  steep cells; it also reaches 1990-1998 through the 10-year temperature zone.
+  `align_era5_land_grid` now rounds the raw coordinates to 4 decimals before wrapping,
+  checks both axes against `cdc.ERA5_LAND_*` and raises on a miss, and only then assigns
+  them. All 3,889 ERA5-Land extracts pass the check. The affected history needs
+  regenerating. (CLIMATE-51)
 - `aggregate hierarchy` failed every job with `ZeroDivisionError`.
   `aggregate_climate_to_hierarchy` divided `weighted_climate` by `population` with no
   zero guard, and because block-level results carry object dtype the division raised from
