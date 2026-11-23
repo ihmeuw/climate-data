@@ -201,6 +201,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   instead of inheriting jobmon's 10000 (effectively unthrottled), matching what
   production runs actually used. Pass `--concurrency-limit` to override. (CLIMATE-25)
 ### Fixed
+- `utils.to_raster` put the first cell **centre** on the raster's corner, so `aggregate pixel`
+  read the 0.1° climate grid half a cell (0.05°) east and north of where it belongs, and the
+  nearest-neighbour resample took a neighbouring cell for about 75% of population pixels. The
+  transform now starts at the outer cell edge (`lon[0] - dlon / 2`, `lat[-1] + dlat / 2`).
+  Measured on a full `gbd_2023` forecast run: mean temperature moves by a median of 0.07 °C
+  (95th percentile 0.59, max 2.24) at most-detailed locations; days over 30 °C by up to 34
+  days a year under ssp585. Existing aggregates carry the bias until rebuilt. (CLIMATE-49)
 - `aggregate hierarchy` failed every job with `ZeroDivisionError`.
   `aggregate_climate_to_hierarchy` divided `weighted_climate` by `population` with no
   zero guard, and because block-level results carry object dtype the division raised from
