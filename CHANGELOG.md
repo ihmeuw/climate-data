@@ -14,8 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   `special compile_country_person_days` writes one country's levels with US Census GEOIDs
   (CLIMATE-45's US-county files), and `special compile_member_person_days` writes one
   member's `gbd_2023` and `fhs_2023` files in the July 2026 production layout (the CLIMATE-48
-  rebuild). None of the new steps has an `--output-dir` default. `lsae_1578` is added as an
-  aggregation-only hierarchy. (CLIMATE-45, CLIMATE-48)
+  rebuild). None of the new steps has an `--output-dir` default. `lsae_1578` is added as a
+  hierarchy for the compile step. (CLIMATE-45, CLIMATE-48)
 - `data.save_parquet` and `data.save_xarray` take `atomic=True`: the data go to `<name>.tmp`
   and are renamed onto the target only once written, so a failed write leaves no partial
   file. The default is unchanged. (CLIMATE-45)
